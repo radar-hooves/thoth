@@ -52,7 +52,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: 22
+          node-version: 24
           cache: "pnpm"
           # No registry-url/scope: the @poodle64 packages are public on npmjs,
           # and setting it here repoints the scope at GitHub Packages, which
