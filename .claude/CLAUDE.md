@@ -36,7 +36,7 @@ Version bumps are owned by `scripts/bump-version.sh` — it is the authority on 
 
 Those two are structural core, which the shape gate refuses from a repo-local exceptions file — so Thoth cannot make itself canonical, and a reviewed desktop-app clause in the rule is the only route. Raised as `radar-hooves/master-project#314`.
 
-What binds Thoth is the design-system half, which the rule makes binding on *every* app with no per-app exception, and Thoth takes it in full: `@poodle64/design-tokens` as the single design language, `@poodle64/ui` for every primitive it ships, a `DESIGN.md` North Star, and both gates (`pnpm lint:drift`, `pnpm lint:design`) in pre-commit and CI on empty baselines.
+What binds Thoth is the design-system half, which the rule makes binding on _every_ app with no per-app exception, and Thoth takes it in full: `@poodle64/design-tokens` as the single design language, `@poodle64/ui` for every primitive it ships, a `DESIGN.md` North Star, and both gates (`pnpm lint:drift`, `pnpm lint:design`) in pre-commit and CI on empty baselines.
 
 ### The app shell is deliberately not adopted (recorded 27/08/2026)
 
@@ -64,7 +64,7 @@ Reason it is safe to deviate here: the tokens underneath ARE shared, so an accen
 
 `canonical-app-shape.md` requires the repo root to hold the canonical set and nothing else, recorded **per entry** rather than wholesale. Thoth's divergences live in `.canonical-exceptions` at the root, in that rule's own grammar (`root-inventory:<name>  YYYY-MM-DD  # reason`), and are not restated here — one home per fact.
 
-Two things worth knowing without opening it. Most extra root entries are a single structural fact rather than a list of decisions: the canonical template puts the web app under `frontend/`, and a Tauri app's web layer IS the repo root. And `flake.nix` is *packaging* — it builds the distributable and exposes the NixOS and home-manager modules (#117) — not the per-app dev shell the fleet dropped on 2026-08-19.
+Two things worth knowing without opening it. Most extra root entries are a single structural fact rather than a list of decisions: the canonical template puts the web app under `frontend/`, and a Tauri app's web layer IS the repo root. And `flake.nix` is _packaging_ — it builds the distributable and exposes the NixOS and home-manager modules (#117) — not the per-app dev shell the fleet dropped on 2026-08-19.
 
 `check-canonical-shape.py` skips this repo entirely ("no backend/ or frontend/ — not a full-stack app"), so nothing reads that file automatically today. It is written in the canonical grammar anyway, and verified against the real parser, so it is a record a human or agent can trust and a gate could consume unchanged.
 
@@ -72,3 +72,8 @@ Two things worth knowing without opening it. Most extra root entries are a singl
 
 - The Apple Neural Engine backend (FluidAudio, macOS/Apple Silicon only) shells out to `swift` at build time (`build.rs`) and is safe to compile everywhere only because the fork itself gates on `target_os = "macos", target_arch = "aarch64"` (`Cargo.toml`) — don't drop that gate, and don't assume a new native backend crate is cross-platform-safe without checking the same.
 - Linux has no Metal path: GPU acceleration is a choice of mutually exclusive Cargo features (`vulkan`/`cuda`/`hipblas`), each requiring `--no-default-features` — read `docs/development/linux-setup.md` before touching the Linux build.
+- The model catalogue's `parakeet-tdt-0.6b-v2-int8` is `nemo_transducer` and routes to the sherpa-onnx CPU backend, not the Apple Neural Engine — a genuine Parakeet v2-on-ANE path doesn't exist without new FFI/Swift-bridge plumbing, declined for a marginal, unproven WER gain.
+- `audio/vad.rs`'s `trim_silence()` is live in both transcription backends (`whisper.rs`, `parakeet.rs`) — a 2026-05-30 dead-code sweep found only `ptt.rs` was genuinely unused; don't assume the whole VAD/hands-free surface is dead without checking call sites.
+- `pipeline.rs`, `audio/capture.rs` and `clipboard.rs` are timing-sensitive — even a 50ms sleep or an extra async step is perceptible on the recording toggle. Test rapid toggle-on/toggle-off before committing a change to any of them.
+- `transcription/filter.rs`'s AU-spelling map is generated (`scripts/generate_au_spelling.py` from vendored VARCON data, `NOTICES.md`) — fix a wrong conversion via the generator's denylist, never a hand-added suffix rule. Its spoken-number filter reads a run of two-plus bare digit words digit-by-digit; a run containing a teen/ten/magnitude word is read as a cardinal instead.
+- Reinstalling a rebuilt `Thoth.app` over `/Applications/Thoth.app` changes its ad-hoc signature and resets macOS TCC (mic/accessibility), so the app hangs at the mic-permission dialogue before the MCP server binds. Quit via `osascript`, `mv` the old bundle aside, `ditto` the new one in, `open`, then have the operator grant Allow.
