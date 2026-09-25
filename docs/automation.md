@@ -53,7 +53,7 @@ Once connected, the assistant can call these tools:
 
 Destructive and system actions (starting a recording, changing audio devices, quitting) are intentionally not exposed; the surface mirrors what you can do safely in the GUI.
 
-For example, you can ask your assistant to "add _portcullis_ to my Thoth dictionary so it stops being misheard", or "transcribe `~/voice-memo.m4a` and summarise it"; the assistant calls `canonical`/`dictionary` or `transcribe_file` on your behalf.
+For example, you can ask your assistant to "add _portcullis_ to my Thoth dictionary so it stops being misheard", or "transcribe `/Users/you/voice-memo.m4a` and summarise it"; the assistant calls `canonical`/`dictionary` or `transcribe_file` on your behalf. `transcribe_file` needs an **absolute** path — a `~`-relative one is rejected even though the tool describes itself as accepting one. `get_state` reflects only the live-recording pipeline (idle/recording/processing) and does not track a `transcribe_file` background job's progress; poll `transcribe_status` for that instead.
 
 ## Driving it from a script (control API)
 
