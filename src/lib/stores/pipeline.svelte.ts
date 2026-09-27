@@ -18,21 +18,10 @@ import { settingsStore } from './settings.svelte';
 import { soundStore } from './sound.svelte';
 
 /** Debug logging — only active in development builds */
-const debug = import.meta.env.DEV
-  ? (...args: unknown[]) => console.log('[Pipeline]', ...args)
-  : () => {};
+const debug = import.meta.env.DEV ? (...args: unknown[]) => console.log('[Pipeline]', ...args) : () => {};
 
 /** Pipeline execution states */
-export type PipelineState =
-  | 'idle'
-  | 'recording'
-  | 'converting'
-  | 'transcribing'
-  | 'filtering'
-  | 'enhancing'
-  | 'outputting'
-  | 'completed'
-  | 'failed';
+export type PipelineState = 'idle' | 'recording' | 'converting' | 'transcribing' | 'filtering' | 'enhancing' | 'outputting' | 'completed' | 'failed';
 
 /** Pipeline configuration for execution */
 export interface PipelineConfig {
@@ -129,9 +118,7 @@ async function resolveEnhancementPrompt(promptId: string): Promise<string> {
 /** Create the default pipeline configuration based on app settings */
 async function getDefaultConfig(): Promise<PipelineConfig> {
   const config = configStore.config;
-  const enhancementPrompt = config.enhancement.enabled
-    ? await resolveEnhancementPrompt(config.enhancement.promptId)
-    : DEFAULT_ENHANCEMENT_PROMPT;
+  const enhancementPrompt = config.enhancement.enabled ? await resolveEnhancementPrompt(config.enhancement.promptId) : DEFAULT_ENHANCEMENT_PROMPT;
 
   return {
     applyDictionary: true,
@@ -302,6 +289,14 @@ function createPipelineStore() {
     });
     unlisteners.push(insertionFailedUnlisten);
 
+    // AI enhancement was skipped (a dictation over the length cap) or its
+    // reply was discarded (implausibly short or long) — the unenhanced
+    // transcript still pasted, so this is informational, not a failure.
+    const enhancementSkippedUnlisten = await listen<string>('enhancement-skipped', (event) => {
+      toast.info(event.payload, { duration: 8000 });
+    });
+    unlisteners.push(enhancementSkippedUnlisten);
+
     // Notify when the configured microphone is unavailable and recording fell
     // back to the system default (e.g. an unplugged USB mic). Deduped in Rust to
     // one toast per distinct missing device.
@@ -318,14 +313,7 @@ function createPipelineStore() {
     const shortcutUnlisten = await listen<string>('shortcut-triggered', async (event) => {
       const shortcutId = event.payload;
       const timestamp = new Date().toISOString();
-      debug(
-        `${timestamp} Shortcut event received:`,
-        shortcutId,
-        'current state:',
-        state,
-        'isRunning:',
-        isRunning
-      );
+      debug(`${timestamp} Shortcut event received:`, shortcutId, 'current state:', state, 'isRunning:', isRunning);
 
       if (shortcutId === 'toggle_recording' || shortcutId === 'toggle_recording_alt') {
         debug(`${timestamp} Calling pipeline_toggle_recording (Rust authority)...`);
@@ -382,10 +370,7 @@ function createPipelineStore() {
    * - BING is played by the shortcut handler the instant the key is pressed.
    * - BONG is played by pipeline_toggle_recording before capture disarms.
    */
-  async function toggleRecording(
-    config?: Partial<PipelineConfig>,
-    intent: ToggleIntent = 'toggle'
-  ): Promise<{ success: boolean; result?: PipelineResult; error?: string }> {
+  async function toggleRecording(config?: Partial<PipelineConfig>, intent: ToggleIntent = 'toggle'): Promise<{ success: boolean; result?: PipelineResult; error?: string }> {
     // Cooldown: ignore toggles that arrive too soon after the last state change.
     // Prevents key bounce from immediately reversing a start or stop.
     //
@@ -415,10 +400,7 @@ function createPipelineStore() {
       const defaultConfig = await getDefaultConfig();
       const fullConfig: PipelineConfig = { ...defaultConfig, ...config };
 
-      type ToggleOutcome =
-        | { action: 'started'; path: string }
-        | { action: 'stopped' }
-        | { action: 'ignored' };
+      type ToggleOutcome = { action: 'started'; path: string } | { action: 'stopped' } | { action: 'ignored' };
 
       let outcome: ToggleOutcome;
       try {
@@ -503,9 +485,7 @@ function createPipelineStore() {
   /**
    * Transcribe an imported audio file (WAV, MP3, M4A, OGG, FLAC)
    */
-  async function transcribeFile(
-    filePath: string
-  ): Promise<{ success: boolean; result?: PipelineResult; error?: string }> {
+  async function transcribeFile(filePath: string): Promise<{ success: boolean; result?: PipelineResult; error?: string }> {
     debug(' transcribeFile() called:', filePath);
     if (isRunning) {
       return { success: false, error: 'Pipeline is already running' };
@@ -619,13 +599,7 @@ function createPipelineStore() {
       return state === 'recording';
     },
     get isProcessing() {
-      return (
-        state === 'converting' ||
-        state === 'transcribing' ||
-        state === 'filtering' ||
-        state === 'enhancing' ||
-        state === 'outputting'
-      );
+      return state === 'converting' || state === 'transcribing' || state === 'filtering' || state === 'enhancing' || state === 'outputting';
     },
     get lastResult() {
       return lastResult;

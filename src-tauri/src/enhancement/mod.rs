@@ -24,14 +24,31 @@ use crate::error::Error;
 use parking_lot::Mutex;
 use std::sync::OnceLock;
 
-/// One attempt, including response decoding, before retaining the original text.
-const REQUEST_TIMEOUT_SECS: u64 = 30;
+/// One attempt, including response decoding, before retaining the original
+/// text. Covers a cold model load, not just generation: Ollama loads a model
+/// as part of handling the first request after it was unloaded (idle timeout,
+/// or just after Thoth started) rather than on a separate warm-up call, and
+/// with the 3-attempt retry gone there is no second chance if this is too
+/// short. A genuinely unreachable server fails long before this — the shared
+/// HTTP client's own connect timeout (telemetry-rs) catches that in ~10s —
+/// so this bound is only ever reached by a connection that is open but slow
+/// to answer.
+const REQUEST_TIMEOUT_SECS: u64 = 90;
 
 /// Above this, a small local model reliably mishandles the rewrite (#179: a
 /// 9,683-char dictation came back at 7-19% of its own length in testing) and
 /// a correctly sized reply would run well past REQUEST_TIMEOUT_SECS anyway.
 /// Skipping is instant; the filtered transcript still pastes.
 const MAX_ENHANCE_INPUT_CHARS: usize = 6_000;
+
+/// Exact `Error::Other` text for the two `enhance_text` outcomes the pipeline
+/// surfaces to the user as a toast: the household's existing sentinel-string
+/// pattern for a Tauri-command error the frontend branches on, same as the
+/// no-speech and Input Monitoring sentinels (`error.rs`'s module docs). A
+/// network or model error is not one of these: it logs and falls back
+/// without a toast, which is a separate, deliberately quieter path.
+pub const ENHANCEMENT_SKIPPED_TOO_LONG: &str = "Dictation too long to enhance";
+pub const ENHANCEMENT_OUTPUT_IMPLAUSIBLE: &str = "Enhancement output length was implausible";
 
 /// A deliberately low token-per-char estimate (English averages nearer 4), so
 /// a request is never undersized for text that tokenises more densely.
@@ -49,17 +66,50 @@ fn output_token_limit(text: &str) -> usize {
 /// A model that shrinks or runs away past these bounds is misbehaving, not
 /// improving the text — `enhance_text` rejects it and the pipeline already
 /// retains the original on any `Err` from here, which is strictly safer than
-/// pasting a truncated or runaway reply.
+/// pasting a truncated or runaway reply. This is the default band, for a
+/// prompt whose intent is an approximately same-length rewrite; a prompt that
+/// deliberately changes length (summarise, expand) gets its own band from
+/// [`expected_output_ratio`].
 const MIN_OUTPUT_RATIO: f64 = 0.5;
 const MAX_OUTPUT_RATIO: f64 = 2.5;
 const MIN_INPUT_CHARS_FOR_RATIO_CHECK: usize = 50;
 
-fn output_length_is_plausible(input_len: usize, output_len: usize) -> bool {
+/// The plausible output/input length ratio for a prompt, by its shipped
+/// intent. Matched against the fixed built-in template text — never
+/// user-edited, since a built-in prompt cannot be modified — so a custom
+/// prompt always falls through to the generic same-length band.
+///
+/// Without this, the generic band rejects the entire point of these two
+/// prompts: `summarise` asks for "1-2 sentences" from a whole dictation
+/// (routinely well under 0.5x), and `expand` asks for "2-3x more detail"
+/// (routinely over 2.5x), so both would silently fall back to pasting the
+/// unenhanced original on every single use.
+fn expected_output_ratio(prompt_template: &str) -> (f64, f64) {
+    let matched_id = prompts::get_builtin_prompts()
+        .into_iter()
+        .find(|p| p.template == prompt_template)
+        .map(|p| p.id);
+
+    match matched_id.as_deref() {
+        // "1-2 sentences": can legitimately be a small fraction of a long
+        // dictation — a couple of sentences from 9,683 chars (#179's own
+        // reported length) is already under 2%. Only the upper bound guards
+        // anything here — a "summary" longer than its source did not summarise.
+        Some("summarise") => (0.01, 1.0),
+        // "2-3x more detail" (i.e. up to ~4x total). Capped short of the 8.5x
+        // runaway measured in testing (#179), not at the requested 3x, so a
+        // slightly generous expansion is not falsely rejected.
+        Some("expand") => (1.0, 6.0),
+        _ => (MIN_OUTPUT_RATIO, MAX_OUTPUT_RATIO),
+    }
+}
+
+fn output_length_is_plausible(input_len: usize, output_len: usize, bounds: (f64, f64)) -> bool {
     if input_len < MIN_INPUT_CHARS_FOR_RATIO_CHECK {
         return true;
     }
     let ratio = output_len as f64 / input_len as f64;
-    (MIN_OUTPUT_RATIO..=MAX_OUTPUT_RATIO).contains(&ratio)
+    (bounds.0..=bounds.1).contains(&ratio)
 }
 
 /// Which enhancement backend is active
@@ -248,7 +298,7 @@ pub async fn enhance_text(text: String, model: String, prompt: String) -> Result
             text.len(),
             MAX_ENHANCE_INPUT_CHARS
         );
-        return Err(Error::Other("Dictation too long to enhance".into()));
+        return Err(Error::Other(ENHANCEMENT_SKIPPED_TOO_LONG.into()));
     }
 
     let (backend_type, ollama, openai_compat) = {
@@ -294,16 +344,14 @@ pub async fn enhance_text(text: String, model: String, prompt: String) -> Result
         return Err(Error::Other("Enhancement returned no text".into()));
     }
 
-    if !output_length_is_plausible(text.len(), result.len()) {
+    if !output_length_is_plausible(text.len(), result.len(), expected_output_ratio(&prompt)) {
         span.record("ok", false);
         tracing::warn!(
             "Enhancement output length implausible ({} -> {} chars), discarding",
             text.len(),
             result.len()
         );
-        return Err(Error::Other(
-            "Enhancement output length was implausible".into(),
-        ));
+        return Err(Error::Other(ENHANCEMENT_OUTPUT_IMPLAUSIBLE.into()));
     }
 
     span.record("output_bytes", result.len());
@@ -364,28 +412,94 @@ mod tests {
         assert_eq!(bt, BackendType::Ollama);
     }
 
+    const GENERIC_BOUNDS: (f64, f64) = (MIN_OUTPUT_RATIO, MAX_OUTPUT_RATIO);
+
     #[test]
     fn test_output_length_is_plausible_within_bounds() {
-        assert!(output_length_is_plausible(9683, 8500));
-        assert!(output_length_is_plausible(1500, 1382));
+        assert!(output_length_is_plausible(9683, 8500, GENERIC_BOUNDS));
+        assert!(output_length_is_plausible(1500, 1382, GENERIC_BOUNDS));
     }
 
     #[test]
     fn test_output_length_rejects_the_179_truncation() {
         // The exact failure from #179: a 9,683-char dictation returned 1,807 chars.
-        assert!(!output_length_is_plausible(9683, 1807));
+        assert!(!output_length_is_plausible(9683, 1807, GENERIC_BOUNDS));
     }
 
     #[test]
     fn test_output_length_rejects_a_runaway_reply() {
-        assert!(!output_length_is_plausible(9686, 82655));
+        assert!(!output_length_is_plausible(9686, 82655, GENERIC_BOUNDS));
     }
 
     #[test]
     fn test_output_length_skips_the_check_for_tiny_input() {
         // A one-word dictation can legitimately shrink to nothing after filler
         // removal; the ratio check would otherwise flag every short command.
-        assert!(output_length_is_plausible(10, 1));
+        assert!(output_length_is_plausible(10, 1, GENERIC_BOUNDS));
+    }
+
+    /// Runs the ratio check against every shipped prompt's own intended output
+    /// shape, so a prompt whose whole point is to change length is never
+    /// silently defeated by the plausibility gate meant to catch truncation.
+    #[test]
+    fn test_expected_output_ratio_matches_each_builtin_prompts_own_intent() {
+        let dictation_len = 9_683; // #179's own reported dictation length.
+
+        for prompt in prompts::get_builtin_prompts() {
+            let bounds = expected_output_ratio(&prompt.template);
+            let (legitimate_output_len, description): (usize, &str) = match prompt.id.as_str() {
+                // "1-2 sentences": a couple of sentences out of a long dictation.
+                "summarise" => (180, "a 1-2 sentence summary"),
+                // "2-3x more detail": ~3.2x the input.
+                "expand" => (31_000, "a 2-3x expansion"),
+                // Every other built-in asks to keep approximately the same length.
+                _ => (
+                    (dictation_len as f64 * 0.9) as usize,
+                    "an approximately same-length rewrite",
+                ),
+            };
+
+            assert!(
+                output_length_is_plausible(dictation_len, legitimate_output_len, bounds),
+                "{}'s own legitimate output ({description}) was rejected by its bounds {bounds:?}",
+                prompt.id,
+            );
+        }
+    }
+
+    #[test]
+    fn test_expected_output_ratio_summarise_still_rejects_a_longer_than_input_reply() {
+        let bounds = expected_output_ratio(
+            &prompts::get_builtin_prompts()
+                .into_iter()
+                .find(|p| p.id == "summarise")
+                .unwrap()
+                .template,
+        );
+        // A "summary" that comes back longer than its source did not summarise.
+        assert!(!output_length_is_plausible(9683, 11_000, bounds));
+    }
+
+    #[test]
+    fn test_expected_output_ratio_expand_still_rejects_a_179_style_collapse() {
+        let bounds = expected_output_ratio(
+            &prompts::get_builtin_prompts()
+                .into_iter()
+                .find(|p| p.id == "expand")
+                .unwrap()
+                .template,
+        );
+        // Asking to expand and getting back a fraction of the input is still
+        // the truncation failure, not a legitimate (if modest) expansion.
+        assert!(!output_length_is_plausible(9683, 1807, bounds));
+    }
+
+    #[test]
+    fn test_expected_output_ratio_falls_back_to_generic_for_a_custom_prompt() {
+        assert_eq!(
+            expected_output_ratio("Translate the following to French:\n\n{text}"),
+            GENERIC_BOUNDS
+        );
     }
 
     #[test]

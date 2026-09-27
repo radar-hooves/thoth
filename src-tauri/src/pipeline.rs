@@ -903,6 +903,21 @@ async fn run_transcription_pipeline(
                     ok = false,
                     "enhancement_complete"
                 );
+
+                // Only these two outcomes are a deliberate decision worth
+                // telling the user about; a network or model error already
+                // logs and falls back without one, on the same footing as
+                // any other transient failure this pipeline absorbs.
+                let e_str = e.to_string();
+                if e_str == enhancement::ENHANCEMENT_SKIPPED_TOO_LONG
+                    || e_str == enhancement::ENHANCEMENT_OUTPUT_IMPLAUSIBLE
+                {
+                    let advisory = format!("Pasted without AI enhancement: {e_str}");
+                    if let Err(emit_err) = app.emit("enhancement-skipped", advisory) {
+                        tracing::warn!("Failed to emit enhancement-skipped event: {emit_err}");
+                    }
+                }
+
                 false
             }
         }
