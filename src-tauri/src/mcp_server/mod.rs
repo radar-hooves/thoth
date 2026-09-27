@@ -17,7 +17,7 @@
 use rmcp::{
     ErrorData as McpError, ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
-    model::{CallToolResult, Content, ServerCapabilities, ServerInfo},
+    model::{CallToolResult, ContentBlock, ServerCapabilities, ServerInfo},
     schemars, tool, tool_handler, tool_router,
 };
 
@@ -145,7 +145,7 @@ pub struct RecordingParams {
 fn json_result<T: serde::Serialize>(value: &T) -> Result<CallToolResult, McpError> {
     let text =
         serde_json::to_string(value).map_err(|e| McpError::internal_error(e.to_string(), None))?;
-    Ok(CallToolResult::success(vec![Content::text(text)]))
+    Ok(CallToolResult::success(vec![ContentBlock::text(text)]))
 }
 
 /// Map a core-call error message into an MCP tool error on failure.
@@ -303,7 +303,7 @@ impl ThothMcp {
             "export" => {
                 let json =
                     crate::dictionary::export_dictionary().map_err(|e| core_err(e.to_string()))?;
-                Ok(CallToolResult::success(vec![Content::text(json)]))
+                Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
             }
             other => Err(core_err(format!(
                 "unknown action '{}'; must be list | add | update | delete | import | export",
