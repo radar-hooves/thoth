@@ -128,9 +128,7 @@ pub fn model_has_loaded() -> bool {
     MODEL_HAS_LOADED.load(Ordering::SeqCst)
 }
 
-/// Initialise the transcription service with whisper backend (primary)
-#[tauri::command]
-pub fn init_whisper_transcription(model_path: String) -> Result<(), Error> {
+fn init_whisper_transcription_unlocked(model_path: String) -> Result<(), Error> {
     let service =
         TranscriptionService::new_whisper(&PathBuf::from(model_path)).map_err(|e| e.to_string())?;
 
@@ -145,9 +143,14 @@ pub fn init_whisper_transcription(model_path: String) -> Result<(), Error> {
     Ok(())
 }
 
-/// Initialise the transcription service with parakeet backend (fallback)
+/// Initialise the transcription service with whisper backend (primary).
 #[tauri::command]
-pub fn init_parakeet_transcription(_model_dir: String) -> Result<(), Error> {
+pub fn init_whisper_transcription(model_path: String) -> Result<(), Error> {
+    let _serialised = WARMUP_LOCK.lock();
+    init_whisper_transcription_unlocked(model_path)
+}
+
+fn init_parakeet_transcription_unlocked(_model_dir: String) -> Result<(), Error> {
     #[cfg(feature = "parakeet")]
     {
         let service = TranscriptionService::new_parakeet(&PathBuf::from(_model_dir))
@@ -167,9 +170,14 @@ pub fn init_parakeet_transcription(_model_dir: String) -> Result<(), Error> {
         .into())
 }
 
-/// Initialise the transcription service with FluidAudio backend (Apple Neural Engine)
+/// Initialise the transcription service with parakeet backend (fallback).
 #[tauri::command]
-pub fn init_fluidaudio_transcription() -> Result<(), Error> {
+pub fn init_parakeet_transcription(model_dir: String) -> Result<(), Error> {
+    let _serialised = WARMUP_LOCK.lock();
+    init_parakeet_transcription_unlocked(model_dir)
+}
+
+fn init_fluidaudio_transcription_unlocked() -> Result<(), Error> {
     #[cfg(all(target_os = "macos", feature = "fluidaudio"))]
     {
         let service = TranscriptionService::new_fluidaudio().map_err(|e| e.to_string())?;
@@ -208,16 +216,22 @@ pub fn init_fluidaudio_transcription() -> Result<(), Error> {
         .into())
 }
 
-/// Initialise the transcription service (auto-detect best backend)
+/// Initialise the transcription service with FluidAudio backend (Apple Neural Engine).
+#[tauri::command]
+pub fn init_fluidaudio_transcription() -> Result<(), Error> {
+    let _serialised = WARMUP_LOCK.lock();
+    init_fluidaudio_transcription_unlocked()
+}
+
+/// Initialise the transcription service (auto-detect best backend).
 ///
 /// Tries whisper first, falls back to parakeet if whisper model not found.
-#[tauri::command]
-pub fn init_transcription(model_path: String) -> Result<(), Error> {
+fn init_transcription_unlocked(model_path: String) -> Result<(), Error> {
     let path = PathBuf::from(&model_path);
 
     // If it's a direct .bin file path, use whisper
     if path.extension().map(|e| e == "bin").unwrap_or(false) {
-        return init_whisper_transcription(model_path);
+        return init_whisper_transcription_unlocked(model_path);
     }
 
     // If it's a directory, check what's inside
@@ -232,7 +246,9 @@ pub fn init_transcription(model_path: String) -> Result<(), Error> {
                     .unwrap_or(false)
                 {
                     tracing::info!("Found whisper model in directory, using Metal GPU backend");
-                    return init_whisper_transcription(entry_path.to_string_lossy().to_string());
+                    return init_whisper_transcription_unlocked(
+                        entry_path.to_string_lossy().to_string(),
+                    );
                 }
             }
         }
@@ -243,7 +259,7 @@ pub fn init_transcription(model_path: String) -> Result<(), Error> {
             let encoder = path.join("encoder.int8.onnx");
             if encoder.exists() {
                 tracing::info!("Found ONNX model in directory, using Parakeet backend");
-                return init_parakeet_transcription(model_path);
+                return init_parakeet_transcription_unlocked(model_path);
             }
         }
         #[cfg(not(feature = "parakeet"))]
@@ -268,6 +284,15 @@ pub fn init_transcription(model_path: String) -> Result<(), Error> {
         path.display()
     )
     .into())
+}
+
+/// Initialise the transcription service (auto-detect best backend).
+///
+/// Tries whisper first, falls back to parakeet if whisper model not found.
+#[tauri::command]
+pub fn init_transcription(model_path: String) -> Result<(), Error> {
+    let _serialised = WARMUP_LOCK.lock();
+    init_transcription_unlocked(model_path)
 }
 
 /// Minimum RMS level to consider audio as containing speech.
@@ -446,13 +471,12 @@ fn audio_has_speech(path: &std::path::Path) -> Result<bool, String> {
     Ok(peak_window_rms >= MIN_SPEECH_RMS)
 }
 
-/// Serialises warmup, so two callers cannot each construct a model at once.
+/// Serialises every model construction, so startup, model selection and wake
+/// warmup cannot build models concurrently.
 ///
-/// Warmup builds the new service *before* taking the service lock and dropping
-/// the old one, so peak memory is already 2x the model. Two unserialised warmups
-/// make it 3x — and the models are 500 MB (FluidAudio) to 3.1 GB (large-v3-turbo
-/// plus Metal buffers). The wake handler debounces one second, so two wake events
-/// slightly further apart than that used to reach here concurrently.
+/// Construction happens before the new service replaces the old one, so even one
+/// replacement peaks at two models. A second constructor would add another model:
+/// 500 MB for FluidAudio or up to 3.1 GB for large-v3-turbo plus Metal buffers.
 static WARMUP_LOCK: Mutex<()> = Mutex::new(());
 
 /// When the loaded model was last used, or loaded. `None` when none is loaded.
@@ -648,7 +672,7 @@ fn warmup_transcription_inner() {
             tracing::info!("Selected model not downloaded yet, skipping warmup");
             return;
         }
-        match init_transcription(model_dir) {
+        match init_transcription_unlocked(model_dir) {
             Ok(()) => {
                 tracing::info!("Transcription model warmed up");
                 return;
@@ -669,7 +693,7 @@ fn try_warmup_fluidaudio() -> bool {
     #[cfg(all(target_os = "macos", feature = "fluidaudio"))]
     {
         if fluidaudio::is_cached() {
-            match init_fluidaudio_transcription() {
+            match init_fluidaudio_transcription_unlocked() {
                 Ok(()) => {
                     tracing::info!("FluidAudio transcription model warmed up (Neural Engine)");
                     return true;
@@ -700,7 +724,7 @@ fn warmup_whisper_fallback(manifest: &manifest::ModelManifest) {
         .find(|m| m.model_type == "whisper_ggml" && manifest::is_model_downloaded(m))
     {
         let whisper_dir = manifest::get_model_directory(&whisper_model.id);
-        match init_transcription(whisper_dir.to_string_lossy().to_string()) {
+        match init_transcription_unlocked(whisper_dir.to_string_lossy().to_string()) {
             Ok(()) => {
                 tracing::info!("Fell back to Whisper model '{}'", whisper_model.id);
             }
@@ -732,26 +756,26 @@ pub fn get_transcription_backend() -> Option<String> {
 /// Get the default model directory path for the currently selected/recommended model
 #[tauri::command]
 pub fn get_model_directory() -> String {
-    // Check if a model is selected in config
     let config_model_id = crate::config::get_config()
         .ok()
-        .and_then(|c| c.transcription.model_id.clone());
+        .and_then(|c| c.transcription.model_id);
 
-    // Use config model if set, otherwise get recommended from manifest
-    let model_id = config_model_id.unwrap_or_else(|| {
-        let fallback = manifest::get_fallback_manifest();
-        fallback
-            .models
-            .iter()
-            .find(|m| m.recommended)
-            .or_else(|| fallback.models.first())
-            .map(|m| m.id.clone())
-            .unwrap_or_else(|| "ggml-large-v3-turbo".to_string())
-    });
-
-    manifest::get_model_directory(&model_id)
+    model_directory_for_selection(config_model_id.as_deref())
         .to_string_lossy()
         .to_string()
+}
+
+/// Resolves a configured model id to the directory this build will actually
+/// load from. Uses the same `resolve_selected_id` the model list uses for the
+/// Active badge, so a model this build cannot run — a config carried from
+/// macOS, or a stale id — is never handed to `init_transcription` while the
+/// UI shows a different model as active (#128, #100).
+fn model_directory_for_selection(configured: Option<&str>) -> PathBuf {
+    let fallback = manifest::get_fallback_manifest();
+    let resolved_id = manifest::resolve_selected_id(&fallback.models, configured)
+        .unwrap_or("ggml-large-v3-turbo");
+
+    manifest::get_model_directory(resolved_id)
 }
 
 /// Get the whisper model directory path
@@ -867,5 +891,22 @@ mod tests {
         let config = crate::config::TranscriptionConfig::default();
         assert_eq!(config.model_idle_unload_secs, None);
         assert_eq!(idle_unload_timeout(config.model_idle_unload_secs), None);
+    }
+
+    /// A config copied from macOS must not point Linux at FluidAudio's CoreML
+    /// cache: no Linux build can initialise that backend.
+    #[cfg(not(all(target_os = "macos", feature = "fluidaudio")))]
+    #[test]
+    fn model_directory_ignores_an_unrunnable_configured_model() {
+        let manifest = manifest::get_fallback_manifest();
+        let configured = "fluidaudio-parakeet-tdt-coreml";
+        let resolved = manifest::resolve_selected_id(&manifest.models, Some(configured))
+            .expect("the bundled manifest has a runnable model");
+
+        assert_ne!(resolved, configured);
+        assert_eq!(
+            model_directory_for_selection(Some(configured)),
+            manifest::get_model_directory(resolved)
+        );
     }
 }
