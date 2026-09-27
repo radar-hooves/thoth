@@ -22,9 +22,7 @@ A Thoth release is:
 
 **CRITICAL**: Always use current date in AEST (Australia/Brisbane, UTC+10)
 
-Compute the next version from the last tag — never count the patch number by
-hand. Hand-counting is what produced the June 2026 regression, where the in-tree
-version ran to `2026.6.10` and was then reset to `2026.6.2`.
+Compute the next version from the last tag — never count the patch number by hand. Hand-counting is what produced the June 2026 regression, where the in-tree version ran to `2026.6.10` and was then reset to `2026.6.2`.
 
 ```bash
 # Last released version, and the current calendar month in AEST
@@ -44,10 +42,7 @@ echo "Last: $LAST_VERSION  ->  Next: $NEXT_VERSION"
 - **Patch bump** (fixes only, same month): `2026.2.0` → `2026.2.1`
 - **Month bump** (first release of a new month): `2026.2.1` → `2026.3.0`
 
-Ask the user to confirm `$NEXT_VERSION`. The bump script re-checks
-monotonicity and refuses anything that is not strictly greater than both the
-last tag and the current in-tree version, so a miscount fails loudly rather
-than shipping.
+Ask the user to confirm `$NEXT_VERSION`. The bump script re-checks monotonicity and refuses anything that is not strictly greater than both the last tag and the current in-tree version, so a miscount fails loudly rather than shipping.
 
 ### 2. Review Changes Since Last Release
 
@@ -70,29 +65,28 @@ Analyse changes and summarise for release notes:
 - Bug fixes
 - Internal changes (optional)
 
-### 3. Run Bump Script
+### 3. Rename the CHANGELOG's `[Unreleased]` heading
+
+`bump-version.sh` deliberately never touches `CHANGELOG.md` (release notes are hand-written prose, not a mechanical rewrite) — so this step is manual, and skipping it is not caught until `cargo test` fails on `changelog::tests::releases_come_back_newest_first`, which asserts the CHANGELOG's newest entry equals the crate's own version.
+
+In `CHANGELOG.md`, rename `## [Unreleased]` to `## [<VERSION>] - <today, AEST>` using the entries already filed under it since the last release (do this in the same commit as the version bump, since both need the same version and date), then add a fresh empty `## [Unreleased]` above it for whatever lands next.
+
+### 4. Run Bump Script
 
 ```bash
 ./scripts/bump-version.sh <VERSION>
 ```
 
-The script is the single authority on which files carry a version — do not
-restate the list here, or it drifts (see the "Single source of truth" rule in
-`.claude/CLAUDE.md`). `flake.nix` rotted for exactly this reason: it carried a
-version, was in nobody's list, and sat at `2026.6.3` while the app shipped
-`2026.6.7`.
+The script is the single authority on which files carry a version — do not restate the list here, or it drifts (see the "Single source of truth" rule in `.claude/CLAUDE.md`). `flake.nix` rotted for exactly this reason: it carried a version, was in nobody's list, and sat at `2026.6.3` while the app shipped `2026.6.7`.
 
 The script refuses to run if:
 
-- the new version is not strictly greater than both the last tag and the
-  current in-tree version; or
-- any file it does not rewrite declares the outgoing version — which means a
-  new version-bearing file was added without teaching the script about it.
+- the new version is not strictly greater than both the last tag and the current in-tree version; or
+- any file it does not rewrite declares the outgoing version — which means a new version-bearing file was added without teaching the script about it.
 
-Both guards run before anything is written, so a failure never leaves a
-half-bumped tree.
+Both guards run before anything is written, so a failure never leaves a half-bumped tree.
 
-### 4. Review Version Changes
+### 5. Review Version Changes
 
 ```bash
 git diff
@@ -100,7 +94,7 @@ git diff
 
 Verify only version fields changed, in the files the script reports.
 
-### 5. Commit and Tag
+### 6. Commit and Tag
 
 ```bash
 # Stage changes
@@ -117,7 +111,7 @@ git push origin main
 git push origin v<VERSION>
 ```
 
-### 6. Monitor CI Build
+### 7. Monitor CI Build
 
 ```bash
 # Open actions page
@@ -130,7 +124,7 @@ Tell user:
 2. Watch for completion
 3. Workflow creates draft release
 
-### 7. Draft Release Instructions
+### 8. Draft Release Instructions
 
 Once CI completes, instruct user to:
 
@@ -145,7 +139,7 @@ Once CI completes, instruct user to:
 5. Edit release notes with the summary from step 2
 6. Publish release when ready
 
-### 8. Post-Release
+### 9. Post-Release
 
 Remind user:
 
@@ -155,37 +149,24 @@ Remind user:
 
 ## Failure Checks
 
-Before pushing (step 5):
+Before pushing (step 6):
 
 - [ ] Version determined using AEST date
-- [ ] **Version is strictly greater than the last tag** — `git describe --tags --abbrev=0`
-      must report a version lower than the one being released. Never retag, delete or
-      move a published tag to fix a numbering mistake: released tags are monotonic and
-      rewriting one breaks auto-updates for everyone who already upgraded. Roll forward
-      with the next patch instead.
-- [ ] **Version is strictly greater than the previous in-tree version** — a source
-      build (Nix) reports the in-tree version, so an in-tree regression outranks the
-      real release even when tags look fine.
+- [ ] **Version is strictly greater than the last tag** — `git describe --tags --abbrev=0` must report a version lower than the one being released. Never retag, delete or move a published tag to fix a numbering mistake: released tags are monotonic and rewriting one breaks auto-updates for everyone who already upgraded. Roll forward with the next patch instead.
+- [ ] **Version is strictly greater than the previous in-tree version** — a source build (Nix) reports the in-tree version, so an in-tree regression outranks the real release even when tags look fine.
 - [ ] Changes reviewed and summarized
-- [ ] Bump script ran successfully (it enforces both checks above and exits non-zero
-      otherwise)
+- [ ] Bump script ran successfully (it enforces both checks above and exits non-zero otherwise)
 - [ ] Only version fields changed (git diff clean)
 - [ ] Commit message format correct
 - [ ] Tag format is `v<VERSION>`
 
 ## When the release build fails
 
-Two failure modes that are not obvious from the workflow log alone, carried over
-from the root RELEASING.md this command replaced.
+Two failure modes that are not obvious from the workflow log alone.
 
-**No draft release appeared.** Check, in order: the `TAURI_SIGNING_PRIVATE_KEY`
-secret is present; `cargo check` passes locally; `pnpm build` passes locally; the
-sherpa-onnx dylibs downloaded (the `download-binaries` feature fetches them, so a
-network failure on the runner looks like a link error).
+**No draft release appeared.** Check, in order: the `TAURI_SIGNING_PRIVATE_KEY` secret is present; `cargo check` passes locally; `pnpm build` passes locally; the sherpa-onnx dylibs downloaded (the `download-binaries` feature fetches them, so a network failure on the runner looks like a link error).
 
-**`latest.json` is missing from the artefacts.** The updater manifest is only
-emitted when `bundle.createUpdaterArtifacts` is `true` in `tauri.conf.json`.
-Without it the build is green and auto-updates silently never arrive.
+**`latest.json` is missing from the artefacts.** The updater manifest is only emitted when `bundle.createUpdaterArtifacts` is `true` in `tauri.conf.json`. Without it the build is green and auto-updates silently never arrive.
 
 Neither is fixed by retagging — see Rollback below. Roll forward.
 
@@ -199,9 +180,7 @@ If critical issues discovered after publishing:
 2. Run this workflow again with next patch version
 3. Publish immediately
 
-**Option 2: Delete Release (NOT Recommended)**
-⚠️ Breaks auto-updates for users who already upgraded
-Only if no users upgraded AND issue is critical:
+**Option 2: Delete Release (NOT Recommended)** ⚠️ Breaks auto-updates for users who already upgraded Only if no users upgraded AND issue is critical:
 
 ```bash
 # Delete tag

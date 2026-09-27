@@ -245,9 +245,14 @@ mod tests {
     /// Newest first, because that is the order the file is written in and the
     /// order a "what changed" list is read in.
     ///
-    /// The expected version is the crate's own, not a literal: `bump-version.sh`
-    /// moves `Cargo.toml` and the changelog's top entry together, so a retyped
-    /// version here just rots at the next release.
+    /// The expected version is the crate's own, not a literal, so a retyped
+    /// version here just rots at the next release. This is also the gate that
+    /// catches a release cut without renaming the CHANGELOG's `[Unreleased]`
+    /// heading to the new version first: `bump-version.sh` deliberately does
+    /// not touch CHANGELOG.md (release notes are hand-written prose, not a
+    /// mechanical rewrite), so that rename is a manual step `git-release.md`
+    /// takes before running the script — done in the same commit as the
+    /// version bump, since both need the same date and version.
     #[test]
     fn releases_come_back_newest_first() {
         let releases = releases();
