@@ -103,7 +103,6 @@ subtle = "2.6"
 # Bundled MCP server (mounts on the same loopback axum router)
 rmcp = { version = "1.7", features = ["server", "macros", "transport-streamable-http-server"] }
 schemars = "1"
-tokio-util = "0.7"
 getrandom = "0.4"
 
 # Persistence

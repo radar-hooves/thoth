@@ -6079,7 +6079,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "tokio-util",
  "tower-http 0.7.0",
  "tracing",
  "unicode-normalization",
