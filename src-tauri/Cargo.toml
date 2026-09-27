@@ -80,7 +80,7 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "str
 # The household's one telemetry call: stderr for the developer, allow-listed
 # OTLP/HTTP for the corpus. `reqwest-middleware` names the type `http_client()`
 # hands back, so the shared traceparent-carrying client can be stored.
-telemetry = { git = "https://github.com/radar-hooves/telemetry-rs", tag = "v0.2.0" }
+telemetry = { git = "https://github.com/radar-hooves/telemetry-rs", tag = "v0.3.0" }
 # `json` for the request builders; the crate forwards it to reqwest.
 reqwest-middleware = { version = "0.5", features = ["json"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "tls12", "std"] }
@@ -122,6 +122,8 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 parking_lot = "0.12"
 dirs = "6.0"
+# Process RSS/CPU sampling for telemetry (own process only, no whole-system scan).
+sysinfo = { version = "0.33", default-features = false, features = ["system"] }
 arboard = "3.4"
 enigo = "0.6"
 open = "5"
