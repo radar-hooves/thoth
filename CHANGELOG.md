@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A long dictation's AI enhancement no longer comes back gutted, or arrives after you've moved on.** A dictation past about 6,000 characters could be handed to your local model with no context-window size set — Ollama then silently drops the _start_ of a prompt that overruns it, so the model corrected a fragment and handed back a fraction of what you said. Enhancement above that length is now skipped outright (your filtered transcript still pastes, instantly), and for everything under it the context window is sized to fit the whole thing, generation is capped so a model that loops cannot run for minutes, and a reply that comes back implausibly short or long is discarded in favour of your original text rather than pasted. The old three-attempt retry (up to 90 seconds before giving up) is gone too — one bounded attempt, so a failure is known and handled in one timeout instead of three.
+- **A model your build cannot run is no longer loaded, even though the Active badge never claimed it.** A config carried between machines, or just gone stale, could point Settings' model list at one (correctly unavailable) model while the actual startup and manual-selection paths tried to load a different, resolved one — so what warmup attempted and what the UI showed could disagree. Both now resolve the same way.
+- **A config reload that fails no longer clears the way to overwrite your real settings with defaults.** A transient failure refreshing configuration replaced it with placeholder defaults in memory while still allowing a save — so the next change you made in Settings could write those defaults over your actual, working configuration. A failed refresh now keeps what was last loaded; defaults are used only before anything has loaded at all, and saving stays disabled until that first load succeeds.
+
 ### Changed
 
 - **Right Shift is the default record key on macOS.** A fresh install used F13, a key almost no keyboard has. A bare tap of right Shift is on every keyboard and clashes with nothing, so it is now the default there; F13 stays the default on Linux and Windows, where a modifier-only key cannot be read on Wayland. An existing configuration is untouched. On macOS the modifier key needs the Input Monitoring permission the setup guide already asks for; the Cmd+Shift+Space alternate works without it.
