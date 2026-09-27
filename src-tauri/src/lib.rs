@@ -281,8 +281,29 @@ pub fn run() {
                 Box::new(e) as Box<dyn std::error::Error>
             })?;
 
-            // Set up system tray
-            tray::setup_tray(app)?;
+            // Set up the system tray, best-effort. On Linux, tray-icon's
+            // libappindicator-sys panics rather than returning an Err when
+            // libayatana-appindicator3/libappindicator3 is not on the system
+            // — a missing optional library the .deb declares as a dependency
+            // but the AppImage and raw binary do not bundle. A caught panic
+            // or an ordinary Err here logs and moves on rather than aborting
+            // the rest of setup: a missing tray icon is cosmetic, and nothing
+            // below this — shortcuts, transcription warmup — should depend
+            // on it existing.
+            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| tray::setup_tray(app))) {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => {
+                    tracing::error!("Tray icon setup failed, continuing without one: {e}")
+                }
+                Err(payload) => {
+                    let detail = payload
+                        .downcast_ref::<&str>()
+                        .map(|s| (*s).to_string())
+                        .or_else(|| payload.downcast_ref::<String>().cloned())
+                        .unwrap_or_else(|| "unknown panic".to_string());
+                    tracing::error!("Tray icon setup panicked, continuing without one: {detail}");
+                }
+            }
 
             // Load config and register shortcuts
             if let Ok(cfg) = config::get_config() {
