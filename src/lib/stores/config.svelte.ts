@@ -516,6 +516,7 @@ function createConfigStore() {
   async function load(): Promise<void> {
     isLoading = true;
     error = null;
+    const hadLoadedConfig = isInitialised;
 
     try {
       const rawConfig = await invoke<ConfigRaw>('get_config');
@@ -525,15 +526,16 @@ function createConfigStore() {
       error = e instanceof Error ? e.message : 'Failed to load configuration';
       console.error('Failed to load config:', e);
 
-      // Fall back to the backend's own defaults rather than the placeholder in
-      // getDefaultConfig(), so the UI shows the bindings that are actually
-      // registered. Deliberately does not set isInitialised: save() must still
-      // refuse, so a failed load can never overwrite the user's persisted
-      // settings with defaults.
-      try {
-        config = parseConfig(await invoke<ConfigRaw>('get_default_config'));
-      } catch (defaultsError) {
-        console.error('Failed to load default config:', defaultsError);
+      // A failed refresh must retain the last verified configuration. Replacing
+      // it with defaults while isInitialised stays true lets the next Settings
+      // save overwrite the user's settings. On first load there is no good
+      // state, so show the backend defaults but keep saves disabled.
+      if (!hadLoadedConfig) {
+        try {
+          config = parseConfig(await invoke<ConfigRaw>('get_default_config'));
+        } catch (defaultsError) {
+          console.error('Failed to load default config:', defaultsError);
+        }
       }
     } finally {
       isLoading = false;

@@ -53,25 +53,6 @@
         console.warn('[App] Database initialisation failed (may already be initialised):', e);
       }
 
-      // Initialise transcription engine (skip if backend warmup already did it)
-      try {
-        const alreadyReady = await invoke<boolean>('is_transcription_ready');
-        if (alreadyReady) {
-          debug('Transcription already warmed up by backend');
-        } else {
-          const modelDir = await invoke<string>('get_model_directory');
-          const modelDownloaded = await invoke<boolean>('check_model_downloaded');
-          debug('Model downloaded:', modelDownloaded);
-
-          if (modelDownloaded) {
-            await invoke('init_transcription', { modelPath: modelDir });
-            debug('Transcription service ready');
-          }
-        }
-      } catch (e) {
-        console.warn('[App] Transcription initialisation failed:', e);
-      }
-
       // Initialise shortcuts store (loads registered shortcuts)
       await shortcutsStore.initialise();
       debug('Shortcuts store initialised');

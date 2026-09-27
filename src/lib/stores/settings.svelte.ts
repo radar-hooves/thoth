@@ -127,8 +127,11 @@ export function createSettingsStore() {
   async function initialise(): Promise<void> {
     if (isInitialised) return;
 
-    // Load config from backend first
-    await configStore.load();
+    // App initialises config before this shared store. Recorder windows can mount
+    // independently, so load only when this webview has not done that yet.
+    if (!configStore.isInitialised) {
+      await configStore.load();
+    }
     await loadAudioDevices();
     isInitialised = true;
 
