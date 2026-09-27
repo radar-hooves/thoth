@@ -7,16 +7,8 @@
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use tokio::time::sleep;
 
-/// Default timeout for API requests in seconds
-const DEFAULT_TIMEOUT_SECS: u64 = 30;
-
-/// Maximum number of retry attempts
-const MAX_RETRY_ATTEMPTS: u32 = 3;
-
-/// Base delay for exponential backoff in milliseconds
-const BASE_RETRY_DELAY_MS: u64 = 100;
+use super::{REQUEST_TIMEOUT_SECS, output_token_limit};
 
 /// A single message in the chat completions request
 #[derive(Debug, Serialize)]
@@ -31,6 +23,7 @@ struct ChatCompletionRequest {
     model: String,
     messages: Vec<ChatMessage>,
     stream: bool,
+    max_tokens: usize,
 }
 
 /// A single choice in the chat completions response
@@ -83,15 +76,12 @@ pub enum OpenAiCompatError {
 
     #[error("Failed to parse response: {0}")]
     ParseError(String),
-
-    #[error("All {attempts} retry attempts failed: {last_error}")]
-    RetriesExhausted { attempts: u32, last_error: String },
 }
 
 /// HTTP client for any OpenAI-compatible `/v1/chat/completions` endpoint.
 ///
-/// Supports configurable base URL, optional API key, and retry logic with
-/// exponential backoff for transient failures. Never logs the API key.
+/// Supports a configurable base URL and an optional API key. Never logs the
+/// API key.
 #[derive(Clone)]
 pub struct OpenAiCompatClient {
     base_url: String,
@@ -122,7 +112,7 @@ impl OpenAiCompatClient {
     ///
     /// Returns an error if `base_url` uses an unsupported scheme (not `http://` or `https://`).
     pub fn new(base_url: String, api_key: Option<String>) -> Result<Self, OpenAiCompatError> {
-        Self::with_timeout(base_url, api_key, DEFAULT_TIMEOUT_SECS)
+        Self::with_timeout(base_url, api_key, REQUEST_TIMEOUT_SECS)
     }
 
     /// Create a new client with an explicit timeout.
@@ -261,6 +251,7 @@ impl OpenAiCompatClient {
         // The rendered prompt is sent as the user message so the model receives
         // both the instruction and the content in one turn.
         let user_content = prompt_template.replace("{text}", text);
+        let max_tokens = output_token_limit(&user_content);
 
         let request = ChatCompletionRequest {
             model: model.to_string(),
@@ -269,61 +260,16 @@ impl OpenAiCompatClient {
                 content: user_content,
             }],
             stream: false,
+            max_tokens,
         };
 
         tracing::debug!("OpenAI-compat: sending chat request with model: {}", model);
 
-        let mut last_error: Option<OpenAiCompatError> = None;
-
-        for attempt in 0..MAX_RETRY_ATTEMPTS {
-            match self.send_chat_request(&request).await {
-                Ok(response) => {
-                    if attempt > 0 {
-                        tracing::debug!(
-                            "OpenAI-compat: request succeeded on attempt {}",
-                            attempt + 1
-                        );
-                    }
-                    return Ok(response);
-                }
-                Err(e) => {
-                    let is_retryable = match &e {
-                        OpenAiCompatError::ConnectionFailed(_) | OpenAiCompatError::Timeout(_) => {
-                            true
-                        }
-                        OpenAiCompatError::ServerError { status, .. } => *status >= 500,
-                        _ => false,
-                    };
-
-                    if !is_retryable || attempt == MAX_RETRY_ATTEMPTS - 1 {
-                        tracing::error!(
-                            "OpenAI-compat request failed (attempt {}): {}",
-                            attempt + 1,
-                            e
-                        );
-                        last_error = Some(e);
-                        break;
-                    }
-
-                    let delay_ms = BASE_RETRY_DELAY_MS * 2u64.pow(attempt);
-                    tracing::warn!(
-                        "OpenAI-compat request failed (attempt {}), retrying in {}ms: {}",
-                        attempt + 1,
-                        delay_ms,
-                        e
-                    );
-                    last_error = Some(e);
-                    sleep(Duration::from_millis(delay_ms)).await;
-                }
-            }
-        }
-
-        Err(anyhow!(OpenAiCompatError::RetriesExhausted {
-            attempts: MAX_RETRY_ATTEMPTS,
-            last_error: last_error
-                .map(|e| e.to_string())
-                .unwrap_or_else(|| "unknown".to_string()),
-        }))
+        Ok(
+            tokio::time::timeout(self.timeout, self.send_chat_request(&request))
+                .await
+                .map_err(|_| OpenAiCompatError::Timeout(self.timeout.as_secs()))??,
+        )
     }
 }
 
@@ -580,29 +526,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_5xx_triggers_retries_exhausted() {
+    async fn test_5xx_fails_on_the_first_attempt() {
         let mut server = Server::new_async().await;
 
-        // 3 consecutive 500 errors → RetriesExhausted
-        for _ in 0..MAX_RETRY_ATTEMPTS {
-            server
-                .mock("POST", "/v1/chat/completions")
-                .with_status(500)
-                .with_body("Internal Server Error")
-                .create_async()
-                .await;
-        }
+        // One 500 is enough: a single bounded request, no retries.
+        server
+            .mock("POST", "/v1/chat/completions")
+            .with_status(500)
+            .with_body("Internal Server Error")
+            .create_async()
+            .await;
 
         let client = OpenAiCompatClient::new(server.url(), None).unwrap();
         let result = client.enhance_text("text", "model", "{text}").await;
 
         assert!(result.is_err());
         let err_str = result.unwrap_err().to_string();
-        assert!(
-            err_str.contains("retry") || err_str.contains("500"),
-            "Unexpected error: {}",
-            err_str
-        );
+        assert!(err_str.contains("500"), "Unexpected error: {}", err_str);
     }
 
     // -------------------------------------------------------------------------
@@ -625,11 +565,13 @@ mod tests {
 
         let err = OpenAiCompatError::EmptyChoices;
         assert_eq!(err.to_string(), "Empty response: no choices returned");
+    }
 
-        let err = OpenAiCompatError::RetriesExhausted {
-            attempts: 3,
-            last_error: "timeout".to_string(),
-        };
-        assert_eq!(err.to_string(), "All 3 retry attempts failed: timeout");
+    #[test]
+    fn test_max_tokens_is_bounded_and_scales_with_input() {
+        let short = output_token_limit("short prompt");
+        let long = output_token_limit(&"a".repeat(6_000));
+        assert!(long > short);
+        assert!(long <= 4096);
     }
 }

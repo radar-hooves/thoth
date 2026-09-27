@@ -1,24 +1,16 @@
 //! Ollama HTTP client for AI text enhancement
 //!
 //! Provides local AI enhancement via the Ollama API running at localhost:11434.
-//! Supports retry with exponential backoff and configurable timeout.
+//! Each generation makes one bounded request.
 
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use tokio::time::sleep;
+
+use super::{REQUEST_TIMEOUT_SECS, estimate_tokens, output_token_limit};
 
 /// Default Ollama server address
 const DEFAULT_OLLAMA_BASE_URL: &str = "http://localhost:11434";
-
-/// Default timeout for API requests in seconds
-const DEFAULT_TIMEOUT_SECS: u64 = 30;
-
-/// Maximum number of retry attempts
-const MAX_RETRY_ATTEMPTS: u32 = 3;
-
-/// Base delay for exponential backoff in milliseconds
-const BASE_RETRY_DELAY_MS: u64 = 100;
 
 /// Request body for Ollama generate endpoint
 #[derive(Debug, Serialize)]
@@ -27,9 +19,25 @@ struct GenerateRequest {
     prompt: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     system: Option<String>,
+    options: GenerateOptions,
+    stream: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct GenerateOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
-    stream: bool,
+    num_predict: usize,
+    num_ctx: usize,
+}
+
+/// Left unset, Ollama defaults num_ctx far below a long dictation's prompt
+/// and silently drops the *start* of whatever overruns it rather than
+/// erroring — the model never sees the missing part, which is what produced
+/// #179's truncated replies, not the output length. Sized to the whole
+/// prompt plus the reply budget, so nothing is ever dropped.
+fn context_window(prompt: &str) -> usize {
+    estimate_tokens(prompt.len()) + output_token_limit(prompt) + 512
 }
 
 /// Response from Ollama generate endpoint (non-streaming)
@@ -67,15 +75,11 @@ pub enum OllamaError {
 
     #[error("Failed to parse response: {0}")]
     ParseError(String),
-
-    #[error("All {attempts} retry attempts failed: {last_error}")]
-    RetriesExhausted { attempts: u32, last_error: String },
 }
 
 /// Ollama HTTP client for AI text enhancement
 ///
-/// Supports configurable base URL, timeout, and retry logic with
-/// exponential backoff for transient failures.
+/// Supports a configurable base URL and timeout.
 #[derive(Debug, Clone)]
 pub struct OllamaClient {
     base_url: String,
@@ -93,12 +97,12 @@ impl Default for OllamaClient {
 impl OllamaClient {
     /// Create a new Ollama client with default settings
     pub fn new() -> Self {
-        Self::with_config(DEFAULT_OLLAMA_BASE_URL, DEFAULT_TIMEOUT_SECS, None)
+        Self::with_config(DEFAULT_OLLAMA_BASE_URL, REQUEST_TIMEOUT_SECS, None)
     }
 
     /// Create a new Ollama client with a custom base URL
     pub fn with_base_url(base_url: String) -> Self {
-        Self::with_config(&base_url, DEFAULT_TIMEOUT_SECS, None)
+        Self::with_config(&base_url, REQUEST_TIMEOUT_SECS, None)
     }
 
     /// Create a new Ollama client with full configuration
@@ -239,7 +243,11 @@ impl OllamaClient {
             model: model.to_string(),
             prompt: prompt.to_string(),
             system: system_prompt.map(|s| s.to_string()),
-            temperature,
+            options: GenerateOptions {
+                temperature,
+                num_predict: output_token_limit(prompt),
+                num_ctx: context_window(prompt),
+            },
             stream: false,
         };
 
@@ -249,49 +257,11 @@ impl OllamaClient {
             system_prompt.is_some()
         );
 
-        // Retry with exponential backoff
-        let mut last_error: Option<OllamaError> = None;
-
-        for attempt in 0..MAX_RETRY_ATTEMPTS {
-            match self.send_generate_request(&request).await {
-                Ok(response) => {
-                    if attempt > 0 {
-                        tracing::debug!("Request succeeded on attempt {}", attempt + 1);
-                    }
-                    return Ok(response);
-                }
-                Err(e) => {
-                    let is_retryable = match &e {
-                        OllamaError::ConnectionFailed(_) | OllamaError::Timeout(_) => true,
-                        OllamaError::ServerError { status, .. } => *status >= 500,
-                        _ => false,
-                    };
-
-                    if !is_retryable || attempt == MAX_RETRY_ATTEMPTS - 1 {
-                        tracing::error!("Ollama request failed (attempt {}): {}", attempt + 1, e);
-                        last_error = Some(e);
-                        break;
-                    }
-
-                    let delay_ms = BASE_RETRY_DELAY_MS * 2u64.pow(attempt);
-                    tracing::warn!(
-                        "Ollama request failed (attempt {}), retrying in {}ms: {}",
-                        attempt + 1,
-                        delay_ms,
-                        e
-                    );
-                    last_error = Some(e);
-                    sleep(Duration::from_millis(delay_ms)).await;
-                }
-            }
-        }
-
-        Err(anyhow!(OllamaError::RetriesExhausted {
-            attempts: MAX_RETRY_ATTEMPTS,
-            last_error: last_error
-                .map(|e| e.to_string())
-                .unwrap_or_else(|| "unknown".to_string()),
-        }))
+        Ok(
+            tokio::time::timeout(self.timeout, self.send_generate_request(&request))
+                .await
+                .map_err(|_| OllamaError::Timeout(self.timeout.as_secs()))??,
+        )
     }
 
     /// Enhance text using the specified model and prompt template
@@ -330,7 +300,7 @@ mod tests {
     fn test_client_creation() {
         let client = OllamaClient::new();
         assert_eq!(client.base_url, DEFAULT_OLLAMA_BASE_URL);
-        assert_eq!(client.timeout.as_secs(), DEFAULT_TIMEOUT_SECS);
+        assert_eq!(client.timeout.as_secs(), REQUEST_TIMEOUT_SECS);
     }
 
     #[test]
@@ -361,13 +331,19 @@ mod tests {
             model: "llama3.2".to_string(),
             prompt: "test prompt".to_string(),
             system: None,
-            temperature: None,
+            options: GenerateOptions {
+                temperature: None,
+                num_predict: 256,
+                num_ctx: 4096,
+            },
             stream: false,
         };
 
         let json = serde_json::to_string(&request).expect("Failed to serialise");
         assert!(json.contains("\"model\":\"llama3.2\""));
         assert!(json.contains("\"stream\":false"));
+        assert!(json.contains("\"num_predict\":256"));
+        assert!(json.contains("\"num_ctx\":4096"));
         // system and temperature should be omitted when None
         assert!(!json.contains("\"system\""));
         assert!(!json.contains("\"temperature\""));
@@ -379,7 +355,11 @@ mod tests {
             model: "llama3.2".to_string(),
             prompt: "test prompt".to_string(),
             system: Some("You are a helpful assistant.".to_string()),
-            temperature: Some(0.3),
+            options: GenerateOptions {
+                temperature: Some(0.3),
+                num_predict: 256,
+                num_ctx: 4096,
+            },
             stream: false,
         };
 
@@ -401,12 +381,13 @@ mod tests {
             message: "Internal error".to_string(),
         };
         assert_eq!(err.to_string(), "Server error (500): Internal error");
+    }
 
-        let err = OllamaError::RetriesExhausted {
-            attempts: 3,
-            last_error: "timeout".to_string(),
-        };
-        assert_eq!(err.to_string(), "All 3 retry attempts failed: timeout");
+    #[test]
+    fn test_context_window_covers_the_whole_prompt() {
+        let prompt = "a".repeat(9686);
+        let window_tokens = context_window(&prompt);
+        assert!(window_tokens > estimate_tokens(prompt.len()));
     }
 
     #[test]

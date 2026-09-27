@@ -24,6 +24,44 @@ use crate::error::Error;
 use parking_lot::Mutex;
 use std::sync::OnceLock;
 
+/// One attempt, including response decoding, before retaining the original text.
+const REQUEST_TIMEOUT_SECS: u64 = 30;
+
+/// Above this, a small local model reliably mishandles the rewrite (#179: a
+/// 9,683-char dictation came back at 7-19% of its own length in testing) and
+/// a correctly sized reply would run well past REQUEST_TIMEOUT_SECS anyway.
+/// Skipping is instant; the filtered transcript still pastes.
+const MAX_ENHANCE_INPUT_CHARS: usize = 6_000;
+
+/// A deliberately low token-per-char estimate (English averages nearer 4), so
+/// a request is never undersized for text that tokenises more densely.
+fn estimate_tokens(chars: usize) -> usize {
+    chars / 3 + 16
+}
+
+/// Bounds a single generation. A grammar fix rarely grows text; capped well
+/// above 1:1 so a legitimate long dictation still fits, without leaving a
+/// model that loops instead of stopping free to run for minutes.
+fn output_token_limit(text: &str) -> usize {
+    (estimate_tokens(text.len()) * 3 / 2).clamp(256, 4096)
+}
+
+/// A model that shrinks or runs away past these bounds is misbehaving, not
+/// improving the text — `enhance_text` rejects it and the pipeline already
+/// retains the original on any `Err` from here, which is strictly safer than
+/// pasting a truncated or runaway reply.
+const MIN_OUTPUT_RATIO: f64 = 0.5;
+const MAX_OUTPUT_RATIO: f64 = 2.5;
+const MIN_INPUT_CHARS_FOR_RATIO_CHECK: usize = 50;
+
+fn output_length_is_plausible(input_len: usize, output_len: usize) -> bool {
+    if input_len < MIN_INPUT_CHARS_FOR_RATIO_CHECK {
+        return true;
+    }
+    let ratio = output_len as f64 / input_len as f64;
+    (MIN_OUTPUT_RATIO..=MAX_OUTPUT_RATIO).contains(&ratio)
+}
+
 /// Which enhancement backend is active
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendType {
@@ -203,6 +241,16 @@ pub async fn enhance_text(text: String, model: String, prompt: String) -> Result
         return Err("Model cannot be empty".to_string().into());
     }
 
+    if text.len() > MAX_ENHANCE_INPUT_CHARS {
+        span.record("ok", false);
+        tracing::info!(
+            "Skipping enhancement for a {}-char dictation (over the {}-char cap); pasting the filtered transcript",
+            text.len(),
+            MAX_ENHANCE_INPUT_CHARS
+        );
+        return Err(Error::Other("Dictation too long to enhance".into()));
+    }
+
     let (backend_type, ollama, openai_compat) = {
         let b = get_backend().lock();
         (b.backend_type, b.ollama.clone(), b.openai_compat.clone())
@@ -240,6 +288,23 @@ pub async fn enhance_text(text: String, model: String, prompt: String) -> Result
                 })?
         }
     };
+
+    if result.trim().is_empty() {
+        span.record("ok", false);
+        return Err(Error::Other("Enhancement returned no text".into()));
+    }
+
+    if !output_length_is_plausible(text.len(), result.len()) {
+        span.record("ok", false);
+        tracing::warn!(
+            "Enhancement output length implausible ({} -> {} chars), discarding",
+            text.len(),
+            result.len()
+        );
+        return Err(Error::Other(
+            "Enhancement output length was implausible".into(),
+        ));
+    }
 
     span.record("output_bytes", result.len());
     span.record("ok", true);
@@ -297,6 +362,39 @@ mod tests {
             None,
         );
         assert_eq!(bt, BackendType::Ollama);
+    }
+
+    #[test]
+    fn test_output_length_is_plausible_within_bounds() {
+        assert!(output_length_is_plausible(9683, 8500));
+        assert!(output_length_is_plausible(1500, 1382));
+    }
+
+    #[test]
+    fn test_output_length_rejects_the_179_truncation() {
+        // The exact failure from #179: a 9,683-char dictation returned 1,807 chars.
+        assert!(!output_length_is_plausible(9683, 1807));
+    }
+
+    #[test]
+    fn test_output_length_rejects_a_runaway_reply() {
+        assert!(!output_length_is_plausible(9686, 82655));
+    }
+
+    #[test]
+    fn test_output_length_skips_the_check_for_tiny_input() {
+        // A one-word dictation can legitimately shrink to nothing after filler
+        // removal; the ratio check would otherwise flag every short command.
+        assert!(output_length_is_plausible(10, 1));
+    }
+
+    #[test]
+    fn test_output_token_limit_covers_a_1to1_rewrite_of_the_cap() {
+        let text = "a".repeat(MAX_ENHANCE_INPUT_CHARS);
+        let estimated_output_tokens = output_token_limit(&text);
+        // A verbatim-length correction of the longest input we still attempt
+        // must fit the token budget we ask Ollama for.
+        assert!(estimated_output_tokens as f64 >= estimate_tokens(text.len()) as f64 * 0.9);
     }
 
     #[test]
