@@ -3,6 +3,7 @@
 //! Provides functions for creating, reading, updating, and deleting transcriptions
 //! in the SQLite database.
 
+use crate::TELEMETRY_TARGET;
 use chrono::Utc;
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -676,6 +677,7 @@ pub fn get_transcription_stats() -> Result<TranscriptionStats, DatabaseError> {
 
 /// Returns aggregated transcription statistics for the performance dashboard.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn get_transcription_stats_cmd() -> Result<TranscriptionStats, Error> {
     get_transcription_stats()
         .map_err(|e| {
@@ -688,6 +690,7 @@ pub fn get_transcription_stats_cmd() -> Result<TranscriptionStats, Error> {
 /// Saves a new transcription to the database.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn save_transcription(
     text: String,
     raw_text: Option<String>,
@@ -723,6 +726,7 @@ pub fn save_transcription(
 
 /// Retrieves a transcription by its ID.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn get_transcription_by_id(id: String) -> Result<Option<Transcription>, Error> {
     get_transcription(&id)
         .map_err(|e| {
@@ -734,6 +738,7 @@ pub fn get_transcription_by_id(id: String) -> Result<Option<Transcription>, Erro
 
 /// Lists all transcriptions with optional pagination.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn list_all_transcriptions(
     limit: Option<i64>,
     offset: Option<i64>,
@@ -748,6 +753,7 @@ pub fn list_all_transcriptions(
 
 /// Deletes a transcription by its ID.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn delete_transcription_by_id(id: String) -> Result<bool, Error> {
     delete_transcription(&id)
         .map_err(|e| {
@@ -759,6 +765,7 @@ pub fn delete_transcription_by_id(id: String) -> Result<bool, Error> {
 
 /// Deletes all transcriptions.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn delete_all_transcriptions_cmd() -> Result<usize, Error> {
     delete_all_transcriptions()
         .map_err(|e| {
@@ -771,6 +778,7 @@ pub fn delete_all_transcriptions_cmd() -> Result<usize, Error> {
 /// Scans ~/.thoth/Recordings/ for WAV files not referenced by any DB row and
 /// removes them. Returns the number of files removed and bytes freed.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn reconcile_orphaned_recordings_cmd() -> Result<ReconcileResult, Error> {
     reconcile_orphaned_recordings()
         .map_err(|e| {
@@ -782,6 +790,7 @@ pub fn reconcile_orphaned_recordings_cmd() -> Result<ReconcileResult, Error> {
 
 /// Searches transcriptions by text content.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn search_transcriptions_text(
     query: String,
     limit: Option<i64>,
@@ -796,6 +805,7 @@ pub fn search_transcriptions_text(
 
 /// Counts transcriptions, optionally filtered by a search query.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn count_transcriptions_filtered(query: Option<String>) -> Result<usize, Error> {
     count_transcriptions(query.as_deref())
         .map_err(|e| {

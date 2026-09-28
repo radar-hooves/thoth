@@ -26,6 +26,7 @@ pub use linux::{DisplayServer, get_display_server};
 pub use conflict::{RegistrationResult, ShortcutConflict};
 pub use manager::{ShortcutInfo, shortcut_ids};
 
+use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use crate::keyboard_service;
 use tauri::AppHandle;
@@ -57,6 +58,7 @@ pub fn is_wayland() -> bool {
 /// * `Ok(())` on success
 /// * `Err(String)` with a user-friendly error message on failure
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn register_shortcut(
     app: AppHandle,
     id: String,
@@ -97,6 +99,7 @@ pub fn register_shortcut(
 /// * `Ok(())` on success
 /// * `Err(String)` if the shortcut is not registered or unregistration fails
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn unregister_shortcut(app: AppHandle, id: String) -> Result<(), Error> {
     // Try modifier monitor first, then regular shortcuts
     if keyboard_service::is_modifier_shortcut_registered(&id) {
@@ -120,6 +123,7 @@ pub fn unregister_shortcut(app: AppHandle, id: String) -> Result<(), Error> {
 /// # Returns
 /// A vector of `ShortcutInfo` for all registered shortcuts
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn list_registered_shortcuts() -> Vec<ShortcutInfo> {
     // Platform-specific listing
     #[cfg(target_os = "linux")]
@@ -153,6 +157,7 @@ pub fn list_registered_shortcuts() -> Vec<ShortcutInfo> {
 /// # Returns
 /// A vector of `ShortcutInfo` describing the default shortcuts
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_default_shortcuts() -> Vec<ShortcutInfo> {
     manager::get_defaults()
 }
@@ -165,6 +170,7 @@ pub fn get_default_shortcuts() -> Vec<ShortcutInfo> {
 /// * `Ok(())` if all shortcuts were registered successfully
 /// * `Err(String)` if any shortcuts failed to register (includes details)
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn register_default_shortcuts(app: AppHandle) -> Result<(), Error> {
     // Register each default through `register_shortcut`, which routes modifier-only
     // accelerators (e.g. "ShiftRight") to the keyboard service and everything else to
@@ -210,6 +216,7 @@ pub fn register_default_shortcuts(app: AppHandle) -> Result<(), Error> {
 /// * `Ok(())` on success
 /// * `Err(String)` if unregistration fails
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn unregister_all_shortcuts(app: AppHandle) -> Result<(), Error> {
     // Unregister all modifier shortcuts (thread stays alive for mode transitions)
     keyboard_service::unregister_all_modifier_shortcuts();
@@ -238,6 +245,7 @@ pub fn unregister_all_shortcuts(app: AppHandle) -> Result<(), Error> {
 /// # Returns
 /// A `RegistrationResult` indicating success or conflict with suggestions
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn try_register_shortcut(
     app: AppHandle,
     id: String,
@@ -304,6 +312,7 @@ pub fn try_register_shortcut(
 /// * `Ok(false)` if the shortcut is already registered by this app
 /// * `Err(String)` if the format is invalid
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn check_shortcut_available(app: AppHandle, accelerator: String) -> Result<bool, Error> {
     // Modifier-only shortcuts are always "available" (we handle them ourselves)
     if keyboard_service::is_modifier_shortcut(&accelerator) {
@@ -359,6 +368,7 @@ pub fn check_shortcut_available(app: AppHandle, accelerator: String) -> Result<b
 /// # Returns
 /// A vector of suggested alternative shortcuts
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_shortcut_suggestions(shortcut: String) -> Vec<String> {
     conflict::suggest_alternatives(&shortcut)
 }

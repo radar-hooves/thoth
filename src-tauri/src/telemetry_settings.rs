@@ -10,6 +10,7 @@
 //! saved values, hands them over, and reports what came back. No header value is
 //! returned, logged or stored — only the helper command that prints them.
 
+use crate::TELEMETRY_TARGET;
 use std::sync::Mutex;
 
 use serde::Serialize;
@@ -87,6 +88,7 @@ pub struct TelemetryStatus {
 
 /// Report the live exporter and the saved values.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn telemetry_get(app: tauri::AppHandle) -> Result<TelemetryStatus, Error> {
     let saved = crate::config::get_config()?.telemetry;
     let (live, from_env) =
@@ -105,6 +107,7 @@ pub fn telemetry_get(app: tauri::AppHandle) -> Result<TelemetryStatus, Error> {
 
 /// Save the endpoint and helper, then point the live exporter at them.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn telemetry_set(
     app: tauri::AppHandle,
     endpoint: String,
@@ -132,6 +135,7 @@ pub async fn telemetry_set(
 /// The error is the crate's own class or HTTP status — never a URL, a header
 /// value or a response body.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn telemetry_probe(endpoint: String, headers_helper: String) -> Result<(), Error> {
     let cfg = TelemetryConfig {
         endpoint,

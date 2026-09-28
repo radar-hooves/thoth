@@ -14,6 +14,7 @@
 //! This module replaces the previous `modifier_monitor.rs` and `keyboard_capture.rs`
 //! which had two independent polling threads that raced against each other.
 
+use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use device_query::{DeviceQuery, DeviceState, Keycode};
 use parking_lot::RwLock;
@@ -343,6 +344,7 @@ pub fn restart_monitoring(app: AppHandle) {
 
 /// Check if Input Monitoring permission is available (macOS)
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn check_input_monitoring() -> bool {
     #[cfg(target_os = "macos")]
     {
@@ -356,6 +358,7 @@ pub fn check_input_monitoring() -> bool {
 
 /// Request Input Monitoring permission (opens System Preferences on macOS)
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn request_input_monitoring() {
     #[cfg(target_os = "macos")]
     {
@@ -369,6 +372,7 @@ pub fn request_input_monitoring() {
 /// so the keyboard service can start without requiring an app restart.
 /// Idempotent: no-ops if already running or no modifier shortcuts are registered.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn try_start_keyboard_service(app: AppHandle) {
     start_monitoring(app);
 }
@@ -380,6 +384,7 @@ pub fn try_start_keyboard_service(app: AppHandle) {
 ///
 /// Returns "native" or "webview" to indicate the capture backend.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn enter_capture_mode(app: AppHandle) -> Result<String, Error> {
     #[cfg(target_os = "macos")]
     {
@@ -431,6 +436,7 @@ pub fn enter_capture_mode(app: AppHandle) -> Result<String, Error> {
 /// Re-registers all shortcuts from config (clean slate).
 /// The frontend MUST save config before calling this.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn exit_capture_mode(app: AppHandle) -> Result<(), Error> {
     // 1. Switch mode back (atomic, instant)
     let has_modifier_shortcuts = !get_registry().read().shortcuts.is_empty();
@@ -456,6 +462,7 @@ pub fn exit_capture_mode(app: AppHandle) -> Result<(), Error> {
 // All args are required by the Tauri IPC contract; grouping would change the JS call-site.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn report_key_event(
     app: AppHandle,
     key: String,

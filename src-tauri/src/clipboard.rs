@@ -3,6 +3,7 @@
 //! Provides smart clipboard operations including auto-copy on transcription
 //! completion, clipboard history, and configurable formatting options.
 
+use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -281,6 +282,7 @@ fn get_manager() -> &'static Mutex<ClipboardManager> {
 /// Copies the provided text to the clipboard and optionally adds it to
 /// clipboard history.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn copy_to_clipboard(
     app: AppHandle,
     text: String,
@@ -311,6 +313,7 @@ pub async fn copy_to_clipboard(
 /// This is the main entry point for copying transcription results. It checks
 /// the current settings and applies formatting as configured.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn copy_transcription(
     app: AppHandle,
     text: String,
@@ -372,6 +375,7 @@ pub async fn copy_transcription(
 
 /// Get current clipboard settings.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_clipboard_settings() -> ClipboardSettings {
     let manager = get_manager().lock();
     manager.settings().clone()
@@ -379,6 +383,7 @@ pub fn get_clipboard_settings() -> ClipboardSettings {
 
 /// Update clipboard settings.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn set_clipboard_settings(settings: ClipboardSettings) -> Result<(), Error> {
     let mut manager = get_manager().lock();
     manager.update_settings(settings);
@@ -387,6 +392,7 @@ pub fn set_clipboard_settings(settings: ClipboardSettings) -> Result<(), Error> 
 
 /// Get clipboard history.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_clipboard_history() -> Vec<ClipboardHistoryEntry> {
     let manager = get_manager().lock();
     manager.get_history()
@@ -394,6 +400,7 @@ pub fn get_clipboard_history() -> Vec<ClipboardHistoryEntry> {
 
 /// Clear clipboard history.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn clear_clipboard_history() {
     let mut manager = get_manager().lock();
     manager.clear_history();
@@ -401,6 +408,7 @@ pub fn clear_clipboard_history() {
 
 /// Remove a specific entry from clipboard history.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn remove_clipboard_history_entry(id: String) -> bool {
     let mut manager = get_manager().lock();
     manager.remove_from_history(&id)
@@ -408,6 +416,7 @@ pub fn remove_clipboard_history_entry(id: String) -> bool {
 
 /// Copy an entry from clipboard history to the clipboard.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn copy_from_history(app: AppHandle, id: String) -> Result<(), Error> {
     let manager = get_manager().lock();
     let entry = manager
@@ -430,6 +439,7 @@ pub async fn copy_from_history(app: AppHandle, id: String) -> Result<(), Error> 
 ///
 /// Call this after pasting to restore the user's original clipboard content.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn restore_clipboard(app: AppHandle) -> Result<bool, Error> {
     let mut manager = get_manager().lock();
     if let Some(content) = manager.take_preserved_content() {
@@ -449,6 +459,7 @@ pub async fn restore_clipboard(app: AppHandle) -> Result<bool, Error> {
 
 /// Get the current restore delay setting in milliseconds.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_restore_delay() -> u64 {
     let manager = get_manager().lock();
     manager.settings().restore_delay_ms
@@ -462,6 +473,7 @@ pub fn get_restore_delay() -> u64 {
 /// 3. Paste at cursor position
 /// 4. Restore original clipboard after configured delay (backend-owned)
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn paste_transcription(
     app: AppHandle,
     text: String,

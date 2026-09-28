@@ -10,6 +10,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+use crate::TELEMETRY_TARGET;
 use crate::enhancement;
 use crate::error::Error;
 
@@ -693,6 +694,14 @@ fn load_from_disk() -> Result<Config, String> {
 
 /// Save configuration to disk
 fn save_to_disk(config: &Config) -> Result<(), String> {
+    try_save_to_disk(config).map_err(|e| {
+        telemetry::report_error("config_save_failed");
+        tracing::error!(target: TELEMETRY_TARGET, error = %e, "config_save_failed");
+        e
+    })
+}
+
+fn try_save_to_disk(config: &Config) -> Result<(), String> {
     ensure_config_dir()?;
 
     let path = get_config_path();
@@ -774,6 +783,8 @@ fn get_config_instance() -> &'static RwLock<Config> {
     CONFIG.get_or_init(|| {
         let config = load_from_disk().unwrap_or_else(|e| {
             tracing::error!("Failed to load config, using defaults: {}", e);
+            telemetry::report_error("config_load_failed");
+            tracing::error!(target: TELEMETRY_TARGET, error = %e, "config_load_failed");
             Config::default()
         });
         tracing::info!(
@@ -792,6 +803,7 @@ fn get_config_instance() -> &'static RwLock<Config> {
 /// Returns the current configuration state. The config is cached in memory
 /// and loaded from disk on first access.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn get_config() -> Result<Config, Error> {
     Ok(get_config_instance().read().clone())
 }
@@ -806,6 +818,7 @@ pub fn get_config() -> Result<Config, Error> {
 ///
 /// This reads nothing from disk and mutates nothing — it is `Config::default()`.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_default_config() -> Config {
     Config::default()
 }
@@ -815,6 +828,7 @@ pub fn get_default_config() -> Config {
 /// Replaces the current configuration with the provided config and persists
 /// it to disk. The version field is automatically updated to the current schema.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn set_config(mut config: Config) -> Result<(), Error> {
     // Ensure version is current
     config.version = CURRENT_VERSION;
@@ -976,6 +990,7 @@ pub fn set_enhancement_enabled(enabled: bool) -> Result<(), String> {
 ///
 /// Pass `Some(key)` to store a new key, `None` to clear it.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn set_enhancement_api_key(key: Option<String>) -> Result<(), Error> {
     let mut cached = get_config_instance().write();
     cached.enhancement.api_key = key;
@@ -1032,6 +1047,7 @@ pub fn record_whats_new_seen(version: &str) -> Result<(), Error> {
 /// overwriting shortcuts, but would also block intentional changes (e.g.
 /// resetting a shortcut back to its default value).
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn set_shortcut_config(shortcuts: ShortcutConfig) -> Result<(), Error> {
     let mut cached = get_config_instance().write();
     cached.shortcuts = shortcuts;
@@ -1064,6 +1080,7 @@ pub fn set_telemetry_config(telemetry: TelemetryConfig) -> Result<(), Error> {
 ///
 /// Resets all settings to their default values and persists to disk.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn reset_config() -> Result<Config, Error> {
     let default_config = Config::default();
 
@@ -1082,6 +1099,7 @@ pub fn reset_config() -> Result<Config, Error> {
 ///
 /// Returns the path to the config file for debugging or user information.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_config_path_cmd() -> String {
     get_config_path().to_string_lossy().to_string()
 }

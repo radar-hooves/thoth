@@ -77,6 +77,10 @@ pub struct PipelineConfig {
     pub enhancement_model: String,
     /// Enhancement prompt template
     pub enhancement_prompt: String,
+    /// Which built-in or custom prompt this is, for telemetry only — never the
+    /// template text.
+    #[serde(default)]
+    pub enhancement_prompt_id: Option<String>,
     /// Whether to auto-copy to clipboard
     pub auto_copy: bool,
     /// Whether to auto-paste at cursor
@@ -106,6 +110,7 @@ impl Default for PipelineConfig {
             enhancement_enabled: false,
             enhancement_model: "llama3.2".to_string(),
             enhancement_prompt: DEFAULT_ENHANCEMENT_PROMPT.to_string(),
+            enhancement_prompt_id: None,
             auto_copy: false,
             auto_paste: true,
             insertion_method: "paste".to_string(),
@@ -146,6 +151,7 @@ pub(crate) fn effective_pipeline_config() -> Result<PipelineConfig, Error> {
         enhancement_enabled: e.enabled,
         enhancement_model: e.model.clone(),
         enhancement_prompt,
+        enhancement_prompt_id: e.enabled.then(|| e.prompt_id.clone()),
         auto_copy: t.auto_copy,
         auto_paste: t.auto_paste,
         insertion_method: "paste".to_string(),
@@ -290,6 +296,7 @@ impl Drop for ProcessingGuard {
 /// Emits `pipeline-progress` event with state updates.
 /// Also shows the recording indicator overlay and starts audio metering.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn pipeline_start_recording(app: AppHandle) -> Result<String, Error> {
     tracing::info!("Pipeline: pipeline_start_recording called");
 
@@ -313,6 +320,7 @@ pub fn pipeline_start_recording(app: AppHandle) -> Result<String, Error> {
         if nothing_can_load || !transcription::download::check_model_downloaded(None) {
             PIPELINE_RUNNING.store(false, Ordering::SeqCst);
             tracing::warn!("Pipeline: No usable transcription model, blocking recording");
+            telemetry::report_error("model_load_failed");
             tracing::warn!(target: TELEMETRY_TARGET, reason = "no_usable_model", "model_load_failure");
             let _ = crate::recording_indicator::hide_recording_indicator(app.clone());
             return Err(
@@ -377,7 +385,13 @@ pub fn pipeline_start_recording(app: AppHandle) -> Result<String, Error> {
         }
         Err(e) => {
             PIPELINE_RUNNING.store(false, Ordering::SeqCst);
-            tracing::warn!(target: TELEMETRY_TARGET, reason = "audio_start_failed", "audio_device_failure");
+            telemetry::report_error_with_cause("audio_capture_failed", &e);
+            tracing::warn!(
+                target: TELEMETRY_TARGET,
+                reason = "audio_start_failed",
+                error = %e,
+                "audio_device_failure"
+            );
             emit_progress(
                 &app,
                 PipelineState::Failed,
@@ -595,6 +609,7 @@ pub async fn pipeline_stop_and_process(
 
 /// Cancel the current pipeline execution
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn pipeline_cancel(app: AppHandle) -> Result<(), Error> {
     if !PIPELINE_RUNNING.load(Ordering::SeqCst) {
         return Ok(()); // Nothing to cancel
@@ -631,6 +646,7 @@ pub fn pipeline_cancel(app: AppHandle) -> Result<(), Error> {
 
 /// Get the current pipeline state
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_pipeline_state() -> PipelineState {
     if crate::audio::is_recording() {
         PipelineState::Recording
@@ -763,24 +779,42 @@ async fn run_transcription_pipeline(
             transcription::warmup_transcription();
         });
 
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        let wait_start = std::time::Instant::now();
+        let deadline = wait_start + std::time::Duration::from_secs(60);
         while !transcription::is_transcription_ready() {
             // Bail the moment the background warmup reports it could load nothing,
             // instead of waiting out the full 60 s on a model that will never load.
             if transcription::warmup_failed() {
-                tracing::warn!(target: TELEMETRY_TARGET, reason = "warmup_failed", "model_load_failure");
+                telemetry::report_error("model_load_failed");
+                tracing::warn!(
+                    target: TELEMETRY_TARGET,
+                    reason = "warmup_failed",
+                    wait_seconds = wait_start.elapsed().as_secs_f64(),
+                    "model_load_failure"
+                );
                 return Err(
                     "No transcription model is ready. Open Settings \u{2192} Models to download or repair one."
                         .to_string(),
                 );
             }
             if std::time::Instant::now() > deadline {
-                tracing::warn!(target: TELEMETRY_TARGET, reason = "load_timeout_60s", "model_load_failure");
+                telemetry::report_error("model_load_failed");
+                tracing::warn!(
+                    target: TELEMETRY_TARGET,
+                    reason = "load_timeout_60s",
+                    wait_seconds = wait_start.elapsed().as_secs_f64(),
+                    "model_load_failure"
+                );
                 return Err("Transcription model failed to load within 60 seconds".to_string());
             }
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
         tracing::info!("Pipeline: Model loaded, proceeding with transcription");
+        tracing::info!(
+            target: TELEMETRY_TARGET,
+            wait_seconds = wait_start.elapsed().as_secs_f64(),
+            "model_load_wait"
+        );
     }
     emit_progress(app, PipelineState::Transcribing, "Transcribing audio...");
     let transcription_start = std::time::Instant::now();
@@ -799,8 +833,16 @@ async fn run_transcription_pipeline(
         transcribe_span.in_scope(|| transcription::transcribe_file(audio_path_owned))
     })
     .await
-    .map_err(|e| format!("Transcription task panicked: {}", e))?
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| {
+        telemetry::report_error_with_cause("transcription_failed", &e);
+        tracing::error!(target: TELEMETRY_TARGET, error = %e, "transcription_failed");
+        format!("Transcription task panicked: {}", e)
+    })?
+    .map_err(|e| {
+        telemetry::report_error_with_cause("transcription_failed", &e);
+        tracing::error!(target: TELEMETRY_TARGET, error = %e, "transcription_failed");
+        e.to_string()
+    })?;
     let transcription_duration_seconds = transcription_start.elapsed().as_secs_f64();
 
     tracing::info!(
@@ -832,9 +874,11 @@ async fn run_transcription_pipeline(
             processing_seconds = transcription_duration_seconds,
             speed_factor = speed_factor,
             char_count = raw_text.chars().count(),
+            word_count = raw_text.split_whitespace().count(),
             "transcription_complete"
         );
     }
+    crate::telemetry_metrics::sample("transcription_complete");
 
     tracing::info!(
         "Pipeline: Transcribed {} characters: '{}'",
@@ -883,12 +927,12 @@ async fn run_transcription_pipeline(
                     text.len(),
                     elapsed
                 );
-                // Deliberately no prompt text/id: the telemetry stream is
-                // content-free, and enhancement-by-prompt analytics already
-                // live in the Insights dashboard (from the DB column).
+                // The prompt ID names which prompt ran, never its text — the
+                // template itself stays out of telemetry.
                 tracing::info!(
                     target: TELEMETRY_TARGET,
                     model = %config.enhancement_model,
+                    prompt_id = %config.enhancement_prompt_id.as_deref().unwrap_or("unknown"),
                     duration_seconds = elapsed,
                     ok = true,
                     "enhancement_complete"
@@ -897,9 +941,12 @@ async fn run_transcription_pipeline(
             }
             Err(e) => {
                 tracing::warn!("Pipeline: Enhancement failed, using original text: {}", e);
+                telemetry::report_error_with_cause("enhancement_discarded", &e);
                 tracing::warn!(
                     target: TELEMETRY_TARGET,
                     model = %config.enhancement_model,
+                    prompt_id = %config.enhancement_prompt_id.as_deref().unwrap_or("unknown"),
+                    error = %e,
                     ok = false,
                     "enhancement_complete"
                 );
@@ -945,6 +992,8 @@ async fn run_transcription_pipeline(
         audio_seconds = tracing::field::Empty,
         char_count = tracing::field::Empty,
         enhanced = tracing::field::Empty,
+        insertion_method = tracing::field::Empty,
+        insertion_ok = tracing::field::Empty,
         ok = tracing::field::Empty,
     )
 )]
@@ -1050,6 +1099,14 @@ async fn process_audio(
 
             if let Err(e) = insert_result {
                 tracing::warn!("Pipeline: Failed to insert text: {}", e);
+                telemetry::report_error_with_cause("insertion_failed", &e);
+                tracing::warn!(
+                    target: TELEMETRY_TARGET,
+                    method = %config.insertion_method,
+                    error = %e,
+                    ok = false,
+                    "insertion_complete"
+                );
                 insertion_failed = true;
                 // Surface the failure instead of leaving it in the log only. The
                 // transcription itself succeeded and is still saved to history,
@@ -1069,6 +1126,12 @@ async fn process_audio(
                 }
             } else {
                 tracing::debug!("Pipeline: Pasted text successfully");
+                tracing::info!(
+                    target: TELEMETRY_TARGET,
+                    method = %config.insertion_method,
+                    ok = true,
+                    "insertion_complete"
+                );
 
                 // Only after a confirmed insertion (#112). Submitting on a failed
                 // paste would send an empty or half-written message, which is
@@ -1077,6 +1140,8 @@ async fn process_audio(
                     tracing::warn!("Pipeline: Failed to send auto-submit key: {}", e);
                 }
             }
+            span.record("insertion_method", config.insertion_method.as_str());
+            span.record("insertion_ok", !insertion_failed);
         }
 
         // Restore the user's original clipboard after paste completes.
@@ -1275,6 +1340,7 @@ fn get_audio_duration(audio_path: &str) -> Option<f64> {
 /// then runs the standard transcription pipeline (transcribe → filter → enhance → save).
 /// Does NOT auto-copy or auto-paste (the user is already in the app).
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn pipeline_transcribe_file(
     app: AppHandle,
     file_path: String,
@@ -1374,6 +1440,7 @@ pub async fn pipeline_transcribe_file(
 /// Looks up the audio file from the DB record, re-runs the transcription
 /// pipeline, and updates the record in place. Does not copy/paste output.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn pipeline_retranscribe(
     app: AppHandle,
     transcription_id: String,
@@ -1490,6 +1557,7 @@ pub async fn pipeline_retranscribe(
 /// - Stop path: BONG is played here, immediately before capture disarms, so it
 ///   is always matched to the decided action.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn pipeline_toggle_recording(
     app: AppHandle,
     config: Option<PipelineConfig>,

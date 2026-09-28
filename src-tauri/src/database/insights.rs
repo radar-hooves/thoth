@@ -3,6 +3,7 @@
 //! Read-only aggregations over the `transcriptions` table for the Insights
 //! pane.  All heavy aggregation is SQL-side; no row text is loaded into Rust.
 
+use crate::TELEMETRY_TARGET;
 use chrono::{DateTime, Duration, Local, NaiveDate, TimeZone, Utc};
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
@@ -846,6 +847,7 @@ fn oldest_file_mtime(dir: &std::path::Path) -> Option<String> {
 
 /// Returns aggregated insights for the Insights dashboard.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn get_insights(range: InsightsRange) -> Result<InsightsData, Error> {
     let conn = open_connection().map_err(|e| {
         tracing::error!("Failed to open DB for insights: {}", e);
@@ -861,6 +863,7 @@ pub fn get_insights(range: InsightsRange) -> Result<InsightsData, Error> {
 ///
 /// Each returned candidate has its WAV decoded for RMS confirmation.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn get_cruft_candidates(density_threshold: Option<f64>) -> Result<Vec<CruftCandidate>, Error> {
     let threshold = density_threshold.unwrap_or(DEFAULT_DENSITY_THRESHOLD);
     let conn = open_connection().map_err(|e| {

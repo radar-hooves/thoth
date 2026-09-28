@@ -21,6 +21,7 @@ use tokio::sync::Mutex;
 use tower_http::validate_request::ValidateRequestHeaderLayer;
 use uuid::Uuid;
 
+use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 
 pub(crate) mod token_store;
@@ -750,6 +751,8 @@ pub async fn start(port: u16, token: String, mcp_enabled: bool) -> Result<(), St
         Ok(l) => l,
         Err(e) => {
             tracing::error!("Control API: failed to bind {}:{}: {}", addr.ip(), port, e);
+            telemetry::report_error_with_cause("control_api_failed", &e);
+            tracing::error!(target: TELEMETRY_TARGET, error = %e, port, "control_api_failed");
             return Err(format!(
                 "Could not start the server on port {port}: {e}. \
                  The port may already be in use — try a different port."
@@ -763,6 +766,8 @@ pub async fn start(port: u16, token: String, mcp_enabled: bool) -> Result<(), St
     let join_handle = tokio::spawn(async move {
         if let Err(e) = server_fut.await {
             tracing::error!("Control API server error: {}", e);
+            telemetry::report_error_with_cause("control_api_failed", &e);
+            tracing::error!(target: TELEMETRY_TARGET, error = %e, "control_api_failed");
         }
     });
 
@@ -805,6 +810,7 @@ pub struct IntegrationsStatus {
 
 /// Return the current integrations status for the frontend settings panel.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn get_integrations_status() -> Result<IntegrationsStatus, Error> {
     let cfg = crate::config::get_config()?;
     let running = is_running().await;
@@ -822,6 +828,7 @@ pub async fn get_integrations_status() -> Result<IntegrationsStatus, Error> {
 /// When enabling: generates a token if none exists, then starts the server.
 /// When disabling: stops the server and persists the updated flag.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn set_api_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), Error> {
     let _ = app; // AppHandle reserved for future event emission
     let mut cfg = crate::config::get_config()?;
@@ -845,6 +852,7 @@ pub async fn set_api_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(),
 /// isn't already running (the MCP route can't exist without the host server).
 /// The route change takes effect immediately; no app restart is required.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn set_mcp_enabled(enabled: bool) -> Result<(), Error> {
     let mut cfg = crate::config::get_config()?;
     cfg.integrations.mcp_enabled = enabled;
@@ -869,6 +877,7 @@ pub async fn set_mcp_enabled(enabled: bool) -> Result<(), Error> {
 
 /// Return the current API token for display/copy in the settings panel.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn get_api_token() -> Result<Option<String>, Error> {
     Ok(Some(token_store::get_or_create_token()))
 }
@@ -877,6 +886,7 @@ pub async fn get_api_token() -> Result<Option<String>, Error> {
 ///
 /// Returns the new token so the frontend can display it immediately.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn rotate_api_token(app: tauri::AppHandle) -> Result<String, Error> {
     let _ = app;
     let new_token = token_store::rotate();
@@ -893,6 +903,7 @@ pub async fn rotate_api_token(app: tauri::AppHandle) -> Result<String, Error> {
 
 /// Change the API port. Restarts the server on the new port if it was running.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn set_api_port(app: tauri::AppHandle, port: u16) -> Result<(), Error> {
     let _ = app;
     let mut cfg = crate::config::get_config()?;

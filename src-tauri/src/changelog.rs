@@ -14,6 +14,7 @@
 //! `## [version] - date`, `### Section`, and `- **Lead.** body` bullets — and
 //! `the_shipped_changelog_parses` fails the build if that stops being true.
 
+use crate::TELEMETRY_TARGET;
 use serde::{Deserialize, Serialize};
 
 /// The changelog, as of the build.
@@ -177,6 +178,7 @@ fn parse_item(bullet: &str) -> NotesItem {
 /// only signal that this is a first launch and it is overwritten moments
 /// later.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn whats_new(version: String) -> Option<ReleaseNotes> {
     let seen = crate::config::get_config()
         .ok()
@@ -189,6 +191,7 @@ pub fn whats_new(version: String) -> Option<ReleaseNotes> {
 
 /// Record that this version's notes have been seen, so they are shown once.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn mark_whats_new_seen(version: String) -> Result<(), crate::error::Error> {
     crate::config::record_whats_new_seen(&version)
 }
@@ -196,6 +199,7 @@ pub fn mark_whats_new_seen(version: String) -> Result<(), crate::error::Error> {
 /// Every release in the changelog, newest first — the "what changed" list the
 /// About dialog can offer beyond the one release the modal shows.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn changelog_releases() -> Vec<ReleaseNotes> {
     releases()
 }

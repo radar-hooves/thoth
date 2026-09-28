@@ -5,6 +5,7 @@
 //! - Archive downloads with extraction (sherpa-onnx models)
 
 use super::manifest::{RemoteModelInfo, get_fallback_manifest, get_model_directory};
+use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use anyhow::{Result, anyhow};
 use parking_lot::Mutex;
@@ -54,6 +55,7 @@ fn get_download_state() -> &'static Mutex<DownloadState> {
 
 /// Check if the model files are downloaded and valid
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn check_model_downloaded(model_id: Option<String>) -> bool {
     // Get the model info from manifest
     let manifest = get_fallback_manifest();
@@ -142,6 +144,7 @@ pub fn check_model_downloaded(model_id: Option<String>) -> bool {
 
 /// Get the current download progress state
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_download_progress() -> DownloadState {
     get_download_state().lock().clone()
 }
@@ -153,6 +156,7 @@ pub fn get_download_progress() -> DownloadState {
 /// - `model-download-complete`: When download and extraction complete
 /// - `model-download-error`: If an error occurs
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn download_model(app: AppHandle, model_id: Option<String>) -> Result<(), Error> {
     // Check if already downloading
     {
@@ -781,6 +785,7 @@ fn emit_progress(app: &AppHandle, progress: DownloadProgress) {
 /// argument they never passed. Every caller has always passed an id, so the
 /// default was a trap with no user.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn delete_model(model_id: String) -> Result<(), Error> {
     let manifest = get_fallback_manifest();
 
@@ -854,6 +859,7 @@ pub fn delete_model(model_id: String) -> Result<(), Error> {
 
 /// Reset the download state to idle
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn reset_download_state() {
     let mut state = get_download_state().lock();
     *state = DownloadState::Idle;

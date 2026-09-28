@@ -2,17 +2,20 @@
 //!
 //! This module contains all IPC commands that can be invoked from the frontend.
 
+use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use tauri::{AppHandle, Manager};
 
 /// Greet command for testing
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn greet(name: &str) -> String {
     format!("Hello, {}! Welcome to Thoth.", name)
 }
 
 /// Show a window by label
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn show_window(app: AppHandle, label: &str) -> Result<(), Error> {
     if let Some(window) = app.get_webview_window(label) {
         window.show().map_err(|e| e.to_string())?;
@@ -26,6 +29,7 @@ pub fn show_window(app: AppHandle, label: &str) -> Result<(), Error> {
 
 /// Open a URL in the system's default browser
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn open_url(url: &str) -> Result<(), Error> {
     // Only allow http/https URLs for security
     if !url.starts_with("https://") && !url.starts_with("http://") {
@@ -42,6 +46,7 @@ pub fn open_url(url: &str) -> Result<(), Error> {
 
 /// Set dock icon visibility (macOS) and persist to config
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn set_show_in_dock(app: AppHandle, show: bool) -> Result<(), Error> {
     // Update config
     let mut config =
@@ -72,6 +77,7 @@ pub fn set_show_in_dock(app: AppHandle, show: bool) -> Result<(), Error> {
 
 /// Get current dock visibility setting
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_show_in_dock() -> bool {
     crate::config::get_config()
         .map(|c| c.general.show_in_dock)
@@ -84,6 +90,7 @@ pub fn get_show_in_dock() -> bool {
 /// the device_id from being accidentally overwritten by other config saves.
 /// Also cools down the warm stream so the next recording opens the new device.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn set_audio_device(device_id: Option<String>) -> Result<(), Error> {
     crate::config::set_audio_device_config(device_id.clone())
         .map_err(|e| format!("Failed to save audio device: {}", e))?;
@@ -98,6 +105,7 @@ pub fn set_audio_device(device_id: Option<String>) -> Result<(), Error> {
 /// Remove the macOS quarantine extended attribute from Thoth.app.
 /// Safe to call on any version — no-ops if already cleared.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn remove_quarantine() -> Result<(), Error> {
     #[cfg(target_os = "macos")]
     {
@@ -127,6 +135,7 @@ pub fn remove_quarantine() -> Result<(), Error> {
 
 /// Open a macOS Privacy & Security preference pane
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
 pub fn open_privacy_pane(pane: String) -> Result<(), Error> {
     #[cfg(target_os = "macos")]
@@ -157,6 +166,35 @@ pub fn open_privacy_pane(pane: String) -> Result<(), Error> {
 
 /// Quit and relaunch the application (used by troubleshooting flow)
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn relaunch_app(app: AppHandle) -> Result<(), Error> {
     app.restart();
+}
+
+/// Record the outcome of the frontend's update check (`@tauri-apps/plugin-updater`'s
+/// `check()`) on the host process, which is the one thing allowed to emit
+/// telemetry — the webview itself ships nothing. `error` is the failure's own
+/// message: this is the app reporting on its own update mechanism, never
+/// arbitrary caller-supplied text, so carrying it is safe by construction.
+#[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
+pub fn report_update_check(available: bool, version: Option<String>, error: Option<String>) {
+    match &error {
+        Some(e) => {
+            telemetry::report_error("update_check_failed");
+            tracing::warn!(
+                target: TELEMETRY_TARGET,
+                error = %e,
+                "update_check_failed"
+            );
+        }
+        None => {
+            tracing::info!(
+                target: TELEMETRY_TARGET,
+                available,
+                version = %version.as_deref().unwrap_or(""),
+                "update_check_complete"
+            );
+        }
+    }
 }

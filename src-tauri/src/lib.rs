@@ -30,6 +30,7 @@ pub mod recording_indicator;
 pub mod shortcuts;
 pub mod sound;
 pub mod storage;
+pub mod telemetry_metrics;
 pub mod telemetry_settings;
 pub mod text_insert;
 #[cfg(target_os = "macos")]
@@ -80,6 +81,7 @@ fn register_single_shortcut(
 /// Unregisters everything first, then registers from the current config.
 /// Called by the frontend after clearing or resetting a shortcut.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 fn reregister_shortcuts(app: tauri::AppHandle) -> Result<(), Error> {
     // Unregister everything
     shortcuts::unregister_all_shortcuts(app.clone())?;
@@ -256,6 +258,10 @@ pub fn run() {
                 "app_start"
             );
 
+            // Own-process RSS/CPU on a slow clock, so a memory or CPU trend is
+            // visible without the operator having to reproduce it live.
+            telemetry_metrics::spawn_periodic_sampler();
+
             // Store the app handle for the few deep paths that emit user-facing
             // events without a handle of their own (e.g. audio device fallback).
             app_handle::set(app.handle().clone());
@@ -307,6 +313,23 @@ pub fn run() {
 
             // Load config and register shortcuts
             if let Ok(cfg) = config::get_config() {
+                // The behaviour-shaping settings only — never a dictionary
+                // entry, a custom prompt's text, or anything that names a
+                // person or place.
+                tracing::info!(
+                    target: TELEMETRY_TARGET,
+                    recording_mode = ?cfg.shortcuts.recording_mode,
+                    auto_paste = cfg.transcription.auto_paste,
+                    auto_copy = cfg.transcription.auto_copy,
+                    enhancement_enabled = cfg.enhancement.enabled,
+                    enhancement_backend = %cfg.enhancement.backend,
+                    remove_fillers = cfg.transcription.remove_fillers,
+                    australian_spelling = cfg.transcription.australian_spelling,
+                    api_enabled = cfg.integrations.api_enabled,
+                    mcp_enabled = cfg.integrations.mcp_enabled,
+                    "config_loaded"
+                );
+
                 // Wire up the enhancement backend before the first pipeline run
                 config::apply_enhancement_backend(&cfg.enhancement);
 
@@ -500,6 +523,7 @@ pub fn run() {
             commands::set_show_in_dock,
             commands::get_show_in_dock,
             commands::set_audio_device,
+            commands::report_update_check,
             // Platform
             platform::check_accessibility,
             platform::request_accessibility,

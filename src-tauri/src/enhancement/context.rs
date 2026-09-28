@@ -3,6 +3,7 @@
 //! Provides functionality to capture clipboard content and build context
 //! for AI-enhanced transcription processing.
 
+use crate::TELEMETRY_TARGET;
 use arboard::Clipboard;
 use tracing::{debug, warn};
 
@@ -125,6 +126,7 @@ fn get_context_capture() -> &'static Mutex<ContextCapture> {
 /// Returns the clipboard content if available and contains text,
 /// otherwise returns `None`.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_clipboard_context() -> Option<String> {
     let mut capture = get_context_capture().lock();
     capture.capture_clipboard()
@@ -141,6 +143,7 @@ pub fn get_clipboard_context() -> Option<String> {
 ///
 /// A formatted context string ready for AI enhancement.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn build_enhancement_context(transcription: String, include_clipboard: bool) -> String {
     let clipboard_content = if include_clipboard {
         let mut capture = get_context_capture().lock();

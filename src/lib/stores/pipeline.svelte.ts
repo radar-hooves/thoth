@@ -49,6 +49,8 @@ export interface PipelineConfig {
   enhancementModel: string;
   /** Enhancement prompt template */
   enhancementPrompt: string;
+  /** Which built-in or custom prompt this is, for telemetry only — never the template text */
+  enhancementPromptId?: string;
   /** Whether to auto-copy to clipboard */
   autoCopy: boolean;
   /** Whether to auto-paste at cursor */
@@ -133,6 +135,7 @@ async function getDefaultConfig(): Promise<PipelineConfig> {
     enhancementEnabled: config.enhancement.enabled,
     enhancementModel: config.enhancement.model,
     enhancementPrompt,
+    enhancementPromptId: config.enhancement.enabled ? config.enhancement.promptId : undefined,
     autoCopy: config.transcription.autoCopy,
     autoPaste: config.transcription.autoPaste && settingsStore.autoPaste,
     insertionMethod: 'paste',

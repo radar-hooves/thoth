@@ -5947,8 +5947,8 @@ dependencies = [
 
 [[package]]
 name = "telemetry"
-version = "0.3.0"
-source = "git+https://github.com/radar-hooves/telemetry-rs?tag=v0.3.0#d21601204138a991d6f435d69aa23e1d965bff03"
+version = "0.4.0"
+source = "git+https://github.com/radar-hooves/telemetry-rs?tag=v0.4.0#b6ee73bd42c14819fc98ce73b600a1836e8beda0"
 dependencies = [
  "async-trait",
  "http",

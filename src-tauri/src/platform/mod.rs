@@ -10,6 +10,7 @@ pub mod linux;
 #[cfg(target_os = "linux")]
 pub use linux::{GpuBackend, GpuDetectionResult, GpuInfo};
 
+use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 
 /// GPU backend type (re-exported for all platforms)
@@ -109,6 +110,7 @@ pub struct DetectedGpu {
 
 /// Get GPU information for the current system
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn get_gpu_info() -> Result<SystemGpuInfo, Error> {
     #[cfg(target_os = "linux")]
     {
@@ -250,6 +252,7 @@ pub fn is_screen_locked() -> bool {
 
 /// Check if accessibility permissions are available
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn check_accessibility() -> bool {
     #[cfg(target_os = "macos")]
     {
@@ -267,6 +270,7 @@ pub fn check_accessibility() -> bool {
 
 /// Request accessibility permission (opens settings if needed)
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn request_accessibility() -> bool {
     #[cfg(target_os = "macos")]
     {
@@ -329,6 +333,7 @@ pub fn open_input_monitoring_settings() {
 /// reinstall with a different code signature). This performs an actual AX API
 /// call to confirm the permission is live.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn verify_accessibility_functional() -> bool {
     #[cfg(target_os = "macos")]
     {
@@ -363,6 +368,7 @@ pub fn reset_permissions_after_update() -> Result<String, String> {
 ///
 /// Valid services: "Accessibility", "ListenEvent", "Microphone", "All"
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn reset_tcc_permissions(services: Vec<String>) -> Result<String, Error> {
     #[cfg(target_os = "macos")]
     {
@@ -384,6 +390,7 @@ pub async fn reset_tcc_permissions(services: Vec<String>) -> Result<String, Erro
 /// - "restricted" - Access is restricted (e.g., parental controls)
 /// - "unknown" - Unable to determine status
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn check_microphone_permission() -> String {
     #[cfg(target_os = "macos")]
     {
@@ -446,6 +453,7 @@ pub fn get_caret_position() -> Option<CaretPosition> {
 /// Triggers the system permission dialog. If permission was already denied,
 /// this will open System Preferences instead.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn request_microphone_permission(app: tauri::AppHandle) {
     #[cfg(target_os = "macos")]
     {

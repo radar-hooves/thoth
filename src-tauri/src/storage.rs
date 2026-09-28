@@ -4,6 +4,7 @@
 //! locations: models, recordings, database, config, and
 //! FluidAudio CoreML cache.
 
+use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use serde::Serialize;
 use std::fs;
@@ -109,6 +110,7 @@ fn config_file_sizes(base: &Path) -> u64 {
 
 /// Get storage usage breakdown
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn get_storage_usage() -> Result<StorageUsage, Error> {
     let base = thoth_dir();
 
@@ -138,6 +140,7 @@ pub fn get_storage_usage() -> Result<StorageUsage, Error> {
 
 /// Delete all audio recordings
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn delete_all_recordings() -> Result<u64, Error> {
     let recordings_dir = thoth_dir().join("Recordings");
     if !recordings_dir.exists() {
@@ -163,6 +166,7 @@ pub fn delete_all_recordings() -> Result<u64, Error> {
 
 /// Delete the FluidAudio CoreML model cache
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn delete_fluidaudio_cache() -> Result<(), Error> {
     let Some(cache_dir) = fluidaudio_models_dir() else {
         return Ok(()); // No FluidAudio cache off macOS.
@@ -196,6 +200,7 @@ pub fn delete_fluidaudio_cache() -> Result<(), Error> {
 ///
 /// Removes ~/.thoth/ and ~/Library/Application Support/FluidAudio/Models/
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn delete_all_data() -> Result<(), Error> {
     let base = thoth_dir();
     if base.exists() {

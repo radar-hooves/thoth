@@ -5,6 +5,7 @@
 
 use super::device::{get_device_display_name, get_recording_device};
 use super::metering::AudioMeter;
+use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use cpal::traits::{DeviceTrait, StreamTrait};
 use parking_lot::Mutex;
@@ -46,6 +47,7 @@ static PREVIEW_STATE: Mutex<Option<MeteringState>> = Mutex::new(None);
 ///
 /// Emits `audio-level` events to the frontend with RMS and peak levels.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn start_audio_preview(app: AppHandle, device_id: Option<String>) -> Result<(), Error> {
     // Stop any existing preview
     stop_audio_preview_inner();
@@ -128,6 +130,7 @@ pub fn start_audio_preview(app: AppHandle, device_id: Option<String>) -> Result<
 
 /// Stop audio preview
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn stop_audio_preview() {
     stop_audio_preview_inner();
 }

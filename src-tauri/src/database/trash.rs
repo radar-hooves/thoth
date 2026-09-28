@@ -18,6 +18,7 @@
 //! It removes trash entries (and their WAV files) older than
 //! `TRASH_RETENTION_DAYS`.
 
+use crate::TELEMETRY_TARGET;
 use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -613,6 +614,7 @@ pub fn auto_purge_expired(conn: &mut Connection) -> Result<u32, DatabaseError> {
 ///
 /// Returns the count of recordings successfully quarantined.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn quarantine_recordings(ids: Vec<String>) -> Result<u32, Error> {
     let mut conn = open_connection()?;
     quarantine_recordings_with_conn(&mut conn, &ids).map_err(|e| {
@@ -625,6 +627,7 @@ pub fn quarantine_recordings(ids: Vec<String>) -> Result<u32, Error> {
 ///
 /// Returns the count of recordings successfully restored.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn restore_recordings(ids: Vec<String>) -> Result<u32, Error> {
     let mut conn = open_connection()?;
     restore_recordings_with_conn(&mut conn, &ids).map_err(|e| {
@@ -637,6 +640,7 @@ pub fn restore_recordings(ids: Vec<String>) -> Result<u32, Error> {
 ///
 /// `ids = None` purges the entire trash.  Returns the count purged.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn purge_trash(ids: Option<Vec<String>>) -> Result<u32, Error> {
     let mut conn = open_connection()?;
     let id_slice = ids.as_deref();
@@ -648,6 +652,7 @@ pub fn purge_trash(ids: Option<Vec<String>>) -> Result<u32, Error> {
 
 /// List all entries currently in the trash.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn list_trash() -> Result<Vec<TrashEntry>, Error> {
     let conn = open_connection()?;
     list_trash_with_conn(&conn).map_err(|e| {

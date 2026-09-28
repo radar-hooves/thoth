@@ -3,6 +3,7 @@
 //! Provides commands for searching transcriptions and exporting them
 //! to various formats (JSON, CSV, TXT).
 
+use crate::TELEMETRY_TARGET;
 use crate::database;
 use crate::error::Error;
 use chrono::{DateTime, Utc};
@@ -382,6 +383,7 @@ fn export_txt(records: &[TranscriptionRecord], path: &Path) -> Result<(), String
 /// * `limit` - Maximum number of records to return (default: 100)
 /// * `offset` - Number of records to skip for pagination (default: 0)
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn search_history(
     query: Option<String>,
     from_date: Option<i64>,
@@ -434,6 +436,7 @@ where
 
 /// Exports transcription records to a JSON file.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn export_to_json(
     ids: Vec<String>,
     path: String,
@@ -444,6 +447,7 @@ pub fn export_to_json(
 
 /// Exports transcription records to a CSV file.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn export_to_csv(
     ids: Vec<String>,
     path: String,
@@ -454,6 +458,7 @@ pub fn export_to_csv(
 
 /// Exports transcription records to a plain text file.
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn export_to_txt(
     ids: Vec<String>,
     path: String,

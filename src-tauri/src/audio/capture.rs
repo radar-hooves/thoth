@@ -18,6 +18,8 @@
 //! The recorder keeps the cpal stream open ("warm") between recordings so that
 //! pressing record is an instant flag flip rather than a ~150ms device open.
 
+use crate::TELEMETRY_TARGET;
+
 use super::format::AudioConverter;
 use super::ring_buffer::AudioRingBuffer;
 use super::speech_gate::{GateConfig, SpeechGate, speech_activity};
@@ -188,6 +190,8 @@ impl AudioRecorder {
             },
             |err| {
                 tracing::error!("Audio stream error: {}", err);
+                telemetry::report_error_with_cause("audio_capture_failed", &err);
+                tracing::error!(target: TELEMETRY_TARGET, error = %err, "audio_capture_failed");
             },
             None,
         )?;

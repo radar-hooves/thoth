@@ -207,6 +207,7 @@ pub fn configure_backend(
 
 /// Check if the Ollama server is available
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub async fn check_ollama_available() -> bool {
     let client = get_backend().lock().ollama.clone();
     client.is_available().await
@@ -214,6 +215,7 @@ pub async fn check_ollama_available() -> bool {
 
 /// List available Ollama models
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn list_ollama_models() -> Result<Vec<String>, Error> {
     let client = get_backend().lock().ollama.clone();
     client
@@ -228,6 +230,7 @@ pub async fn list_ollama_models() -> Result<Vec<String>, Error> {
 
 /// Check if the configured OpenAI-compatible server is available
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub async fn check_openai_compat_available() -> bool {
     let client = get_backend().lock().openai_compat.clone();
     match client {
@@ -238,6 +241,7 @@ pub async fn check_openai_compat_available() -> bool {
 
 /// List available models from the OpenAI-compatible server
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn list_openai_compat_models() -> Result<Vec<String>, Error> {
     let client = get_backend().lock().openai_compat.clone();
     match client {

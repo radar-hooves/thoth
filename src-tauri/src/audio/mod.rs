@@ -19,6 +19,7 @@ pub use metering::{AudioLevel, AudioMeter};
 pub use preview::{start_recording_metering, stop_recording_metering};
 pub use ring_buffer::AudioRingBuffer;
 
+use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use parking_lot::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -129,6 +130,7 @@ fn spawn_idle_teardown(generation: u64) {
 
 /// Start recording audio to ~/.thoth/Recordings/
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn start_recording() -> Result<String, Error> {
     tracing::info!("Audio: start_recording called");
     let mut recorder = get_recorder().lock();
@@ -206,6 +208,7 @@ pub fn start_recording() -> Result<String, Error> {
 
 /// Stop recording and return the path to the recorded file
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn stop_recording() -> Result<String, Error> {
     let mut recorder = get_recorder().lock();
 
@@ -303,6 +306,7 @@ mod tests {
 
 /// Check if recording is in progress
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn is_recording() -> bool {
     get_recorder().lock().is_recording()
 }

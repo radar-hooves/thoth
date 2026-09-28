@@ -1,5 +1,6 @@
 //! Audio device enumeration using cpal
 
+use crate::TELEMETRY_TARGET;
 use cpal::DeviceId;
 use cpal::traits::{DeviceTrait, HostTrait};
 use serde::Serialize;
@@ -237,6 +238,7 @@ pub fn get_recording_device(device_id: Option<&str>) -> Option<cpal::Device> {
 
 /// Tauri command to list audio devices
 #[tauri::command]
+#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn list_audio_devices() -> Vec<AudioDevice> {
     let devices = list_input_devices();
     tracing::debug!("Found {} audio input devices", devices.len());
