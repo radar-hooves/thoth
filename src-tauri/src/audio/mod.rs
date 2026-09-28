@@ -311,8 +311,7 @@ mod tests {
 /// Check if recording is in progress
 #[tauri::command]
 pub fn is_recording() -> bool {
-    tauri_plugin_telemetry::traced_sync("is_recording", || {
-        Ok::<_, std::convert::Infallible>(get_recorder().lock().is_recording())
+    tauri_plugin_telemetry::traced_sync_value("is_recording", || {
+        get_recorder().lock().is_recording()
     })
-    .unwrap()
 }

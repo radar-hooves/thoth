@@ -253,8 +253,8 @@ pub fn is_screen_locked() -> bool {
 /// Check if accessibility permissions are available
 #[tauri::command]
 pub fn check_accessibility() -> bool {
-    tauri_plugin_telemetry::traced_sync("check_accessibility", || {
-        Ok::<_, std::convert::Infallible>({
+    tauri_plugin_telemetry::traced_sync_value("check_accessibility", || {
+        {
             #[cfg(target_os = "macos")]
             {
                 macos::check_accessibility_permission()
@@ -267,16 +267,15 @@ pub fn check_accessibility() -> bool {
             {
                 true // Not needed on other platforms
             }
-        })
+        }
     })
-    .unwrap()
 }
 
 /// Request accessibility permission (opens settings if needed)
 #[tauri::command]
 pub fn request_accessibility() -> bool {
-    tauri_plugin_telemetry::traced_sync("request_accessibility", || {
-        Ok::<_, std::convert::Infallible>({
+    tauri_plugin_telemetry::traced_sync_value("request_accessibility", || {
+        {
             #[cfg(target_os = "macos")]
             {
                 if !macos::check_accessibility_permission() {
@@ -296,9 +295,8 @@ pub fn request_accessibility() -> bool {
             {
                 true
             }
-        })
+        }
     })
-    .unwrap()
 }
 
 /// Check if Input Monitoring permission is granted
@@ -342,8 +340,8 @@ pub fn open_input_monitoring_settings() {
 /// call to confirm the permission is live.
 #[tauri::command]
 pub fn verify_accessibility_functional() -> bool {
-    tauri_plugin_telemetry::traced_sync("verify_accessibility_functional", || {
-        Ok::<_, std::convert::Infallible>({
+    tauri_plugin_telemetry::traced_sync_value("verify_accessibility_functional", || {
+        {
             #[cfg(target_os = "macos")]
             {
                 macos::verify_accessibility_functional()
@@ -352,9 +350,8 @@ pub fn verify_accessibility_functional() -> bool {
             {
                 true // Not needed on other platforms
             }
-        })
+        }
     })
-    .unwrap()
 }
 
 /// Reset the permissions an app update is likely to have invalidated.
@@ -405,8 +402,8 @@ pub async fn reset_tcc_permissions(services: Vec<String>) -> Result<String, Erro
 /// - "unknown" - Unable to determine status
 #[tauri::command]
 pub fn check_microphone_permission() -> String {
-    tauri_plugin_telemetry::traced_sync("check_microphone_permission", || {
-        Ok::<_, std::convert::Infallible>({
+    tauri_plugin_telemetry::traced_sync_value("check_microphone_permission", || {
+        {
             #[cfg(target_os = "macos")]
             {
                 macos::check_microphone_permission().to_string()
@@ -420,9 +417,8 @@ pub fn check_microphone_permission() -> String {
             {
                 "granted".to_string() // Not needed on other platforms
             }
-        })
+        }
     })
-    .unwrap()
 }
 
 /// Caret (text cursor) position on screen
@@ -472,7 +468,7 @@ pub fn get_caret_position() -> Option<CaretPosition> {
 /// this will open System Preferences instead.
 #[tauri::command]
 pub fn request_microphone_permission(app: tauri::AppHandle) {
-    tauri_plugin_telemetry::traced_sync("request_microphone_permission", || {
+    tauri_plugin_telemetry::traced_sync_value("request_microphone_permission", || {
         #[cfg(target_os = "macos")]
         {
             let status = macos::check_microphone_permission();
@@ -506,10 +502,7 @@ pub fn request_microphone_permission(app: tauri::AppHandle) {
         {
             let _ = app;
         }
-
-        Ok::<_, std::convert::Infallible>(())
     })
-    .unwrap()
 }
 
 #[cfg(test)]

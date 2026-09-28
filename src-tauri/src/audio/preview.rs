@@ -132,12 +132,9 @@ pub async fn start_audio_preview(app: AppHandle, device_id: Option<String>) -> R
 /// Stop audio preview
 #[tauri::command]
 pub fn stop_audio_preview() {
-    tauri_plugin_telemetry::traced_sync("stop_audio_preview", || {
+    tauri_plugin_telemetry::traced_sync_value("stop_audio_preview", || {
         stop_audio_preview_inner();
-
-        Ok::<_, std::convert::Infallible>(())
     })
-    .unwrap()
 }
 
 /// Internal stop function (doesn't require Tauri command context)

@@ -976,27 +976,21 @@ fn handle_select_prompt(app: &AppHandle, prompt_id: String) {
 /// Get the current tray state
 #[tauri::command]
 pub fn get_tray_state_cmd() -> TrayStateInfo {
-    tauri_plugin_telemetry::traced_sync("get_tray_state_cmd", || {
-        Ok::<_, std::convert::Infallible>({
-            let state = get_tray_state().read();
-            TrayStateInfo {
-                is_recording: state.is_recording,
-                has_last_transcription: state.last_transcription.is_some(),
-            }
-        })
+    tauri_plugin_telemetry::traced_sync_value("get_tray_state_cmd", || {
+        let state = get_tray_state().read();
+        TrayStateInfo {
+            is_recording: state.is_recording,
+            has_last_transcription: state.last_transcription.is_some(),
+        }
     })
-    .unwrap()
 }
 
 /// Refresh the tray menu (e.g. after permissions change)
 #[tauri::command]
 pub fn refresh_tray_menu(app: AppHandle) {
-    tauri_plugin_telemetry::traced_sync("refresh_tray_menu", || {
+    tauri_plugin_telemetry::traced_sync_value("refresh_tray_menu", || {
         rebuild_tray_menu(&app);
-
-        Ok::<_, std::convert::Infallible>(())
     })
-    .unwrap()
 }
 
 /// Tray state info for frontend

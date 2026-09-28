@@ -382,45 +382,33 @@ fn play_macos_sound(path: &'static str, volume: f32) {
 /// Play a sound for recording start
 #[tauri::command]
 pub fn play_recording_start_sound() {
-    tauri_plugin_telemetry::traced_sync("play_recording_start_sound", || {
+    tauri_plugin_telemetry::traced_sync_value("play_recording_start_sound", || {
         play_sound(SoundEvent::RecordingStart);
-
-        Ok::<_, std::convert::Infallible>(())
     })
-    .unwrap()
 }
 
 /// Play a sound for recording stop
 #[tauri::command]
 pub fn play_recording_stop_sound() {
-    tauri_plugin_telemetry::traced_sync("play_recording_stop_sound", || {
+    tauri_plugin_telemetry::traced_sync_value("play_recording_stop_sound", || {
         play_sound(SoundEvent::RecordingStop);
-
-        Ok::<_, std::convert::Infallible>(())
     })
-    .unwrap()
 }
 
 /// Play a sound for transcription complete
 #[tauri::command]
 pub fn play_transcription_complete_sound() {
-    tauri_plugin_telemetry::traced_sync("play_transcription_complete_sound", || {
+    tauri_plugin_telemetry::traced_sync_value("play_transcription_complete_sound", || {
         play_sound(SoundEvent::TranscriptionComplete);
-
-        Ok::<_, std::convert::Infallible>(())
     })
-    .unwrap()
 }
 
 /// Play a sound for error
 #[tauri::command]
 pub fn play_error_sound() {
-    tauri_plugin_telemetry::traced_sync("play_error_sound", || {
+    tauri_plugin_telemetry::traced_sync_value("play_error_sound", || {
         play_sound(SoundEvent::Error);
-
-        Ok::<_, std::convert::Infallible>(())
     })
-    .unwrap()
 }
 
 /// Check if sounds are enabled

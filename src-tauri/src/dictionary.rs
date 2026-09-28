@@ -466,10 +466,9 @@ fn whole_word_replace_all(re: &Regex, text: &str, to: &str) -> String {
 /// Tauri command to apply dictionary replacements
 #[tauri::command]
 pub fn apply_dictionary_to_text(text: String) -> String {
-    tauri_plugin_telemetry::traced_sync("apply_dictionary_to_text", || {
-        Ok::<_, std::convert::Infallible>(apply_dictionary(&text))
+    tauri_plugin_telemetry::traced_sync_value("apply_dictionary_to_text", || {
+        apply_dictionary(&text)
     })
-    .unwrap()
 }
 
 /// Get vocabulary words for AI enhancement context

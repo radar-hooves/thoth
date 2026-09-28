@@ -656,8 +656,8 @@ pub async fn pipeline_cancel(app: AppHandle) -> Result<(), Error> {
 /// Get the current pipeline state
 #[tauri::command]
 pub fn get_pipeline_state() -> PipelineState {
-    tauri_plugin_telemetry::traced_sync("get_pipeline_state", || {
-        Ok::<_, std::convert::Infallible>({
+    tauri_plugin_telemetry::traced_sync_value("get_pipeline_state", || {
+        {
             if crate::audio::is_recording() {
                 PipelineState::Recording
             } else if PROCESSING_COUNT.load(Ordering::SeqCst) > 0 {
@@ -666,9 +666,8 @@ pub fn get_pipeline_state() -> PipelineState {
             } else {
                 PipelineState::Idle
             }
-        })
+        }
     })
-    .unwrap()
 }
 
 /// Run the synchronous, panic-prone post-transcription text transforms under

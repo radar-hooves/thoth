@@ -55,109 +55,99 @@ fn get_download_state() -> &'static Mutex<DownloadState> {
 /// Check if the model files are downloaded and valid
 #[tauri::command]
 pub fn check_model_downloaded(model_id: Option<String>) -> bool {
-    tauri_plugin_telemetry::traced_sync("check_model_downloaded", || {
-        Ok::<_, std::convert::Infallible>(check_model_downloaded_impl(model_id))
-    })
-    .unwrap()
-}
+    tauri_plugin_telemetry::traced_sync_value("check_model_downloaded", || {
+        // Get the model info from manifest
+        let manifest = get_fallback_manifest();
 
-/// [`check_model_downloaded`]'s own body, kept as its own function so the
-/// early `return`s inside stay plain `bool` — wrapping them in `Ok(...)` to
-/// fit `traced_sync`'s `Result` bound would touch every one of them for no
-/// behavioural change.
-fn check_model_downloaded_impl(model_id: Option<String>) -> bool {
-    // Get the model info from manifest
-    let manifest = get_fallback_manifest();
+        // Use the provided model_id, else resolve the effective selection. Resolution
+        // filters on backend availability (#128), so this no longer reports on a model
+        // the build cannot run — the recommended model is macOS-only.
+        let model_id = model_id.unwrap_or_else(|| {
+            let configured = crate::config::get_config()
+                .ok()
+                .and_then(|c| c.transcription.model_id.clone());
 
-    // Use the provided model_id, else resolve the effective selection. Resolution
-    // filters on backend availability (#128), so this no longer reports on a model
-    // the build cannot run — the recommended model is macOS-only.
-    let model_id = model_id.unwrap_or_else(|| {
-        let configured = crate::config::get_config()
-            .ok()
-            .and_then(|c| c.transcription.model_id.clone());
+            super::manifest::resolve_selected_id(&manifest.models, configured.as_deref())
+                .map(|id| id.to_string())
+                .unwrap_or_else(|| "ggml-large-v3-turbo".to_string())
+        });
 
-        super::manifest::resolve_selected_id(&manifest.models, configured.as_deref())
-            .map(|id| id.to_string())
-            .unwrap_or_else(|| "ggml-large-v3-turbo".to_string())
-    });
+        let model = manifest.models.iter().find(|m| m.id == model_id);
 
-    let model = manifest.models.iter().find(|m| m.id == model_id);
-
-    // FluidAudio readiness is its compiled CoreML cache, not the on-disk
-    // required_files sentinel; defer to the manifest's cache-aware check.
-    if let Some(m) = model {
-        if m.model_type == "fluidaudio_coreml" {
-            return super::manifest::is_model_downloaded(m);
-        }
-    }
-
-    let required_files: Vec<&str> = match &model {
-        Some(m) => m.required_files.iter().map(|s| s.as_str()).collect(),
-        None => vec![
-            "encoder.int8.onnx",
-            "decoder.int8.onnx",
-            "joiner.int8.onnx",
-            "tokens.txt",
-        ],
-    };
-
-    // For direct downloads (single file), we can verify against the expected size
-    let expected_size = model
-        .as_ref()
-        .filter(|m| m.model_type == "whisper_ggml" && m.required_files.len() == 1)
-        .map(|m| m.download_size);
-
-    let model_dir = get_model_directory(&model_id);
-
-    for file in required_files {
-        let path = model_dir.join(file);
-        if !path.exists() {
-            tracing::debug!("Model file missing: {}", path.display());
-            return false;
-        }
-
-        // Verify file has content (not empty) and correct size
-        match std::fs::metadata(&path) {
-            Ok(metadata) => {
-                if metadata.len() == 0 {
-                    tracing::warn!("Model file is empty: {}", path.display());
-                    return false;
-                }
-
-                // For direct downloads, verify file is at least 90% of expected size
-                // (exact size may differ slightly from manifest estimate)
-                if let Some(expected) = expected_size {
-                    let min_size = expected * 9 / 10;
-                    if metadata.len() < min_size {
-                        tracing::warn!(
-                            "Model file appears incomplete: {} bytes, expected ~{} bytes ({})",
-                            metadata.len(),
-                            expected,
-                            path.display()
-                        );
-                        return false;
-                    }
-                }
+        // FluidAudio readiness is its compiled CoreML cache, not the on-disk
+        // required_files sentinel; defer to the manifest's cache-aware check.
+        if let Some(m) = model {
+            if m.model_type == "fluidaudio_coreml" {
+                return super::manifest::is_model_downloaded(m);
             }
-            Err(e) => {
-                tracing::warn!("Failed to read model file metadata: {}", e);
+        }
+
+        let required_files: Vec<&str> = match &model {
+            Some(m) => m.required_files.iter().map(|s| s.as_str()).collect(),
+            None => vec![
+                "encoder.int8.onnx",
+                "decoder.int8.onnx",
+                "joiner.int8.onnx",
+                "tokens.txt",
+            ],
+        };
+
+        // For direct downloads (single file), we can verify against the expected size
+        let expected_size = model
+            .as_ref()
+            .filter(|m| m.model_type == "whisper_ggml" && m.required_files.len() == 1)
+            .map(|m| m.download_size);
+
+        let model_dir = get_model_directory(&model_id);
+
+        for file in required_files {
+            let path = model_dir.join(file);
+            if !path.exists() {
+                tracing::debug!("Model file missing: {}", path.display());
                 return false;
             }
-        }
-    }
 
-    tracing::info!("All model files present and valid for {}", model_id);
-    true
+            // Verify file has content (not empty) and correct size
+            match std::fs::metadata(&path) {
+                Ok(metadata) => {
+                    if metadata.len() == 0 {
+                        tracing::warn!("Model file is empty: {}", path.display());
+                        return false;
+                    }
+
+                    // For direct downloads, verify file is at least 90% of expected size
+                    // (exact size may differ slightly from manifest estimate)
+                    if let Some(expected) = expected_size {
+                        let min_size = expected * 9 / 10;
+                        if metadata.len() < min_size {
+                            tracing::warn!(
+                                "Model file appears incomplete: {} bytes, expected ~{} bytes ({})",
+                                metadata.len(),
+                                expected,
+                                path.display()
+                            );
+                            return false;
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to read model file metadata: {}", e);
+                    return false;
+                }
+            }
+        }
+
+        tracing::info!("All model files present and valid for {}", model_id);
+        true
+    })
 }
 
 /// Get the current download progress state
 #[tauri::command]
 pub fn get_download_progress() -> DownloadState {
-    tauri_plugin_telemetry::traced_sync("get_download_progress", || {
-        Ok::<_, std::convert::Infallible>(get_download_state().lock().clone())
+    tauri_plugin_telemetry::traced_sync_value("get_download_progress", || {
+        get_download_state().lock().clone()
     })
-    .unwrap()
 }
 
 /// Download the model archive and extract it
@@ -875,14 +865,11 @@ pub fn delete_model(model_id: String) -> Result<(), Error> {
 /// Reset the download state to idle
 #[tauri::command]
 pub fn reset_download_state() {
-    tauri_plugin_telemetry::traced_sync("reset_download_state", || {
+    tauri_plugin_telemetry::traced_sync_value("reset_download_state", || {
         let mut state = get_download_state().lock();
         *state = DownloadState::Idle;
         tracing::info!("Download state reset to idle");
-
-        Ok::<_, std::convert::Infallible>(())
     })
-    .unwrap()
 }
 
 #[cfg(test)]

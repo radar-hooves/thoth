@@ -126,8 +126,8 @@ pub async fn unregister_shortcut(app: AppHandle, id: String) -> Result<(), Error
 /// A vector of `ShortcutInfo` for all registered shortcuts
 #[tauri::command]
 pub fn list_registered_shortcuts() -> Vec<ShortcutInfo> {
-    tauri_plugin_telemetry::traced_sync("list_registered_shortcuts", || {
-        Ok::<_, std::convert::Infallible>({
+    tauri_plugin_telemetry::traced_sync_value("list_registered_shortcuts", || {
+        {
             // Platform-specific listing
             #[cfg(target_os = "linux")]
             let mut shortcuts = linux::list_registered();
@@ -145,9 +145,8 @@ pub fn list_registered_shortcuts() -> Vec<ShortcutInfo> {
             }
 
             shortcuts
-        })
+        }
     })
-    .unwrap()
 }
 
 /// Get the default shortcuts for Thoth
@@ -164,10 +163,7 @@ pub fn list_registered_shortcuts() -> Vec<ShortcutInfo> {
 /// A vector of `ShortcutInfo` describing the default shortcuts
 #[tauri::command]
 pub fn get_default_shortcuts() -> Vec<ShortcutInfo> {
-    tauri_plugin_telemetry::traced_sync("get_default_shortcuts", || {
-        Ok::<_, std::convert::Infallible>(manager::get_defaults())
-    })
-    .unwrap()
+    tauri_plugin_telemetry::traced_sync_value("get_default_shortcuts", manager::get_defaults)
 }
 
 /// Register all default shortcuts
@@ -262,72 +258,55 @@ pub fn try_register_shortcut(
     accelerator: String,
     description: String,
 ) -> RegistrationResult {
-    tauri_plugin_telemetry::traced_sync("try_register_shortcut", || {
-        Ok::<_, std::convert::Infallible>(try_register_shortcut_impl(
-            app,
-            id,
-            accelerator,
-            description,
-        ))
-    })
-    .unwrap()
-}
+    tauri_plugin_telemetry::traced_sync_value("try_register_shortcut", || {
+        // Handle modifier-only shortcuts separately
+        if keyboard_service::is_modifier_shortcut(&accelerator) {
+            if keyboard_service::register_modifier_shortcut(
+                id.clone(),
+                accelerator.clone(),
+                description,
+            ) {
+                keyboard_service::restart_monitoring(app);
+                return RegistrationResult::Success {
+                    shortcut: accelerator,
+                    shortcut_id: id,
+                };
+            } else {
+                return RegistrationResult::Conflict(conflict::ShortcutConflict {
+                    shortcut: accelerator.clone(),
+                    shortcut_id: id,
+                    reason: "Failed to register modifier shortcut".to_string(),
+                    suggestions: vec![],
+                });
+            }
+        }
 
-/// [`try_register_shortcut`]'s own body, kept as its own function so the
-/// early `return`s inside stay plain `RegistrationResult` — wrapping them in
-/// `Ok(...)` to fit `traced_sync`'s `Result` bound would touch every one of
-/// them for no behavioural change.
-fn try_register_shortcut_impl(
-    app: AppHandle,
-    id: String,
-    accelerator: String,
-    description: String,
-) -> RegistrationResult {
-    // Handle modifier-only shortcuts separately
-    if keyboard_service::is_modifier_shortcut(&accelerator) {
-        if keyboard_service::register_modifier_shortcut(
-            id.clone(),
-            accelerator.clone(),
-            description,
-        ) {
-            keyboard_service::restart_monitoring(app);
-            return RegistrationResult::Success {
-                shortcut: accelerator,
-                shortcut_id: id,
-            };
-        } else {
+        // Validate format first
+        if let Err(e) = conflict::validate_shortcut_format(&accelerator) {
             return RegistrationResult::Conflict(conflict::ShortcutConflict {
                 shortcut: accelerator.clone(),
                 shortcut_id: id,
-                reason: "Failed to register modifier shortcut".to_string(),
-                suggestions: vec![],
+                reason: e,
+                suggestions: conflict::suggest_alternatives(&accelerator),
             });
         }
-    }
 
-    // Validate format first
-    if let Err(e) = conflict::validate_shortcut_format(&accelerator) {
-        return RegistrationResult::Conflict(conflict::ShortcutConflict {
-            shortcut: accelerator.clone(),
-            shortcut_id: id,
-            reason: e,
-            suggestions: conflict::suggest_alternatives(&accelerator),
-        });
-    }
+        // Attempt registration (platform-specific)
+        #[cfg(target_os = "linux")]
+        let result = linux::register(&app, id.clone(), accelerator.clone(), description);
+        #[cfg(not(target_os = "linux"))]
+        let result = manager::register(&app, id.clone(), accelerator.clone(), description);
 
-    // Attempt registration (platform-specific)
-    #[cfg(target_os = "linux")]
-    let result = linux::register(&app, id.clone(), accelerator.clone(), description);
-    #[cfg(not(target_os = "linux"))]
-    let result = manager::register(&app, id.clone(), accelerator.clone(), description);
-
-    match result {
-        Ok(()) => RegistrationResult::Success {
-            shortcut: accelerator,
-            shortcut_id: id,
-        },
-        Err(e) => RegistrationResult::Conflict(conflict::create_conflict(&accelerator, &id, &e)),
-    }
+        match result {
+            Ok(()) => RegistrationResult::Success {
+                shortcut: accelerator,
+                shortcut_id: id,
+            },
+            Err(e) => {
+                RegistrationResult::Conflict(conflict::create_conflict(&accelerator, &id, &e))
+            }
+        }
+    })
 }
 
 /// Check if a shortcut can be registered without actually registering it
@@ -402,8 +381,7 @@ pub async fn check_shortcut_available(app: AppHandle, accelerator: String) -> Re
 /// A vector of suggested alternative shortcuts
 #[tauri::command]
 pub fn get_shortcut_suggestions(shortcut: String) -> Vec<String> {
-    tauri_plugin_telemetry::traced_sync("get_shortcut_suggestions", || {
-        Ok::<_, std::convert::Infallible>(conflict::suggest_alternatives(&shortcut))
+    tauri_plugin_telemetry::traced_sync_value("get_shortcut_suggestions", || {
+        conflict::suggest_alternatives(&shortcut)
     })
-    .unwrap()
 }

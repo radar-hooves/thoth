@@ -761,42 +761,37 @@ fn warmup_whisper_fallback(manifest: &manifest::ModelManifest) {
 /// Check if transcription service is ready
 #[tauri::command]
 pub fn is_transcription_ready() -> bool {
-    tauri_plugin_telemetry::traced_sync("is_transcription_ready", || {
-        Ok::<_, std::convert::Infallible>(get_service().lock().is_some())
+    tauri_plugin_telemetry::traced_sync_value("is_transcription_ready", || {
+        get_service().lock().is_some()
     })
-    .unwrap()
 }
 
 /// Get the current transcription backend
 #[tauri::command]
 pub fn get_transcription_backend() -> Option<String> {
-    tauri_plugin_telemetry::traced_sync("get_transcription_backend", || {
-        Ok::<_, std::convert::Infallible>({
+    tauri_plugin_telemetry::traced_sync_value("get_transcription_backend", || {
+        {
             get_service().lock().as_ref().map(|s| match s.backend() {
                 TranscriptionBackend::Whisper => "whisper".to_string(),
                 TranscriptionBackend::Parakeet => "parakeet".to_string(),
                 TranscriptionBackend::FluidAudio => "fluidaudio".to_string(),
             })
-        })
+        }
     })
-    .unwrap()
 }
 
 /// Get the default model directory path for the currently selected/recommended model
 #[tauri::command]
 pub fn get_model_directory() -> String {
-    tauri_plugin_telemetry::traced_sync("get_model_directory", || {
-        Ok::<_, std::convert::Infallible>({
-            let config_model_id = crate::config::get_config()
-                .ok()
-                .and_then(|c| c.transcription.model_id);
+    tauri_plugin_telemetry::traced_sync_value("get_model_directory", || {
+        let config_model_id = crate::config::get_config()
+            .ok()
+            .and_then(|c| c.transcription.model_id);
 
-            model_directory_for_selection(config_model_id.as_deref())
-                .to_string_lossy()
-                .to_string()
-        })
+        model_directory_for_selection(config_model_id.as_deref())
+            .to_string_lossy()
+            .to_string()
     })
-    .unwrap()
 }
 
 /// Resolves a configured model id to the directory this build will actually
@@ -815,36 +810,31 @@ fn model_directory_for_selection(configured: Option<&str>) -> PathBuf {
 /// Get the whisper model directory path
 #[tauri::command]
 pub fn get_whisper_model_directory() -> String {
-    tauri_plugin_telemetry::traced_sync("get_whisper_model_directory", || {
-        Ok::<_, std::convert::Infallible>({
+    tauri_plugin_telemetry::traced_sync_value("get_whisper_model_directory", || {
+        {
             whisper::get_whisper_model_directory()
                 .to_string_lossy()
                 .to_string()
-        })
+        }
     })
-    .unwrap()
 }
 
 /// Check if a whisper model is downloaded
 #[tauri::command]
 pub fn is_whisper_model_downloaded(model_id: String) -> bool {
-    tauri_plugin_telemetry::traced_sync("is_whisper_model_downloaded", || {
-        Ok::<_, std::convert::Infallible>(whisper::is_whisper_model_downloaded(&model_id))
+    tauri_plugin_telemetry::traced_sync_value("is_whisper_model_downloaded", || {
+        whisper::is_whisper_model_downloaded(&model_id)
     })
-    .unwrap()
 }
 
 /// Filter transcription text to clean up filler words and formatting
 #[tauri::command]
 pub fn filter_transcription(text: String, options: Option<FilterOptions>) -> String {
-    tauri_plugin_telemetry::traced_sync("filter_transcription", || {
-        Ok::<_, std::convert::Infallible>({
-            let filter_options = options.unwrap_or_default();
-            let output_filter = OutputFilter::new(filter_options);
-            output_filter.filter(&text)
-        })
+    tauri_plugin_telemetry::traced_sync_value("filter_transcription", || {
+        let filter_options = options.unwrap_or_default();
+        let output_filter = OutputFilter::new(filter_options);
+        output_filter.filter(&text)
     })
-    .unwrap()
 }
 
 /// Set the selected model ID in config

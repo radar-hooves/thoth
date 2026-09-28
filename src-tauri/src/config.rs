@@ -818,10 +818,7 @@ pub fn get_config() -> Result<Config, Error> {
 /// This reads nothing from disk and mutates nothing — it is `Config::default()`.
 #[tauri::command]
 pub fn get_default_config() -> Config {
-    tauri_plugin_telemetry::traced_sync("get_default_config", || {
-        Ok::<_, std::convert::Infallible>(Config::default())
-    })
-    .unwrap()
+    tauri_plugin_telemetry::traced_sync_value("get_default_config", Config::default)
 }
 
 /// Update the configuration
@@ -1108,10 +1105,9 @@ pub async fn reset_config() -> Result<Config, Error> {
 /// Returns the path to the config file for debugging or user information.
 #[tauri::command]
 pub fn get_config_path_cmd() -> String {
-    tauri_plugin_telemetry::traced_sync("get_config_path_cmd", || {
-        Ok::<_, std::convert::Infallible>(get_config_path().to_string_lossy().to_string())
+    tauri_plugin_telemetry::traced_sync_value("get_config_path_cmd", || {
+        get_config_path().to_string_lossy().to_string()
     })
-    .unwrap()
 }
 
 #[cfg(test)]
