@@ -155,3 +155,6 @@ blob-report/
 # Extracted by CI (nix-check.yaml) to run the base branch copy of the
 # pnpmDeps hash script; never committed.
 scripts/.ci-update-pnpm-deps-hash.sh
+
+# `nix build`'s own output symlink.
+/result

@@ -1,7 +1,0 @@
-# Cargo's default libgit2 backend doesn't read `http.<url>.extraheader`, the
-# git config actions/checkout persists its GITHUB_TOKEN credential into — so
-# a private cross-repo git dependency (tauri-plugin-telemetry, telemetry) get
-# "failed to authenticate" in CI even once the token has read access. The
-# system git CLI does read it, and cargo shells out to it if asked.
-[net]
-git-fetch-with-cli = true
