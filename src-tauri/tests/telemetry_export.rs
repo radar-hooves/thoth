@@ -8,9 +8,17 @@
 //! callable once, which is exactly why this lives in its own `tests/*.rs`
 //! binary: the `thoth_lib` unit-test binary never calls `init`, so there is no
 //! other caller to race.
+//!
+//! Since the move to `tauri_plugin_telemetry` (moved from the standalone
+//! telemetry-rs repo into the factory's `kits/rust`, `full-stack-app-template#55`),
+//! every Tauri IPC command's span is opened by the plugin's own
+//! `tauri_plugin_telemetry::traced` rather than a hand-rolled
+//! `#[tracing::instrument]`, on the plugin's own `COMMAND_SPAN_TARGET` — this
+//! test calls it directly, the same way a real command body does, to prove
+//! that path reaches the collector too, not only Thoth's own curated target.
 
 #[test]
-fn a_reported_error_and_an_allow_listed_span_both_reach_the_collector() {
+fn a_reported_error_a_curated_span_and_a_command_span_all_reach_the_collector() {
     let mut server = mockito::Server::new();
     let logs_mock = server
         .mock("POST", "/v1/logs")
@@ -31,7 +39,18 @@ fn a_reported_error_and_an_allow_listed_span_both_reach_the_collector() {
         std::env::remove_var("OTEL_EXPORTER_OTLP_HEADERS_HELPER");
     }
 
-    let guard = telemetry::init("thoth-test", "0.0.0", &["thoth_telemetry_export_test"]);
+    // `tauri_plugin_telemetry::init`'s own allow-list handling adds
+    // `COMMAND_SPAN_TARGET` automatically; this test drives `telemetry::init`
+    // directly (there is no Tauri `App` here to plug into), so it adds that
+    // target itself, exactly as the plugin would.
+    let guard = telemetry::init(
+        "thoth-test",
+        "0.0.0",
+        &[
+            "thoth_telemetry_export_test",
+            tauri_plugin_telemetry::COMMAND_SPAN_TARGET,
+        ],
+    );
     assert!(
         !guard.exporter_is_from_env() || guard.exporter().is_some(),
         "the endpoint just set should have built a real exporter"
@@ -41,8 +60,8 @@ fn a_reported_error_and_an_allow_listed_span_both_reach_the_collector() {
     // the app calls at every failure site a user would feel.
     telemetry::report_error("integration_test_error");
 
-    // An allow-listed span, standing in for the per-command telemetry span
-    // every Tauri IPC command now carries.
+    // A curated domain span, standing in for Thoth's own hand-built spans
+    // (dictation, process_audio, transcription, enhancement).
     tracing::info_span!(target: "thoth_telemetry_export_test", "integration_test_span").in_scope(
         || {
             tracing::info!(
@@ -52,9 +71,26 @@ fn a_reported_error_and_an_allow_listed_span_both_reach_the_collector() {
         },
     );
 
-    // Drop flushes both batch processors, bounded, before returning — see
-    // telemetry-rs's own `Guard` docs. The exporter's HTTP client is blocking,
-    // so the POSTs below have already landed by the time this returns.
+    // The real per-command span mechanism every Tauri IPC command wrapped in
+    // `tauri_plugin_telemetry::traced` now carries — name, duration, outcome.
+    // `telemetry::init` above must run on a plain thread, never inside a Tokio
+    // task (it builds a blocking `reqwest` client), so the runtime is built
+    // here and used only to drive this one `.await` — the same pattern the
+    // `telemetry` crate's own tests use for a swap from inside a runtime.
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("a runtime");
+    runtime
+        .block_on(tauri_plugin_telemetry::traced(
+            "integration_test_command",
+            async { Ok::<(), &'static str>(()) },
+        ))
+        .expect("the traced future's own Ok is untouched");
+
+    // Drop flushes both batch processors, bounded, before returning — see the
+    // crate's own `Guard` docs. The exporter's HTTP client is blocking, so the
+    // POSTs below have already landed by the time this returns.
     drop(guard);
 
     logs_mock.assert();
