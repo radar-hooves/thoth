@@ -345,11 +345,16 @@ pub fn pipeline_start_recording(app: AppHandle) -> Result<String, Error> {
     match crate::audio::start_recording() {
         Ok(path) => {
             tracing::info!("Pipeline: Recording started at {}", path);
-            tracing::info!(target: TELEMETRY_TARGET, event = "recording_started", "recording_started");
 
             // Now that start_recording has resolved (and stored) the device name,
             // emit a follow-up progress event that includes it for the UI.
             let device_name = crate::audio::last_device_name();
+            tracing::info!(
+                target: TELEMETRY_TARGET,
+                event = "recording_started",
+                device = %device_name.as_deref().unwrap_or("unknown"),
+                "recording_started"
+            );
             emit_progress_with_device(
                 &app,
                 PipelineState::Recording,
