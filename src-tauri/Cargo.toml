@@ -79,8 +79,15 @@ fluidaudio-rs = { git = "https://github.com/radar-hooves/fluidaudio-rs", tag = "
 reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "charset", "http2", "system-proxy", "rustls-no-provider"] }
 # The household's one telemetry call: stderr for the developer, allow-listed
 # OTLP/HTTP for the corpus. `reqwest-middleware` names the type `http_client()`
-# hands back, so the shared traceparent-carrying client can be stored.
-telemetry = { git = "https://github.com/radar-hooves/telemetry-rs", tag = "v0.4.0" }
+# hands back, so the shared traceparent-carrying client can be stored. Moved
+# into the factory's kits/rust (telemetry-rs#55); the Tauri wiring is the
+# plugin below.
+telemetry = { git = "https://github.com/radar-hooves/full-stack-app-template", tag = "v2026.9.31" }
+# The one `.plugin(...)` call that switches the telemetry contract on: init off
+# the async runtime, the Guard dropped on RunEvent::Exit, allow-listed command
+# spans with no argument capture, the Settings-pane commands, the process
+# sampler.
+tauri-plugin-telemetry = { git = "https://github.com/radar-hooves/full-stack-app-template", tag = "v2026.9.31" }
 # `json` for the request builders; the crate forwards it to reqwest.
 reqwest-middleware = { version = "0.5", features = ["json"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "tls12", "std"] }

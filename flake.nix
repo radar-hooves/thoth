@@ -289,7 +289,28 @@
             lockFile = ./src-tauri/Cargo.lock;
             outputHashes = {
               "fluidaudio-rs-0.10.0" = "sha256-z7c8tibtfevefrYAwh3hJM/sr/OWnbSrxjDS4Tda8+k=";
-              "telemetry-0.4.0" = "sha256-XlxpcWdZKOxj0QQHIdmQ5Z5FftScNf+wvqR76xAI0Ag=";
+              # STILL fakeHash — blocked, not merely unrun. `radar-hooves/full-stack-app-template`
+              # is a PRIVATE repo (confirmed via `gh api repos/radar-hooves/full-stack-app-template`,
+              # 28/09/2026), unlike every other git dependency here (fluidaudio-rs, and the
+              # telemetry-rs repo this crate moved out of) which are public. `nix build`'s
+              # `fetchgit` FOD runs the git fetch inside Nix's build sandbox, which strips
+              # `$HOME`/`~/.gitconfig`/credential helpers — confirmed by testing `netrc-file`,
+              # `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_*` env vars and a plain public-repo control
+              # fetch (which succeeds) — so it cannot authenticate, and this hash cannot be
+              # discovered by running `nix build` from any machine, CI included, until one of:
+              # (a) the factory repo is made public (matches its own kit README, which documents
+              # a plain unauthenticated `git = "https://github.com/..."` dependency line with no
+              # credential step — the strongest signal this is a visibility oversight, not intent);
+              # (b) a cross-repo CI credential is provisioned for Thoth and `fetchgit`'s
+              # `netrcPhase`/`netrcImpureEnvVars` are wired in by hand (`cargoLock.outputHashes`
+              # has no extension point for this — it always calls plain `fetchgit { url; rev;
+              # sha256; }`, so this would mean not using `cargoLock.outputHashes` for this one
+              # dependency and vendoring it separately). This also blocks plain `cargo build` in
+              # `.github/workflows/ci.yaml` on the hosted `macos-15`/`ubuntu-22.04` runners, which
+              # have no cross-repo credential either. Once resolved, replace both `pkgs.lib.fakeHash`
+              # values below with what `nix build` reports.
+              "telemetry-0.6.0" = pkgs.lib.fakeHash;
+              "tauri-plugin-telemetry-0.1.0" = pkgs.lib.fakeHash;
             };
           };
 
