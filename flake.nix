@@ -289,7 +289,7 @@
             lockFile = ./src-tauri/Cargo.lock;
             outputHashes = {
               "fluidaudio-rs-0.10.0" = "sha256-z7c8tibtfevefrYAwh3hJM/sr/OWnbSrxjDS4Tda8+k=";
-              "telemetry-0.2.0" = "sha256-p5/HYd9TJgJY5P2yrV/DZ0eI9iVMnEcvcqgr73zqa3w=";
+              "telemetry-0.4.0" = "sha256-XlxpcWdZKOxj0QQHIdmQ5Z5FftScNf+wvqR76xAI0Ag=";
             };
           };
 
