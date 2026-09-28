@@ -289,39 +289,44 @@
             lockFile = ./src-tauri/Cargo.lock;
             outputHashes = {
               "fluidaudio-rs-0.10.0" = "sha256-z7c8tibtfevefrYAwh3hJM/sr/OWnbSrxjDS4Tda8+k=";
-              # STILL fakeHash — blocked, not merely unrun. `radar-hooves/full-stack-app-template`
-              # is a PRIVATE repo, unlike every other git dependency here (fluidaudio-rs, and the
-              # telemetry-rs repo this crate moved out of) which are public. `nix build`'s
-              # `fetchgit` FOD runs the git fetch inside Nix's build sandbox, which strips
-              # `$HOME`/`~/.gitconfig`/credential helpers — confirmed by testing `netrc-file`,
-              # `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_*` env vars and a plain public-repo control
-              # fetch (which succeeds) — so it cannot authenticate there, and this hash cannot be
-              # discovered by running `nix build` from any machine, CI included: not a fixable
-              # local-environment gap, a structural one in `cargoLock.outputHashes`, which always
-              # calls plain `fetchgit { url; rev; sha256; }` with no credential extension point
-              # (`fetchgit` itself supports `netrcPhase`/`netrcImpureEnvVars`, but nothing routes
-              # them through `outputHashes`).
+              # STILL fakeHash — blocked on an operator decision, not merely unrun.
+              # `radar-hooves/full-stack-app-template` is a PRIVATE repo, unlike every other git
+              # dependency here (fluidaudio-rs, and the telemetry-rs repo this crate moved out of)
+              # which are public, and there is no credential this session holds or can mint that
+              # closes that gap:
               #
-              # `.github/workflows/ci.yaml`'s plain `cargo build`/`test`/`clippy` on the hosted
-              # `macos-15`/`ubuntu-22.04` runners hit the same private-repo wall a different way —
-              # `actions/checkout`'s persisted `GITHUB_TOKEN` credential is scoped to Thoth only by
-              # default — fixed on 28/09/2026 by setting
-              # `radar-hooves/full-stack-app-template`'s own Settings → Actions → General →
-              # "Access" to organization-wide, so every radar-hooves repo's own `GITHUB_TOKEN` can
-              # read it (`gh api -X PUT repos/radar-hooves/full-stack-app-template/actions/permissions/access
-              # -f access_level=organization`; a curated per-repo list was tried first and refused
-              # with "Only 'none' and 'organization' access levels are allowed for this repository").
-              # That grant runs at the ordinary git/HTTP layer `actions/checkout` sets up outside
-              # any build sandbox, so it reaches plain `cargo`; it does not reach a Nix FOD builder,
-              # which strips that layer entirely, so `nix-check.yaml`'s "Flake build" tier is
-              # unaffected and still fails until: (a) the factory repo is made public (matches its
-              # own kit README, which documents a plain unauthenticated
-              # `git = "https://github.com/..."` dependency line with no credential step — the
-              # strongest signal this is a visibility oversight, not intent), or (b) `fetchgit`'s
-              # `netrcPhase`/`netrcImpureEnvVars` are wired in by hand, which means not using
-              # `cargoLock.outputHashes` for this one dependency and vendoring it separately. Once
-              # resolved, replace both `pkgs.lib.fakeHash` values below with what `nix build`
-              # reports.
+              # - `nix build`'s `fetchgit` FOD runs the git fetch inside Nix's build sandbox, which
+              #   strips `$HOME`/`~/.gitconfig`/credential helpers entirely — confirmed by testing
+              #   `netrc-file` and `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_*` env vars against it (neither
+              #   reaches the builder) and a plain public-repo control fetch (which succeeds).
+              #   `cargoLock.outputHashes` always calls plain `fetchgit { url; rev; sha256; }` with
+              #   no credential extension point — `fetchgit` itself supports `netrcPhase`/
+              #   `netrcImpureEnvVars`, but nothing routes them through `outputHashes`.
+              # - Plain `cargo build`/`test`/`clippy` in `.github/workflows/ci.yaml`'s hosted
+              #   `macos-15`/`ubuntu-22.04` runners hit the same wall a different way: `actions/
+              #   checkout` persists its per-job `GITHUB_TOKEN` as an `http.https://github.com/
+              #   .extraheader` git-config entry, which only the system git CLI reads — added
+              #   `../.cargo/config.toml`'s `net.git-fetch-with-cli = true` so cargo shells out to
+              #   it instead of its default libgit2 backend, confirmed against a real CI run. That
+              #   still was not enough: the default `GITHUB_TOKEN` is scoped to Thoth alone, and
+              #   the repo-to-repo "Access" setting under full-stack-app-template's own Settings →
+              #   Actions → General (tried 28/09/2026, `access_level=organization`, since reverted
+              #   to `none`) turned out to govern reusable-*workflow* calls between repos, not git
+              #   content access — it made no difference to the fetch and was the wrong lever.
+              #
+              # What actually closes this: (a) make the factory repo public — matches its own kit
+              # README, which documents a plain unauthenticated `git = "https://github.com/..."`
+              # dependency line with no credential step, the strongest signal this is a visibility
+              # oversight rather than intent; or (b) mint a dedicated fine-grained PAT for
+              # cross-repo read (GitHub's API has no endpoint to create one — it needs the web UI,
+              # matching the `GHCR_PAT`-shaped secret mcp-servers and godswood already carry for
+              # exactly this "clone a private sibling repo in CI" case) and store it as a Thoth repo
+              # secret, consumed by both a `.github/workflows/ci.yaml` step (`git config --global
+              # url."https://x-access-token:${SECRET}@github.com/".insteadOf "https://github.com/"`
+              # — the CLI-backend switch above is what makes this reach cargo) and, for the Nix
+              # tier specifically, a hand-written `fetchgit` call carrying `netrcPhase`, replacing
+              # this dependency's entry in `cargoLock.outputHashes`. Once resolved, replace both
+              # `pkgs.lib.fakeHash` values below with what `nix build` reports.
               "telemetry-0.6.0" = pkgs.lib.fakeHash;
               "tauri-plugin-telemetry-0.1.0" = pkgs.lib.fakeHash;
             };
