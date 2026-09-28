@@ -144,7 +144,8 @@ jobs:
 
   frontend:
     name: Frontend
-    runs-on: [self-hosted, atlas]
+    # by-exception (2026-09-28): public repo takes fork PRs; fork code must not run on the household runner
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","atlas"]') }}
 
     # Tighter than the rust job's ceiling: this one takes ~1.5 minutes, and it
     # runs on the self-hosted box, where a hung job holds the runner hostage
