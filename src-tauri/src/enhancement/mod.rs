@@ -207,7 +207,6 @@ pub fn configure_backend(
 
 /// Check if the Ollama server is available
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub async fn check_ollama_available() -> bool {
     let client = get_backend().lock().ollama.clone();
     client.is_available().await
@@ -215,22 +214,23 @@ pub async fn check_ollama_available() -> bool {
 
 /// List available Ollama models
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn list_ollama_models() -> Result<Vec<String>, Error> {
-    let client = get_backend().lock().ollama.clone();
-    client
-        .list_models()
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to list Ollama models: {}", e);
-            format!("Failed to list models: {}", e)
-        })
-        .map_err(Into::into)
+    tauri_plugin_telemetry::traced("list_ollama_models", async move {
+        let client = get_backend().lock().ollama.clone();
+        client
+            .list_models()
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to list Ollama models: {}", e);
+                format!("Failed to list models: {}", e)
+            })
+            .map_err(Into::into)
+    })
+    .await
 }
 
 /// Check if the configured OpenAI-compatible server is available
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub async fn check_openai_compat_available() -> bool {
     let client = get_backend().lock().openai_compat.clone();
     match client {
@@ -241,22 +241,24 @@ pub async fn check_openai_compat_available() -> bool {
 
 /// List available models from the OpenAI-compatible server
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn list_openai_compat_models() -> Result<Vec<String>, Error> {
-    let client = get_backend().lock().openai_compat.clone();
-    match client {
-        Some(c) => c
-            .list_models()
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to list OpenAI-compat models: {}", e);
-                format!("Failed to list models: {}", e)
-            })
-            .map_err(Into::into),
-        None => Err("OpenAI-compatible backend not configured"
-            .to_string()
-            .into()),
-    }
+    tauri_plugin_telemetry::traced("list_openai_compat_models", async move {
+        let client = get_backend().lock().openai_compat.clone();
+        match client {
+            Some(c) => c
+                .list_models()
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to list OpenAI-compat models: {}", e);
+                    format!("Failed to list models: {}", e)
+                })
+                .map_err(Into::into),
+            None => Err("OpenAI-compatible backend not configured"
+                .to_string()
+                .into()),
+        }
+    })
+    .await
 }
 
 /// Enhance text using the active backend.

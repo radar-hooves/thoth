@@ -3,7 +3,6 @@
 //! Read-only aggregations over the `transcriptions` table for the Insights
 //! pane.  All heavy aggregation is SQL-side; no row text is loaded into Rust.
 
-use crate::TELEMETRY_TARGET;
 use chrono::{DateTime, Duration, Local, NaiveDate, TimeZone, Utc};
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
@@ -847,33 +846,39 @@ fn oldest_file_mtime(dir: &std::path::Path) -> Option<String> {
 
 /// Returns aggregated insights for the Insights dashboard.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn get_insights(range: InsightsRange) -> Result<InsightsData, Error> {
-    let conn = open_connection().map_err(|e| {
-        tracing::error!("Failed to open DB for insights: {}", e);
-        e
-    })?;
-    get_insights_with_conn(&conn, &range).map_err(|e| {
-        tracing::error!("Failed to compute insights: {}", e);
-        format!("Failed to compute insights: {}", e).into()
+pub async fn get_insights(range: InsightsRange) -> Result<InsightsData, Error> {
+    tauri_plugin_telemetry::traced("get_insights", async move {
+        let conn = open_connection().map_err(|e| {
+            tracing::error!("Failed to open DB for insights: {}", e);
+            e
+        })?;
+        get_insights_with_conn(&conn, &range).map_err(|e| {
+            tracing::error!("Failed to compute insights: {}", e);
+            format!("Failed to compute insights: {}", e).into()
+        })
     })
+    .await
 }
 
 /// Returns recordings flagged as likely cruft by a low text-density heuristic.
 ///
 /// Each returned candidate has its WAV decoded for RMS confirmation.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn get_cruft_candidates(density_threshold: Option<f64>) -> Result<Vec<CruftCandidate>, Error> {
-    let threshold = density_threshold.unwrap_or(DEFAULT_DENSITY_THRESHOLD);
-    let conn = open_connection().map_err(|e| {
-        tracing::error!("Failed to open DB for cruft scan: {}", e);
-        e
-    })?;
-    get_cruft_candidates_with_conn(&conn, threshold).map_err(|e| {
-        tracing::error!("Failed to get cruft candidates: {}", e);
-        format!("Failed to get cruft candidates: {}", e).into()
+pub async fn get_cruft_candidates(
+    density_threshold: Option<f64>,
+) -> Result<Vec<CruftCandidate>, Error> {
+    tauri_plugin_telemetry::traced("get_cruft_candidates", async move {
+        let threshold = density_threshold.unwrap_or(DEFAULT_DENSITY_THRESHOLD);
+        let conn = open_connection().map_err(|e| {
+            tracing::error!("Failed to open DB for cruft scan: {}", e);
+            e
+        })?;
+        get_cruft_candidates_with_conn(&conn, threshold).map_err(|e| {
+            tracing::error!("Failed to get cruft candidates: {}", e);
+            format!("Failed to get cruft candidates: {}", e).into()
+        })
     })
+    .await
 }
 
 // =============================================================================

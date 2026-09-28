@@ -3,7 +3,6 @@
 //! Provides built-in and custom prompt templates for text enhancement.
 //! Custom prompts are stored in `~/.thoth/prompts.json`.
 
-use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -162,7 +161,6 @@ pub fn apply_prompt(template: &PromptTemplate, text: &str) -> String {
 
 /// Get all prompt templates (built-in and custom)
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_all_prompts() -> Vec<PromptTemplate> {
     let mut prompts = get_builtin_prompts();
     let custom_path = get_custom_prompts_path();
@@ -173,14 +171,12 @@ pub fn get_all_prompts() -> Vec<PromptTemplate> {
 
 /// Get only built-in prompt templates
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_builtin_prompts_cmd() -> Vec<PromptTemplate> {
     get_builtin_prompts()
 }
 
 /// Get only custom prompt templates
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_custom_prompts_cmd() -> Vec<PromptTemplate> {
     let custom_path = get_custom_prompts_path();
     load_custom_prompts(&custom_path)
@@ -188,50 +184,53 @@ pub fn get_custom_prompts_cmd() -> Vec<PromptTemplate> {
 
 /// Add or update a custom prompt template
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn save_custom_prompt_cmd(prompt: PromptTemplate) -> Result<(), Error> {
-    if prompt.is_builtin {
-        return Err("Cannot save a built-in prompt as custom".to_string().into());
-    }
+pub async fn save_custom_prompt_cmd(prompt: PromptTemplate) -> Result<(), Error> {
+    tauri_plugin_telemetry::traced("save_custom_prompt_cmd", async move {
+        if prompt.is_builtin {
+            return Err("Cannot save a built-in prompt as custom".to_string().into());
+        }
 
-    if prompt.id.is_empty() {
-        return Err("Prompt ID cannot be empty".to_string().into());
-    }
+        if prompt.id.is_empty() {
+            return Err("Prompt ID cannot be empty".to_string().into());
+        }
 
-    if prompt.name.is_empty() {
-        return Err("Prompt name cannot be empty".to_string().into());
-    }
+        if prompt.name.is_empty() {
+            return Err("Prompt name cannot be empty".to_string().into());
+        }
 
-    if prompt.template.is_empty() {
-        return Err("Prompt template cannot be empty".to_string().into());
-    }
+        if prompt.template.is_empty() {
+            return Err("Prompt template cannot be empty".to_string().into());
+        }
 
-    if !prompt.template.contains("{text}") {
-        return Err("Prompt template must contain {text} placeholder"
-            .to_string()
-            .into());
-    }
+        if !prompt.template.contains("{text}") {
+            return Err("Prompt template must contain {text} placeholder"
+                .to_string()
+                .into());
+        }
 
-    let custom_path = get_custom_prompts_path();
-    save_custom_prompt(&custom_path, &prompt).map_err(Into::into)
+        let custom_path = get_custom_prompts_path();
+        save_custom_prompt(&custom_path, &prompt).map_err(Into::into)
+    })
+    .await
 }
 
 /// Delete a custom prompt template
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn delete_custom_prompt_cmd(prompt_id: String) -> Result<(), Error> {
-    // Check if it's a built-in prompt
-    if get_builtin_prompts().iter().any(|p| p.id == prompt_id) {
-        return Err("Cannot delete a built-in prompt".to_string().into());
-    }
+pub async fn delete_custom_prompt_cmd(prompt_id: String) -> Result<(), Error> {
+    tauri_plugin_telemetry::traced("delete_custom_prompt_cmd", async move {
+        // Check if it's a built-in prompt
+        if get_builtin_prompts().iter().any(|p| p.id == prompt_id) {
+            return Err("Cannot delete a built-in prompt".to_string().into());
+        }
 
-    let custom_path = get_custom_prompts_path();
-    delete_custom_prompt(&custom_path, &prompt_id).map_err(Into::into)
+        let custom_path = get_custom_prompts_path();
+        delete_custom_prompt(&custom_path, &prompt_id).map_err(Into::into)
+    })
+    .await
 }
 
 /// Get a prompt by ID
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_prompt_by_id(prompt_id: String) -> Option<PromptTemplate> {
     let all_prompts = get_all_prompts();
     all_prompts.into_iter().find(|p| p.id == prompt_id)

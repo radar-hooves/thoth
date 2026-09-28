@@ -14,7 +14,6 @@
 //! reliably due to Wayland's security model. Users may want to disable the
 //! indicator on Wayland.
 
-use crate::TELEMETRY_TARGET;
 use crate::config;
 use crate::config::IndicatorStyle;
 use crate::error::Error;
@@ -290,13 +289,15 @@ fn position_at_primary_monitor<R: Runtime>(indicator: &tauri::WebviewWindow<R>) 
 ///
 /// Returns silently if the recording indicator is disabled in config.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn show_recording_indicator(app: AppHandle) -> Result<(), Error> {
-    tracing::info!("show_recording_indicator called");
-    show_indicator_common(&app, |app_handle, indicator| {
-        position_at_bottom_centre(app_handle, indicator)
+pub async fn show_recording_indicator(app: AppHandle) -> Result<(), Error> {
+    tauri_plugin_telemetry::traced("show_recording_indicator", async move {
+        tracing::info!("show_recording_indicator called");
+        show_indicator_common(&app, |app_handle, indicator| {
+            position_at_bottom_centre(app_handle, indicator)
+        })
+        .map_err(Into::into)
     })
-    .map_err(Into::into)
+    .await
 }
 
 /// Position the indicator at the bottom centre of the main window's monitor
@@ -361,7 +362,6 @@ fn position_at_bottom_centre(app: &AppHandle, indicator: &WebviewWindow) -> Resu
 /// class of bug. The webview stays warm from pre-warm, so re-showing an
 /// already-mapped 58px borderless window is fast.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn hide_recording_indicator(app: AppHandle) -> Result<(), Error> {
     tracing::info!("hide_recording_indicator called");
 

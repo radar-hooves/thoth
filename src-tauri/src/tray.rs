@@ -7,7 +7,6 @@
 //! - Settings window
 //! - Quit
 
-use crate::TELEMETRY_TARGET;
 use parking_lot::RwLock;
 use std::sync::OnceLock;
 use tauri::{
@@ -976,7 +975,6 @@ fn handle_select_prompt(app: &AppHandle, prompt_id: String) {
 
 /// Get the current tray state
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_tray_state_cmd() -> TrayStateInfo {
     let state = get_tray_state().read();
     TrayStateInfo {
@@ -987,7 +985,6 @@ pub fn get_tray_state_cmd() -> TrayStateInfo {
 
 /// Refresh the tray menu (e.g. after permissions change)
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn refresh_tray_menu(app: AppHandle) {
     rebuild_tray_menu(&app);
 }

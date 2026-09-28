@@ -9,7 +9,6 @@ pub mod schema;
 pub mod transcription;
 pub mod trash;
 
-use crate::TELEMETRY_TARGET;
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -136,14 +135,16 @@ pub fn initialise_database() -> Result<(), DatabaseError> {
 
 /// Initialises the database. Call this on application startup.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn init_database() -> Result<(), Error> {
-    initialise_database()
-        .map_err(|e| {
-            tracing::error!("Failed to initialise database: {}", e);
-            format!("Failed to initialise database: {}", e)
-        })
-        .map_err(Into::into)
+pub async fn init_database() -> Result<(), Error> {
+    tauri_plugin_telemetry::traced("init_database", async move {
+        initialise_database()
+            .map_err(|e| {
+                tracing::error!("Failed to initialise database: {}", e);
+                format!("Failed to initialise database: {}", e)
+            })
+            .map_err(Into::into)
+    })
+    .await
 }
 
 // =============================================================================

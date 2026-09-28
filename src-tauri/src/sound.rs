@@ -23,7 +23,6 @@
 //! playback ends, so a player that is not dropped is retained for the life of the
 //! process (see #170 — this leaked a decoded PCM buffer twice per dictation).
 
-use crate::TELEMETRY_TARGET;
 use crate::config;
 use crate::error::Error;
 
@@ -382,56 +381,58 @@ fn play_macos_sound(path: &'static str, volume: f32) {
 
 /// Play a sound for recording start
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn play_recording_start_sound() {
     play_sound(SoundEvent::RecordingStart);
 }
 
 /// Play a sound for recording stop
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn play_recording_stop_sound() {
     play_sound(SoundEvent::RecordingStop);
 }
 
 /// Play a sound for transcription complete
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn play_transcription_complete_sound() {
     play_sound(SoundEvent::TranscriptionComplete);
 }
 
 /// Play a sound for error
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn play_error_sound() {
     play_sound(SoundEvent::Error);
 }
 
 /// Check if sounds are enabled
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn are_sounds_enabled() -> Result<bool, Error> {
-    let cfg = config::get_config()?;
-    Ok(cfg.audio.play_sounds)
+pub async fn are_sounds_enabled() -> Result<bool, Error> {
+    tauri_plugin_telemetry::traced("are_sounds_enabled", async move {
+        let cfg = config::get_config()?;
+        Ok(cfg.audio.play_sounds)
+    })
+    .await
 }
 
 /// Set sounds enabled state
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn set_sounds_enabled(enabled: bool) -> Result<(), Error> {
-    let mut cfg = config::get_config()?;
-    cfg.audio.play_sounds = enabled;
-    config::set_config(cfg)?;
-    tracing::info!("Sounds enabled: {}", enabled);
-    Ok(())
+pub async fn set_sounds_enabled(enabled: bool) -> Result<(), Error> {
+    tauri_plugin_telemetry::traced("set_sounds_enabled", async move {
+        let mut cfg = config::get_config()?;
+        cfg.audio.play_sounds = enabled;
+        config::set_config(cfg)?;
+        tracing::info!("Sounds enabled: {}", enabled);
+        Ok(())
+    })
+    .await
 }
 
 /// Get the recording cue volume (0.0 to 1.0).
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn get_sound_volume() -> Result<f32, Error> {
-    Ok(clamp_volume(config::get_config()?.audio.sound_volume))
+pub async fn get_sound_volume() -> Result<f32, Error> {
+    tauri_plugin_telemetry::traced("get_sound_volume", async move {
+        Ok(clamp_volume(config::get_config()?.audio.sound_volume))
+    })
+    .await
 }
 
 /// Set the recording cue volume.
@@ -440,14 +441,16 @@ pub fn get_sound_volume() -> Result<f32, Error> {
 /// corrected once here rather than needing to be defended against at every
 /// playback site.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn set_sound_volume(volume: f32) -> Result<(), Error> {
-    let volume = clamp_volume(volume);
-    let mut cfg = config::get_config()?;
-    cfg.audio.sound_volume = volume;
-    config::set_config(cfg)?;
-    tracing::info!("Sound volume: {:.2}", volume);
-    Ok(())
+pub async fn set_sound_volume(volume: f32) -> Result<(), Error> {
+    tauri_plugin_telemetry::traced("set_sound_volume", async move {
+        let volume = clamp_volume(volume);
+        let mut cfg = config::get_config()?;
+        cfg.audio.sound_volume = volume;
+        config::set_config(cfg)?;
+        tracing::info!("Sound volume: {:.2}", volume);
+        Ok(())
+    })
+    .await
 }
 
 #[cfg(test)]

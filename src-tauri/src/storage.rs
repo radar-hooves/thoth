@@ -4,7 +4,6 @@
 //! locations: models, recordings, database, config, and
 //! FluidAudio CoreML cache.
 
-use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use serde::Serialize;
 use std::fs;
@@ -110,122 +109,130 @@ fn config_file_sizes(base: &Path) -> u64 {
 
 /// Get storage usage breakdown
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn get_storage_usage() -> Result<StorageUsage, Error> {
-    let base = thoth_dir();
+pub async fn get_storage_usage() -> Result<StorageUsage, Error> {
+    tauri_plugin_telemetry::traced("get_storage_usage", async move {
+        let base = thoth_dir();
 
-    let models_bytes = dir_size(&base.join("models"));
-    let recordings_bytes = dir_size(&base.join("Recordings"));
-    let database_bytes = fs::metadata(base.join("thoth.db"))
-        .map(|m| m.len())
-        .unwrap_or(0);
-    let config_bytes = config_file_sizes(&base);
-    let fluidaudio_bytes = fluidaudio_models_dir().map(|d| dir_size(&d)).unwrap_or(0);
+        let models_bytes = dir_size(&base.join("models"));
+        let recordings_bytes = dir_size(&base.join("Recordings"));
+        let database_bytes = fs::metadata(base.join("thoth.db"))
+            .map(|m| m.len())
+            .unwrap_or(0);
+        let config_bytes = config_file_sizes(&base);
+        let fluidaudio_bytes = fluidaudio_models_dir().map(|d| dir_size(&d)).unwrap_or(0);
 
-    let recording_count = file_count(&base.join("Recordings"));
+        let recording_count = file_count(&base.join("Recordings"));
 
-    let total_bytes =
-        models_bytes + recordings_bytes + database_bytes + config_bytes + fluidaudio_bytes;
+        let total_bytes =
+            models_bytes + recordings_bytes + database_bytes + config_bytes + fluidaudio_bytes;
 
-    Ok(StorageUsage {
-        models_bytes,
-        recordings_bytes,
-        database_bytes,
-        config_bytes,
-        fluidaudio_bytes,
-        total_bytes,
-        recording_count,
+        Ok(StorageUsage {
+            models_bytes,
+            recordings_bytes,
+            database_bytes,
+            config_bytes,
+            fluidaudio_bytes,
+            total_bytes,
+            recording_count,
+        })
     })
+    .await
 }
 
 /// Delete all audio recordings
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn delete_all_recordings() -> Result<u64, Error> {
-    let recordings_dir = thoth_dir().join("Recordings");
-    if !recordings_dir.exists() {
-        return Ok(0);
-    }
+pub async fn delete_all_recordings() -> Result<u64, Error> {
+    tauri_plugin_telemetry::traced("delete_all_recordings", async move {
+        let recordings_dir = thoth_dir().join("Recordings");
+        if !recordings_dir.exists() {
+            return Ok(0);
+        }
 
-    let mut deleted = 0u64;
-    let entries = fs::read_dir(&recordings_dir).map_err(|e| e.to_string())?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_file() {
-            if let Err(e) = fs::remove_file(&path) {
-                tracing::warn!("Failed to delete recording {:?}: {}", path, e);
-            } else {
-                deleted += 1;
+        let mut deleted = 0u64;
+        let entries = fs::read_dir(&recordings_dir).map_err(|e| e.to_string())?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Err(e) = fs::remove_file(&path) {
+                    tracing::warn!("Failed to delete recording {:?}: {}", path, e);
+                } else {
+                    deleted += 1;
+                }
             }
         }
-    }
 
-    tracing::info!("Deleted {} recording files", deleted);
-    Ok(deleted)
+        tracing::info!("Deleted {} recording files", deleted);
+        Ok(deleted)
+    })
+    .await
 }
 
 /// Delete the FluidAudio CoreML model cache
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn delete_fluidaudio_cache() -> Result<(), Error> {
-    let Some(cache_dir) = fluidaudio_models_dir() else {
-        return Ok(()); // No FluidAudio cache off macOS.
-    };
-    if !cache_dir.exists() {
-        return Ok(());
-    }
+pub async fn delete_fluidaudio_cache() -> Result<(), Error> {
+    tauri_plugin_telemetry::traced("delete_fluidaudio_cache", async move {
+        let Some(cache_dir) = fluidaudio_models_dir() else {
+            return Ok(()); // No FluidAudio cache off macOS.
+        };
+        if !cache_dir.exists() {
+            return Ok(());
+        }
 
-    fs::remove_dir_all(&cache_dir).map_err(|e| {
-        format!(
-            "Failed to delete FluidAudio cache at {}: {}",
-            cache_dir.display(),
-            e
-        )
-    })?;
+        fs::remove_dir_all(&cache_dir).map_err(|e| {
+            format!(
+                "Failed to delete FluidAudio cache at {}: {}",
+                cache_dir.display(),
+                e
+            )
+        })?;
 
-    // Also remove the ready marker so Model Manager reflects the change
-    let marker_dir = thoth_dir()
-        .join("models")
-        .join("fluidaudio-parakeet-tdt-coreml");
-    let marker_path = marker_dir.join(".fluidaudio_ready");
-    if marker_path.exists() {
-        let _ = fs::remove_file(&marker_path);
-    }
+        // Also remove the ready marker so Model Manager reflects the change
+        let marker_dir = thoth_dir()
+            .join("models")
+            .join("fluidaudio-parakeet-tdt-coreml");
+        let marker_path = marker_dir.join(".fluidaudio_ready");
+        if marker_path.exists() {
+            let _ = fs::remove_file(&marker_path);
+        }
 
-    tracing::info!("Deleted FluidAudio cache directory");
-    Ok(())
+        tracing::info!("Deleted FluidAudio cache directory");
+        Ok(())
+    })
+    .await
 }
 
 /// Delete ALL Thoth data (full reset / uninstall cleanup)
 ///
 /// Removes ~/.thoth/ and ~/Library/Application Support/FluidAudio/Models/
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn delete_all_data() -> Result<(), Error> {
-    let base = thoth_dir();
-    if base.exists() {
-        fs::remove_dir_all(&base)
-            .map_err(|e| format!("Failed to delete Thoth data at {}: {}", base.display(), e))?;
-        tracing::info!("Deleted Thoth data directory: {}", base.display());
-    }
-
-    if let Some(fluid_dir) = fluidaudio_models_dir() {
-        if fluid_dir.exists() {
-            fs::remove_dir_all(&fluid_dir).map_err(|e| {
-                format!(
-                    "Failed to delete FluidAudio cache at {}: {}",
-                    fluid_dir.display(),
-                    e
-                )
-            })?;
-            tracing::info!(
-                "Deleted FluidAudio cache directory: {}",
-                fluid_dir.display()
-            );
+pub async fn delete_all_data() -> Result<(), Error> {
+    tauri_plugin_telemetry::traced("delete_all_data", async move {
+        let base = thoth_dir();
+        if base.exists() {
+            fs::remove_dir_all(&base)
+                .map_err(|e| format!("Failed to delete Thoth data at {}: {}", base.display(), e))?;
+            tracing::info!("Deleted Thoth data directory: {}", base.display());
         }
-    }
 
-    Ok(())
+        if let Some(fluid_dir) = fluidaudio_models_dir() {
+            if fluid_dir.exists() {
+                fs::remove_dir_all(&fluid_dir).map_err(|e| {
+                    format!(
+                        "Failed to delete FluidAudio cache at {}: {}",
+                        fluid_dir.display(),
+                        e
+                    )
+                })?;
+                tracing::info!(
+                    "Deleted FluidAudio cache directory: {}",
+                    fluid_dir.display()
+                );
+            }
+        }
+
+        Ok(())
+    })
+    .await
 }
 
 #[cfg(test)]

@@ -5,7 +5,6 @@
 //! - Archive downloads with extraction (sherpa-onnx models)
 
 use super::manifest::{RemoteModelInfo, get_fallback_manifest, get_model_directory};
-use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use anyhow::{Result, anyhow};
 use parking_lot::Mutex;
@@ -55,7 +54,6 @@ fn get_download_state() -> &'static Mutex<DownloadState> {
 
 /// Check if the model files are downloaded and valid
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn check_model_downloaded(model_id: Option<String>) -> bool {
     // Get the model info from manifest
     let manifest = get_fallback_manifest();
@@ -144,7 +142,6 @@ pub fn check_model_downloaded(model_id: Option<String>) -> bool {
 
 /// Get the current download progress state
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_download_progress() -> DownloadState {
     get_download_state().lock().clone()
 }
@@ -156,68 +153,100 @@ pub fn get_download_progress() -> DownloadState {
 /// - `model-download-complete`: When download and extraction complete
 /// - `model-download-error`: If an error occurs
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn download_model(app: AppHandle, model_id: Option<String>) -> Result<(), Error> {
-    // Check if already downloading
-    {
-        let state = get_download_state().lock().clone();
-        if state == DownloadState::Downloading || state == DownloadState::Extracting {
-            return Err("Download already in progress".to_string().into());
+    tauri_plugin_telemetry::traced("download_model", async move {
+        // Check if already downloading
+        {
+            let state = get_download_state().lock().clone();
+            if state == DownloadState::Downloading || state == DownloadState::Extracting {
+                return Err("Download already in progress".to_string().into());
+            }
         }
-    }
 
-    // Get model info from manifest
-    let manifest = get_fallback_manifest();
-    // An explicit model_id is honoured as-is (the user clicked Download on that
-    // model). Only the implicit fallback is filtered on backend availability, so
-    // a bare download_model() cannot start fetching the macOS-only recommended
-    // model on a build that could never run it (#128).
-    let model_id = model_id.unwrap_or_else(|| {
-        super::manifest::resolve_selected_id(&manifest.models, None)
-            .map(|id| id.to_string())
-            .unwrap_or_else(|| "ggml-large-v3-turbo".to_string())
-    });
+        // Get model info from manifest
+        let manifest = get_fallback_manifest();
+        // An explicit model_id is honoured as-is (the user clicked Download on that
+        // model). Only the implicit fallback is filtered on backend availability, so
+        // a bare download_model() cannot start fetching the macOS-only recommended
+        // model on a build that could never run it (#128).
+        let model_id = model_id.unwrap_or_else(|| {
+            super::manifest::resolve_selected_id(&manifest.models, None)
+                .map(|id| id.to_string())
+                .unwrap_or_else(|| "ggml-large-v3-turbo".to_string())
+        });
 
-    let model = manifest
-        .models
-        .iter()
-        .find(|m| m.id == model_id)
-        .cloned()
-        .ok_or_else(|| format!("Model not found: {}", model_id))?;
+        let model = manifest
+            .models
+            .iter()
+            .find(|m| m.id == model_id)
+            .cloned()
+            .ok_or_else(|| format!("Model not found: {}", model_id))?;
 
-    // FluidAudio models: init_asr() handles download + CoreML compilation
-    if model.model_type == "fluidaudio_coreml" {
+        // FluidAudio models: init_asr() handles download + CoreML compilation
+        if model.model_type == "fluidaudio_coreml" {
+            {
+                let mut state = get_download_state().lock();
+                *state = DownloadState::Downloading;
+            }
+
+            // Check if models are already cached to show accurate progress message
+            #[cfg(all(target_os = "macos", feature = "fluidaudio"))]
+            let cached = super::fluidaudio::is_cached();
+            #[cfg(not(all(target_os = "macos", feature = "fluidaudio")))]
+            let cached = false;
+
+            let status_msg = if cached {
+                "Loading cached CoreML models for Neural Engine..."
+            } else {
+                "Downloading and compiling CoreML models (~500 MB, first run only)..."
+            };
+
+            emit_progress(
+                &app,
+                DownloadProgress {
+                    current_file: model.name.clone(),
+                    bytes_downloaded: 0,
+                    total_bytes: Some(model.download_size),
+                    percentage: 0.0,
+                    status: status_msg.to_string(),
+                },
+            );
+
+            let result = tokio::task::spawn_blocking(super::init_fluidaudio_transcription)
+                .await
+                .map_err(|e| format!("FluidAudio init task panicked: {}", e))?;
+
+            match result {
+                Ok(()) => {
+                    {
+                        let mut state = get_download_state().lock();
+                        *state = DownloadState::Completed;
+                    }
+                    app.emit("model-download-complete", &model_id)
+                        .map_err(|e| e.to_string())?;
+                    return Ok(());
+                }
+                Err(e) => {
+                    let error_msg = e.to_string();
+                    {
+                        let mut state = get_download_state().lock();
+                        *state = DownloadState::Failed(error_msg.clone());
+                    }
+                    app.emit("model-download-error", &error_msg)
+                        .map_err(|e| e.to_string())?;
+                    return Err(error_msg.into());
+                }
+            }
+        }
+
+        // Update state to downloading
         {
             let mut state = get_download_state().lock();
             *state = DownloadState::Downloading;
         }
 
-        // Check if models are already cached to show accurate progress message
-        #[cfg(all(target_os = "macos", feature = "fluidaudio"))]
-        let cached = super::fluidaudio::is_cached();
-        #[cfg(not(all(target_os = "macos", feature = "fluidaudio")))]
-        let cached = false;
-
-        let status_msg = if cached {
-            "Loading cached CoreML models for Neural Engine..."
-        } else {
-            "Downloading and compiling CoreML models (~500 MB, first run only)..."
-        };
-
-        emit_progress(
-            &app,
-            DownloadProgress {
-                current_file: model.name.clone(),
-                bytes_downloaded: 0,
-                total_bytes: Some(model.download_size),
-                percentage: 0.0,
-                status: status_msg.to_string(),
-            },
-        );
-
-        let result = tokio::task::spawn_blocking(super::init_fluidaudio_transcription)
-            .await
-            .map_err(|e| format!("FluidAudio init task panicked: {}", e))?;
+        // Run the download in the background
+        let result = download_and_extract_model(&app, &model).await;
 
         match result {
             Ok(()) => {
@@ -227,7 +256,7 @@ pub async fn download_model(app: AppHandle, model_id: Option<String>) -> Result<
                 }
                 app.emit("model-download-complete", &model_id)
                     .map_err(|e| e.to_string())?;
-                return Ok(());
+                Ok(())
             }
             Err(e) => {
                 let error_msg = e.to_string();
@@ -237,41 +266,11 @@ pub async fn download_model(app: AppHandle, model_id: Option<String>) -> Result<
                 }
                 app.emit("model-download-error", &error_msg)
                     .map_err(|e| e.to_string())?;
-                return Err(error_msg.into());
+                Err(error_msg.into())
             }
         }
-    }
-
-    // Update state to downloading
-    {
-        let mut state = get_download_state().lock();
-        *state = DownloadState::Downloading;
-    }
-
-    // Run the download in the background
-    let result = download_and_extract_model(&app, &model).await;
-
-    match result {
-        Ok(()) => {
-            {
-                let mut state = get_download_state().lock();
-                *state = DownloadState::Completed;
-            }
-            app.emit("model-download-complete", &model_id)
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        }
-        Err(e) => {
-            let error_msg = e.to_string();
-            {
-                let mut state = get_download_state().lock();
-                *state = DownloadState::Failed(error_msg.clone());
-            }
-            app.emit("model-download-error", &error_msg)
-                .map_err(|e| e.to_string())?;
-            Err(error_msg.into())
-        }
-    }
+    })
+    .await
 }
 
 /// Check if a model is a direct file download (not an archive)
@@ -785,7 +784,6 @@ fn emit_progress(app: &AppHandle, progress: DownloadProgress) {
 /// argument they never passed. Every caller has always passed an id, so the
 /// default was a trap with no user.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn delete_model(model_id: String) -> Result<(), Error> {
     let manifest = get_fallback_manifest();
 
@@ -859,7 +857,6 @@ pub fn delete_model(model_id: String) -> Result<(), Error> {
 
 /// Reset the download state to idle
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn reset_download_state() {
     let mut state = get_download_state().lock();
     *state = DownloadState::Idle;

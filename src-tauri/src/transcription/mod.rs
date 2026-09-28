@@ -146,7 +146,6 @@ fn init_whisper_transcription_unlocked(model_path: String) -> Result<(), Error> 
 
 /// Initialise the transcription service with whisper backend (primary).
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn init_whisper_transcription(model_path: String) -> Result<(), Error> {
     let _serialised = WARMUP_LOCK.lock();
     init_whisper_transcription_unlocked(model_path)
@@ -174,10 +173,12 @@ fn init_parakeet_transcription_unlocked(_model_dir: String) -> Result<(), Error>
 
 /// Initialise the transcription service with parakeet backend (fallback).
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn init_parakeet_transcription(model_dir: String) -> Result<(), Error> {
-    let _serialised = WARMUP_LOCK.lock();
-    init_parakeet_transcription_unlocked(model_dir)
+pub async fn init_parakeet_transcription(model_dir: String) -> Result<(), Error> {
+    tauri_plugin_telemetry::traced("init_parakeet_transcription", async move {
+        let _serialised = WARMUP_LOCK.lock();
+        init_parakeet_transcription_unlocked(model_dir)
+    })
+    .await
 }
 
 fn init_fluidaudio_transcription_unlocked() -> Result<(), Error> {
@@ -221,7 +222,6 @@ fn init_fluidaudio_transcription_unlocked() -> Result<(), Error> {
 
 /// Initialise the transcription service with FluidAudio backend (Apple Neural Engine).
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn init_fluidaudio_transcription() -> Result<(), Error> {
     let _serialised = WARMUP_LOCK.lock();
     init_fluidaudio_transcription_unlocked()
@@ -294,7 +294,6 @@ fn init_transcription_unlocked(model_path: String) -> Result<(), Error> {
 ///
 /// Tries whisper first, falls back to parakeet if whisper model not found.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn init_transcription(model_path: String) -> Result<(), Error> {
     let _serialised = WARMUP_LOCK.lock();
     init_transcription_unlocked(model_path)
@@ -321,7 +320,6 @@ const MIN_SPEECH_RMS: f32 = 0.002;
 /// pipeline uses, so it takes the model ahead of queued background file jobs.
 /// Background callers must use [`transcribe_file_with_priority`] instead.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn transcribe_file(audio_path: String) -> Result<String, Error> {
     transcribe_file_with_priority(audio_path, Priority::Interactive)
 }
@@ -754,14 +752,12 @@ fn warmup_whisper_fallback(manifest: &manifest::ModelManifest) {
 
 /// Check if transcription service is ready
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn is_transcription_ready() -> bool {
     get_service().lock().is_some()
 }
 
 /// Get the current transcription backend
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_transcription_backend() -> Option<String> {
     get_service().lock().as_ref().map(|s| match s.backend() {
         TranscriptionBackend::Whisper => "whisper".to_string(),
@@ -772,7 +768,6 @@ pub fn get_transcription_backend() -> Option<String> {
 
 /// Get the default model directory path for the currently selected/recommended model
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_model_directory() -> String {
     let config_model_id = crate::config::get_config()
         .ok()
@@ -798,7 +793,6 @@ fn model_directory_for_selection(configured: Option<&str>) -> PathBuf {
 
 /// Get the whisper model directory path
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_whisper_model_directory() -> String {
     whisper::get_whisper_model_directory()
         .to_string_lossy()
@@ -807,14 +801,12 @@ pub fn get_whisper_model_directory() -> String {
 
 /// Check if a whisper model is downloaded
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn is_whisper_model_downloaded(model_id: String) -> bool {
     whisper::is_whisper_model_downloaded(&model_id)
 }
 
 /// Filter transcription text to clean up filler words and formatting
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn filter_transcription(text: String, options: Option<FilterOptions>) -> String {
     let filter_options = options.unwrap_or_default();
     let output_filter = OutputFilter::new(filter_options);
@@ -823,7 +815,6 @@ pub fn filter_transcription(text: String, options: Option<FilterOptions>) -> Str
 
 /// Set the selected model ID in config
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn set_selected_model_id(model_id: Option<String>) -> Result<(), Error> {
     let mut config = crate::config::get_config().map_err(|e| e.to_string())?;
     config.transcription.model_id = model_id.clone();

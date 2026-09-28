@@ -13,7 +13,6 @@
 //! On first run the file is absent; the module seeds from the dictionary so
 //! existing behaviour is preserved exactly (AliasOnly policy = same as today).
 
-use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use parking_lot::RwLock;
 use rphonetic::{DoubleMetaphone, Encoder};
@@ -804,14 +803,12 @@ pub fn suggest_aliases_from_history(
 
 /// Return all registered canonical terms.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn get_canonical_terms() -> Result<Vec<CanonicalTerm>, Error> {
     Ok(get_registry().read().terms.clone())
 }
 
 /// Add a new canonical term.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn add_canonical_term(term: CanonicalTerm) -> Result<(), Error> {
     if term.term.trim().is_empty() {
         return Err("Term cannot be empty".to_string().into());
@@ -831,7 +828,6 @@ pub fn add_canonical_term(term: CanonicalTerm) -> Result<(), Error> {
 
 /// Update an existing canonical term by index.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn update_canonical_term(index: usize, term: CanonicalTerm) -> Result<(), Error> {
     if term.term.trim().is_empty() {
         return Err("Term cannot be empty".to_string().into());
@@ -855,7 +851,6 @@ pub fn update_canonical_term(index: usize, term: CanonicalTerm) -> Result<(), Er
 
 /// Remove a canonical term by index.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn remove_canonical_term(index: usize) -> Result<(), Error> {
     let mut registry = get_registry().write();
     if index >= registry.terms.len() {

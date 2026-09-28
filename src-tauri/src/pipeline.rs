@@ -296,7 +296,6 @@ impl Drop for ProcessingGuard {
 /// Emits `pipeline-progress` event with state updates.
 /// Also shows the recording indicator overlay and starts audio metering.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn pipeline_start_recording(app: AppHandle) -> Result<String, Error> {
     tracing::info!("Pipeline: pipeline_start_recording called");
 
@@ -614,44 +613,45 @@ pub async fn pipeline_stop_and_process(
 
 /// Cancel the current pipeline execution
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn pipeline_cancel(app: AppHandle) -> Result<(), Error> {
-    if !PIPELINE_RUNNING.load(Ordering::SeqCst) {
-        return Ok(()); // Nothing to cancel
-    }
+pub async fn pipeline_cancel(app: AppHandle) -> Result<(), Error> {
+    tauri_plugin_telemetry::traced("pipeline_cancel", async move {
+        if !PIPELINE_RUNNING.load(Ordering::SeqCst) {
+            return Ok(()); // Nothing to cancel
+        }
 
-    // Stop recording metering and hide indicator
-    crate::audio::stop_recording_metering();
-    if let Err(e) = crate::recording_indicator::hide_recording_indicator(app.clone()) {
-        tracing::warn!(
-            "Pipeline: Failed to hide recording indicator on cancel: {}",
-            e
-        );
-    }
+        // Stop recording metering and hide indicator
+        crate::audio::stop_recording_metering();
+        if let Err(e) = crate::recording_indicator::hide_recording_indicator(app.clone()) {
+            tracing::warn!(
+                "Pipeline: Failed to hide recording indicator on cancel: {}",
+                e
+            );
+        }
 
-    // Signal cancellation for file import operations
-    IMPORT_CANCELLED.store(true, Ordering::SeqCst);
+        // Signal cancellation for file import operations
+        IMPORT_CANCELLED.store(true, Ordering::SeqCst);
 
-    // Stop recording if in progress
-    if crate::audio::is_recording() {
-        let _ = crate::audio::stop_recording();
-    }
+        // Stop recording if in progress
+        if crate::audio::is_recording() {
+            let _ = crate::audio::stop_recording();
+        }
 
-    // Reset tray state
-    tray::set_recording_state(&app, false);
+        // Reset tray state
+        tray::set_recording_state(&app, false);
 
-    PIPELINE_RUNNING.store(false, Ordering::SeqCst);
-    emit_progress(&app, PipelineState::Idle, "Pipeline cancelled");
-    emit_recording_state(&app);
-    app.emit("pipeline-cancelled", ()).ok();
+        PIPELINE_RUNNING.store(false, Ordering::SeqCst);
+        emit_progress(&app, PipelineState::Idle, "Pipeline cancelled");
+        emit_recording_state(&app);
+        app.emit("pipeline-cancelled", ()).ok();
 
-    tracing::info!("Pipeline: Cancelled");
-    Ok(())
+        tracing::info!("Pipeline: Cancelled");
+        Ok(())
+    })
+    .await
 }
 
 /// Get the current pipeline state
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_pipeline_state() -> PipelineState {
     if crate::audio::is_recording() {
         PipelineState::Recording
@@ -1345,99 +1345,103 @@ fn get_audio_duration(audio_path: &str) -> Option<f64> {
 /// then runs the standard transcription pipeline (transcribe → filter → enhance → save).
 /// Does NOT auto-copy or auto-paste (the user is already in the app).
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn pipeline_transcribe_file(
     app: AppHandle,
     file_path: String,
     config: Option<PipelineConfig>,
 ) -> Result<PipelineResult, Error> {
-    tracing::info!("Pipeline: transcribe_file called for {}", file_path);
+    tauri_plugin_telemetry::traced("pipeline_transcribe_file", async move {
+        tracing::info!("Pipeline: transcribe_file called for {}", file_path);
 
-    if PIPELINE_RUNNING.swap(true, Ordering::SeqCst) {
-        return Err("Pipeline is already running".to_string().into());
-    }
+        if PIPELINE_RUNNING.swap(true, Ordering::SeqCst) {
+            return Err("Pipeline is already running".to_string().into());
+        }
 
-    // RAII guard ensures PIPELINE_RUNNING is reset even on early return
-    let _guard = PipelineGuard;
+        // RAII guard ensures PIPELINE_RUNNING is reset even on early return
+        let _guard = PipelineGuard;
 
-    // If the model isn't loaded yet but is downloaded, start eager loading.
-    // The file decode step below takes time, so the model may be ready by
-    // the time we need it.
-    if !transcription::is_transcription_ready() {
-        if !transcription::download::check_model_downloaded(None) {
-            return Err(
+        // If the model isn't loaded yet but is downloaded, start eager loading.
+        // The file decode step below takes time, so the model may be ready by
+        // the time we need it.
+        if !transcription::is_transcription_ready() {
+            if !transcription::download::check_model_downloaded(None) {
+                return Err(
                 "No transcription model downloaded. Open Settings \u{2192} Models to get started."
                     .to_string()
                     .into(),
             );
+            }
+            tracing::info!(
+                "Pipeline: Model not loaded yet, starting eager background load for import"
+            );
+            std::thread::spawn(|| {
+                transcription::warmup_transcription();
+            });
         }
-        tracing::info!("Pipeline: Model not loaded yet, starting eager background load for import");
-        std::thread::spawn(|| {
-            transcription::warmup_transcription();
-        });
-    }
 
-    // Reset cancellation signal
-    IMPORT_CANCELLED.store(false, Ordering::SeqCst);
+        // Reset cancellation signal
+        IMPORT_CANCELLED.store(false, Ordering::SeqCst);
 
-    // Build config with auto_copy and auto_paste disabled (manual copy from UI)
-    let mut config = config.unwrap_or_default();
-    config.auto_copy = false;
-    config.auto_paste = false;
+        // Build config with auto_copy and auto_paste disabled (manual copy from UI)
+        let mut config = config.unwrap_or_default();
+        config.auto_copy = false;
+        config.auto_paste = false;
 
-    // Generate output path for the decoded WAV
-    let home = dirs::home_dir().ok_or("Could not find home directory")?;
-    let recordings_dir = home.join(".thoth").join("Recordings");
-    std::fs::create_dir_all(&recordings_dir)
-        .map_err(|e| format!("Failed to create recordings directory: {}", e))?;
+        // Generate output path for the decoded WAV
+        let home = dirs::home_dir().ok_or("Could not find home directory")?;
+        let recordings_dir = home.join(".thoth").join("Recordings");
+        std::fs::create_dir_all(&recordings_dir)
+            .map_err(|e| format!("Failed to create recordings directory: {}", e))?;
 
-    let filename = format!(
-        "thoth_import_{}.wav",
-        chrono::Utc::now().format("%Y%m%d_%H%M%S")
-    );
-    let output_wav = recordings_dir.join(&filename);
+        let filename = format!(
+            "thoth_import_{}.wav",
+            chrono::Utc::now().format("%Y%m%d_%H%M%S")
+        );
+        let output_wav = recordings_dir.join(&filename);
 
-    // Decode the audio file to 16kHz mono WAV (CPU-bound, run off async runtime)
-    emit_progress(
-        &app,
-        PipelineState::Converting,
-        "Converting audio format...",
-    );
+        // Decode the audio file to 16kHz mono WAV (CPU-bound, run off async runtime)
+        emit_progress(
+            &app,
+            PipelineState::Converting,
+            "Converting audio format...",
+        );
 
-    let input_path = PathBuf::from(&file_path);
-    let output_path = output_wav.clone();
-    let decode_result = tokio::task::spawn_blocking(move || {
-        crate::audio::decode::decode_audio_to_wav(&input_path, &output_path, &IMPORT_CANCELLED)
-    })
-    .await
-    .map_err(|e| format!("Decode task failed: {}", e))?;
+        let input_path = PathBuf::from(&file_path);
+        let output_path = output_wav.clone();
+        let decode_result = tokio::task::spawn_blocking(move || {
+            crate::audio::decode::decode_audio_to_wav(&input_path, &output_path, &IMPORT_CANCELLED)
+        })
+        .await
+        .map_err(|e| format!("Decode task failed: {}", e))?;
 
-    let _duration = decode_result?;
+        let _duration = decode_result?;
 
-    let wav_path = output_wav.to_string_lossy().to_string();
-    tracing::info!("Pipeline: Decoded to {}", wav_path);
+        let wav_path = output_wav.to_string_lossy().to_string();
+        tracing::info!("Pipeline: Decoded to {}", wav_path);
 
-    // Run the standard processing pipeline
-    let result = process_audio(&app, &wav_path, &config).await;
+        // Run the standard processing pipeline
+        let result = process_audio(&app, &wav_path, &config).await;
 
-    // Emit completion event
-    match &result {
-        Ok(r) => {
-            tracing::info!("Pipeline: Emitting pipeline-complete event");
-            if let Err(e) = app.emit("pipeline-complete", r) {
-                tracing::error!("Pipeline: Failed to emit pipeline-complete: {}", e);
+        // Emit completion event
+        match &result {
+            Ok(r) => {
+                tracing::info!("Pipeline: Emitting pipeline-complete event");
+                if let Err(e) = app.emit("pipeline-complete", r) {
+                    tracing::error!("Pipeline: Failed to emit pipeline-complete: {}", e);
+                }
+            }
+            Err(_) if discard_silent_wav(&result, &wav_path) => {
+                // Silent import suppressed — discard_silent_wav already deleted the WAV.
+            }
+            Err(e) => {
+                tracing::error!("Pipeline: File transcription failed: {}", e);
+                emit_progress(&app, PipelineState::Failed, e);
             }
         }
-        Err(_) if discard_silent_wav(&result, &wav_path) => {
-            // Silent import suppressed — discard_silent_wav already deleted the WAV.
-        }
-        Err(e) => {
-            tracing::error!("Pipeline: File transcription failed: {}", e);
-            emit_progress(&app, PipelineState::Failed, e);
-        }
-    }
 
-    result.map_err(Into::into)
+        result.map_err(Into::into)
+    })
+    .await
 }
 
 /// Re-transcribe an existing history record using the current model.
@@ -1445,108 +1449,110 @@ pub async fn pipeline_transcribe_file(
 /// Looks up the audio file from the DB record, re-runs the transcription
 /// pipeline, and updates the record in place. Does not copy/paste output.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn pipeline_retranscribe(
     app: AppHandle,
     transcription_id: String,
     config: Option<PipelineConfig>,
 ) -> Result<PipelineResult, Error> {
-    tracing::info!("Pipeline: retranscribe called for id={}", transcription_id);
+    tauri_plugin_telemetry::traced("pipeline_retranscribe", async move {
+        tracing::info!("Pipeline: retranscribe called for id={}", transcription_id);
 
-    // Look up the existing record from the database
-    let existing = database::transcription::get_transcription(&transcription_id)
-        .map_err(|e| format!("Failed to read transcription: {}", e))?
-        .ok_or_else(|| format!("Transcription '{}' not found", transcription_id))?;
+        // Look up the existing record from the database
+        let existing = database::transcription::get_transcription(&transcription_id)
+            .map_err(|e| format!("Failed to read transcription: {}", e))?
+            .ok_or_else(|| format!("Transcription '{}' not found", transcription_id))?;
 
-    let audio_path = existing
-        .audio_path
-        .as_deref()
-        .ok_or("This transcription has no associated audio file")?;
+        let audio_path = existing
+            .audio_path
+            .as_deref()
+            .ok_or("This transcription has no associated audio file")?;
 
-    // Check the file still exists on disk
-    if !std::path::Path::new(audio_path).exists() {
-        return Err(
-            "Audio file no longer available. It may have been deleted via Storage cleanup."
-                .to_string()
-                .into(),
-        );
-    }
-
-    if PIPELINE_RUNNING.swap(true, Ordering::SeqCst) {
-        return Err("Pipeline is already running".to_string().into());
-    }
-
-    // RAII guard ensures PIPELINE_RUNNING is reset even on early return
-    let _guard = PipelineGuard;
-
-    // Ensure model is loaded
-    if !transcription::is_transcription_ready() {
-        if !transcription::download::check_model_downloaded(None) {
+        // Check the file still exists on disk
+        if !std::path::Path::new(audio_path).exists() {
             return Err(
-                "No transcription model downloaded. Open Settings \u{2192} Models to get started."
+                "Audio file no longer available. It may have been deleted via Storage cleanup."
                     .to_string()
                     .into(),
             );
         }
-        tracing::info!(
-            "Pipeline: Model not loaded, starting eager background load for retranscribe"
-        );
-        std::thread::spawn(|| {
-            transcription::warmup_transcription();
-        });
-    }
 
-    // Build config with output disabled (retranscribe from history, not at cursor)
-    let mut config = config.unwrap_or_default();
-    config.auto_copy = false;
-    config.auto_paste = false;
+        if PIPELINE_RUNNING.swap(true, Ordering::SeqCst) {
+            return Err("Pipeline is already running".to_string().into());
+        }
 
-    // Run the core transcription pipeline
-    let output = run_transcription_pipeline(&app, audio_path, &config).await?;
+        // RAII guard ensures PIPELINE_RUNNING is reset even on early return
+        let _guard = PipelineGuard;
 
-    // Read-modify-write: update only the fields that changed
-    let mut updated = existing;
-    updated.text = output.text.clone();
-    updated.raw_text = stored_raw_text(&output.text, &output.raw_text);
-    updated.is_enhanced = output.is_enhanced;
-    updated.enhancement_prompt = if output.is_enhanced {
-        Some(config.enhancement_prompt.clone())
-    } else {
-        None
-    };
-    updated.transcription_model_name = output.transcription_model_name.clone();
-    updated.transcription_duration_seconds = Some(output.transcription_duration_seconds);
-    updated.enhancement_model_name = output.enhancement_model_name.clone();
-    updated.enhancement_duration_seconds = output.enhancement_duration_seconds;
+        // Ensure model is loaded
+        if !transcription::is_transcription_ready() {
+            if !transcription::download::check_model_downloaded(None) {
+                return Err(
+                "No transcription model downloaded. Open Settings \u{2192} Models to get started."
+                    .to_string()
+                    .into(),
+            );
+            }
+            tracing::info!(
+                "Pipeline: Model not loaded, starting eager background load for retranscribe"
+            );
+            std::thread::spawn(|| {
+                transcription::warmup_transcription();
+            });
+        }
 
-    // Persist to database
-    database::transcription::update_transcription(&updated)
-        .map_err(|e| format!("Failed to update transcription: {}", e))?;
+        // Build config with output disabled (retranscribe from history, not at cursor)
+        let mut config = config.unwrap_or_default();
+        config.auto_copy = false;
+        config.auto_paste = false;
 
-    tracing::info!("Pipeline: Retranscribed and updated id={}", updated.id);
+        // Run the core transcription pipeline
+        let output = run_transcription_pipeline(&app, audio_path, &config).await?;
 
-    emit_progress(&app, PipelineState::Completed, "Done");
+        // Read-modify-write: update only the fields that changed
+        let mut updated = existing;
+        updated.text = output.text.clone();
+        updated.raw_text = stored_raw_text(&output.text, &output.raw_text);
+        updated.is_enhanced = output.is_enhanced;
+        updated.enhancement_prompt = if output.is_enhanced {
+            Some(config.enhancement_prompt.clone())
+        } else {
+            None
+        };
+        updated.transcription_model_name = output.transcription_model_name.clone();
+        updated.transcription_duration_seconds = Some(output.transcription_duration_seconds);
+        updated.enhancement_model_name = output.enhancement_model_name.clone();
+        updated.enhancement_duration_seconds = output.enhancement_duration_seconds;
 
-    let result = PipelineResult {
-        success: true,
-        text: output.text,
-        raw_text: output.raw_text,
-        is_enhanced: output.is_enhanced,
-        duration_seconds: updated.duration_seconds,
-        audio_path: updated.audio_path,
-        error: None,
-        transcription_id: Some(updated.id),
-        transcription_model_name: output.transcription_model_name,
-        transcription_duration_seconds: Some(output.transcription_duration_seconds),
-        enhancement_model_name: output.enhancement_model_name,
-        enhancement_duration_seconds: output.enhancement_duration_seconds,
-    };
+        // Persist to database
+        database::transcription::update_transcription(&updated)
+            .map_err(|e| format!("Failed to update transcription: {}", e))?;
 
-    if let Err(e) = app.emit("pipeline-complete", &result) {
-        tracing::error!("Pipeline: Failed to emit pipeline-complete: {}", e);
-    }
+        tracing::info!("Pipeline: Retranscribed and updated id={}", updated.id);
 
-    Ok(result)
+        emit_progress(&app, PipelineState::Completed, "Done");
+
+        let result = PipelineResult {
+            success: true,
+            text: output.text,
+            raw_text: output.raw_text,
+            is_enhanced: output.is_enhanced,
+            duration_seconds: updated.duration_seconds,
+            audio_path: updated.audio_path,
+            error: None,
+            transcription_id: Some(updated.id),
+            transcription_model_name: output.transcription_model_name,
+            transcription_duration_seconds: Some(output.transcription_duration_seconds),
+            enhancement_model_name: output.enhancement_model_name,
+            enhancement_duration_seconds: output.enhancement_duration_seconds,
+        };
+
+        if let Err(e) = app.emit("pipeline-complete", &result) {
+            tracing::error!("Pipeline: Failed to emit pipeline-complete: {}", e);
+        }
+
+        Ok(result)
+    })
+    .await
 }
 
 /// Toggle recording from the single source of truth: the armed flag.
@@ -1562,37 +1568,39 @@ pub async fn pipeline_retranscribe(
 /// - Stop path: BONG is played here, immediately before capture disarms, so it
 ///   is always matched to the decided action.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn pipeline_toggle_recording(
     app: AppHandle,
     config: Option<PipelineConfig>,
     intent: Option<ToggleIntent>,
 ) -> Result<ToggleOutcome, Error> {
-    // A key-up in hold-to-record mode (#111) is not a toggle: it must stop a
-    // running recording and, crucially, must never START one. Inferring from
-    // `is_recording()` gets that wrong whenever the press failed or has not
-    // landed yet, and the user is then holding a key that started nothing and
-    // released one that started everything.
-    if intent.unwrap_or_default() == ToggleIntent::StopOnly && !crate::audio::is_recording() {
-        return Ok(ToggleOutcome::Ignored);
-    }
+    tauri_plugin_telemetry::traced("pipeline_toggle_recording", async move {
+        // A key-up in hold-to-record mode (#111) is not a toggle: it must stop a
+        // running recording and, crucially, must never START one. Inferring from
+        // `is_recording()` gets that wrong whenever the press failed or has not
+        // landed yet, and the user is then holding a key that started nothing and
+        // released one that started everything.
+        if intent.unwrap_or_default() == ToggleIntent::StopOnly && !crate::audio::is_recording() {
+            return Ok(ToggleOutcome::Ignored);
+        }
 
-    if crate::audio::is_recording() {
-        // --- STOP ---
-        // Play BONG now, before disarming, so the sound is always paired with
-        // the action decided from the authority.
-        crate::sound::play_sound(crate::sound::SoundEvent::RecordingStop);
+        if crate::audio::is_recording() {
+            // --- STOP ---
+            // Play BONG now, before disarming, so the sound is always paired with
+            // the action decided from the authority.
+            crate::sound::play_sound(crate::sound::SoundEvent::RecordingStop);
 
-        pipeline_stop_and_process(app, config).await?;
-        Ok(ToggleOutcome::Stopped)
-    } else {
-        // --- START ---
-        // BING and indicator are played by the shortcut handler on keypress
-        // (keyboard_service.rs / manager.rs / tray.rs) so they fire before the
-        // IPC round-trip.  pipeline_start_recording does not duplicate them.
-        let path = pipeline_start_recording(app)?;
-        Ok(ToggleOutcome::Started { path })
-    }
+            pipeline_stop_and_process(app, config).await?;
+            Ok(ToggleOutcome::Stopped)
+        } else {
+            // --- START ---
+            // BING and indicator are played by the shortcut handler on keypress
+            // (keyboard_service.rs / manager.rs / tray.rs) so they fire before the
+            // IPC round-trip.  pipeline_start_recording does not duplicate them.
+            let path = pipeline_start_recording(app)?;
+            Ok(ToggleOutcome::Started { path })
+        }
+    })
+    .await
 }
 
 /// What the caller wants, when it knows something `is_recording()` does not.

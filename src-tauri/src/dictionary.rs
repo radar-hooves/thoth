@@ -3,7 +3,6 @@
 //! Provides persistent storage and CRUD operations for custom word replacements.
 //! Dictionary entries are stored in JSON format at `~/.thoth/dictionary.json`.
 
-use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use parking_lot::RwLock;
 use regex::{Regex, RegexBuilder};
@@ -92,7 +91,6 @@ fn save_dictionary(dictionary: &Dictionary) -> Result<(), String> {
 
 /// Get all dictionary entries
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn get_dictionary_entries() -> Result<Vec<DictionaryEntry>, Error> {
     let dictionary = get_dictionary().read();
     Ok(dictionary.entries.clone())
@@ -100,7 +98,6 @@ pub fn get_dictionary_entries() -> Result<Vec<DictionaryEntry>, Error> {
 
 /// Add a new dictionary entry
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn add_dictionary_entry(entry: DictionaryEntry) -> Result<(), Error> {
     // Validate entry
     if entry.from.trim().is_empty() {
@@ -134,7 +131,6 @@ pub fn add_dictionary_entry(entry: DictionaryEntry) -> Result<(), Error> {
 
 /// Update an existing dictionary entry
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn update_dictionary_entry(index: usize, entry: DictionaryEntry) -> Result<(), Error> {
     let mut dictionary = get_dictionary().write();
     update_entry_locked(&mut dictionary, index, entry)
@@ -142,7 +138,6 @@ pub fn update_dictionary_entry(index: usize, entry: DictionaryEntry) -> Result<(
 
 /// Remove a dictionary entry by index
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn remove_dictionary_entry(index: usize) -> Result<(), Error> {
     let mut dictionary = get_dictionary().write();
     remove_entry_locked(&mut dictionary, index)
@@ -341,7 +336,6 @@ fn type_name(value: &serde_json::Value) -> &'static str {
 /// behaviour in the MCP tool; this command takes it explicitly) deduplicates by
 /// `from`; replace swaps the whole dictionary.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn import_dictionary(json_content: String, merge: bool) -> Result<usize, Error> {
     let imported = parse_import_entries(&json_content).map_err(Error::from)?;
 
@@ -390,7 +384,6 @@ pub fn import_dictionary(json_content: String, merge: bool) -> Result<usize, Err
 
 /// Export dictionary entries as JSON
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn export_dictionary() -> Result<String, Error> {
     let dictionary = get_dictionary().read();
     serde_json::to_string_pretty(&*dictionary)
@@ -460,7 +453,6 @@ fn whole_word_replace_all(re: &Regex, text: &str, to: &str) -> String {
 
 /// Tauri command to apply dictionary replacements
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn apply_dictionary_to_text(text: String) -> String {
     apply_dictionary(&text)
 }

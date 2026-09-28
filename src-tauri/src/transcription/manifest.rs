@@ -3,7 +3,6 @@
 //! Fetches model information from a remote JSON manifest to keep
 //! the model list up-to-date without requiring app updates.
 
-use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
@@ -579,52 +578,53 @@ fn probed_languages(remote: &RemoteModelInfo, downloaded: bool) -> Option<Vec<St
 /// new models added in app updates are visible even before the remote
 /// manifest on GitHub is updated.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn fetch_model_manifest(force_refresh: bool) -> Result<Vec<ModelInfo>, Error> {
-    let remote_manifest = match fetch_manifest(force_refresh).await {
-        Ok(m) => Some(m),
-        Err(e) => {
-            tracing::warn!("Failed to fetch remote manifest: {}", e);
-            None
-        }
-    };
+    tauri_plugin_telemetry::traced("fetch_model_manifest", async move {
+        let remote_manifest = match fetch_manifest(force_refresh).await {
+            Ok(m) => Some(m),
+            Err(e) => {
+                tracing::warn!("Failed to fetch remote manifest: {}", e);
+                None
+            }
+        };
 
-    let bundled = get_fallback_manifest();
+        let bundled = get_fallback_manifest();
 
-    let manifest = match remote_manifest {
-        Some(remote) if remote.version >= bundled.version => remote,
-        Some(remote) => {
-            tracing::info!(
-                "Bundled manifest v{} is newer than remote v{}, using bundled",
-                bundled.version,
-                remote.version
-            );
-            bundled
-        }
-        None => {
-            tracing::info!("Using bundled manifest v{}", bundled.version);
-            bundled
-        }
-    };
+        let manifest = match remote_manifest {
+            Some(remote) if remote.version >= bundled.version => remote,
+            Some(remote) => {
+                tracing::info!(
+                    "Bundled manifest v{} is newer than remote v{}, using bundled",
+                    bundled.version,
+                    remote.version
+                );
+                bundled
+            }
+            None => {
+                tracing::info!("Using bundled manifest v{}", bundled.version);
+                bundled
+            }
+        };
 
-    let selected_id = crate::config::get_config()
-        .ok()
-        .and_then(|c| c.transcription.model_id.clone());
+        let selected_id = crate::config::get_config()
+            .ok()
+            .and_then(|c| c.transcription.model_id.clone());
 
-    let resolved_id = resolve_selected_id(&manifest.models, selected_id.as_deref());
+        let resolved_id = resolve_selected_id(&manifest.models, selected_id.as_deref());
 
-    let models: Vec<ModelInfo> = manifest
-        .models
-        .iter()
-        .map(|m| to_model_info(m, resolved_id))
-        .collect();
+        let models: Vec<ModelInfo> = manifest
+            .models
+            .iter()
+            .map(|m| to_model_info(m, resolved_id))
+            .collect();
 
-    Ok(models)
+        Ok(models)
+    })
+    .await
 }
 
 /// Tauri command: Get manifest last update time
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_manifest_update_time() -> Option<String> {
     let cache_path = get_cache_path();
     if !cache_path.exists() {

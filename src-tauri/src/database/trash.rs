@@ -18,7 +18,6 @@
 //! It removes trash entries (and their WAV files) older than
 //! `TRASH_RETENTION_DAYS`.
 
-use crate::TELEMETRY_TARGET;
 use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -614,51 +613,59 @@ pub fn auto_purge_expired(conn: &mut Connection) -> Result<u32, DatabaseError> {
 ///
 /// Returns the count of recordings successfully quarantined.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn quarantine_recordings(ids: Vec<String>) -> Result<u32, Error> {
-    let mut conn = open_connection()?;
-    quarantine_recordings_with_conn(&mut conn, &ids).map_err(|e| {
-        tracing::error!("quarantine_recordings failed: {}", e);
-        Error::Database(e)
+pub async fn quarantine_recordings(ids: Vec<String>) -> Result<u32, Error> {
+    tauri_plugin_telemetry::traced("quarantine_recordings", async move {
+        let mut conn = open_connection()?;
+        quarantine_recordings_with_conn(&mut conn, &ids).map_err(|e| {
+            tracing::error!("quarantine_recordings failed: {}", e);
+            Error::Database(e)
+        })
     })
+    .await
 }
 
 /// Restore quarantined recordings back to the live history.
 ///
 /// Returns the count of recordings successfully restored.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn restore_recordings(ids: Vec<String>) -> Result<u32, Error> {
-    let mut conn = open_connection()?;
-    restore_recordings_with_conn(&mut conn, &ids).map_err(|e| {
-        tracing::error!("restore_recordings failed: {}", e);
-        Error::Database(e)
+pub async fn restore_recordings(ids: Vec<String>) -> Result<u32, Error> {
+    tauri_plugin_telemetry::traced("restore_recordings", async move {
+        let mut conn = open_connection()?;
+        restore_recordings_with_conn(&mut conn, &ids).map_err(|e| {
+            tracing::error!("restore_recordings failed: {}", e);
+            Error::Database(e)
+        })
     })
+    .await
 }
 
 /// Permanently delete trash entries.
 ///
 /// `ids = None` purges the entire trash.  Returns the count purged.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn purge_trash(ids: Option<Vec<String>>) -> Result<u32, Error> {
-    let mut conn = open_connection()?;
-    let id_slice = ids.as_deref();
-    purge_trash_with_conn(&mut conn, id_slice).map_err(|e| {
-        tracing::error!("purge_trash failed: {}", e);
-        Error::Database(e)
+pub async fn purge_trash(ids: Option<Vec<String>>) -> Result<u32, Error> {
+    tauri_plugin_telemetry::traced("purge_trash", async move {
+        let mut conn = open_connection()?;
+        let id_slice = ids.as_deref();
+        purge_trash_with_conn(&mut conn, id_slice).map_err(|e| {
+            tracing::error!("purge_trash failed: {}", e);
+            Error::Database(e)
+        })
     })
+    .await
 }
 
 /// List all entries currently in the trash.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn list_trash() -> Result<Vec<TrashEntry>, Error> {
-    let conn = open_connection()?;
-    list_trash_with_conn(&conn).map_err(|e| {
-        tracing::error!("list_trash failed: {}", e);
-        Error::Database(e)
+pub async fn list_trash() -> Result<Vec<TrashEntry>, Error> {
+    tauri_plugin_telemetry::traced("list_trash", async move {
+        let conn = open_connection()?;
+        list_trash_with_conn(&conn).map_err(|e| {
+            tracing::error!("list_trash failed: {}", e);
+            Error::Database(e)
+        })
     })
+    .await
 }
 
 // =============================================================================

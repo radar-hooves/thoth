@@ -26,7 +26,6 @@ pub use linux::{DisplayServer, get_display_server};
 pub use conflict::{RegistrationResult, ShortcutConflict};
 pub use manager::{ShortcutInfo, shortcut_ids};
 
-use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use crate::keyboard_service;
 use tauri::AppHandle;
@@ -58,7 +57,6 @@ pub fn is_wayland() -> bool {
 /// * `Ok(())` on success
 /// * `Err(String)` with a user-friendly error message on failure
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn register_shortcut(
     app: AppHandle,
     id: String,
@@ -99,23 +97,25 @@ pub fn register_shortcut(
 /// * `Ok(())` on success
 /// * `Err(String)` if the shortcut is not registered or unregistration fails
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn unregister_shortcut(app: AppHandle, id: String) -> Result<(), Error> {
-    // Try modifier monitor first, then regular shortcuts
-    if keyboard_service::is_modifier_shortcut_registered(&id) {
-        keyboard_service::unregister_modifier_shortcut(&id);
-        Ok(())
-    } else {
-        // Platform-specific unregistration
-        #[cfg(target_os = "linux")]
-        {
-            linux::unregister(&app, &id).map_err(Into::into)
+pub async fn unregister_shortcut(app: AppHandle, id: String) -> Result<(), Error> {
+    tauri_plugin_telemetry::traced("unregister_shortcut", async move {
+        // Try modifier monitor first, then regular shortcuts
+        if keyboard_service::is_modifier_shortcut_registered(&id) {
+            keyboard_service::unregister_modifier_shortcut(&id);
+            Ok(())
+        } else {
+            // Platform-specific unregistration
+            #[cfg(target_os = "linux")]
+            {
+                linux::unregister(&app, &id).map_err(Into::into)
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                manager::unregister(&app, &id).map_err(Into::into)
+            }
         }
-        #[cfg(not(target_os = "linux"))]
-        {
-            manager::unregister(&app, &id).map_err(Into::into)
-        }
-    }
+    })
+    .await
 }
 
 /// List all currently registered shortcuts
@@ -123,7 +123,6 @@ pub fn unregister_shortcut(app: AppHandle, id: String) -> Result<(), Error> {
 /// # Returns
 /// A vector of `ShortcutInfo` for all registered shortcuts
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn list_registered_shortcuts() -> Vec<ShortcutInfo> {
     // Platform-specific listing
     #[cfg(target_os = "linux")]
@@ -157,7 +156,6 @@ pub fn list_registered_shortcuts() -> Vec<ShortcutInfo> {
 /// # Returns
 /// A vector of `ShortcutInfo` describing the default shortcuts
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_default_shortcuts() -> Vec<ShortcutInfo> {
     manager::get_defaults()
 }
@@ -170,41 +168,43 @@ pub fn get_default_shortcuts() -> Vec<ShortcutInfo> {
 /// * `Ok(())` if all shortcuts were registered successfully
 /// * `Err(String)` if any shortcuts failed to register (includes details)
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn register_default_shortcuts(app: AppHandle) -> Result<(), Error> {
-    // Register each default through `register_shortcut`, which routes modifier-only
-    // accelerators (e.g. "ShiftRight") to the keyboard service and everything else to
-    // the platform layer. Calling the platform layer directly here would hand a bare
-    // modifier to tauri-plugin-global-shortcut, which cannot bind one, so it would
-    // silently fail to register.
-    let defaults = manager::get_defaults();
-    let mut errors = Vec::new();
+pub async fn register_default_shortcuts(app: AppHandle) -> Result<(), Error> {
+    tauri_plugin_telemetry::traced("register_default_shortcuts", async move {
+        // Register each default through `register_shortcut`, which routes modifier-only
+        // accelerators (e.g. "ShiftRight") to the keyboard service and everything else to
+        // the platform layer. Calling the platform layer directly here would hand a bare
+        // modifier to tauri-plugin-global-shortcut, which cannot bind one, so it would
+        // silently fail to register.
+        let defaults = manager::get_defaults();
+        let mut errors = Vec::new();
 
-    for shortcut in defaults {
-        if let Err(e) = register_shortcut(
-            app.clone(),
-            shortcut.id.clone(),
-            shortcut.accelerator.clone(),
-            shortcut.description.clone(),
-        ) {
-            tracing::warn!(
-                "Failed to register default shortcut '{}': {}",
-                shortcut.id,
-                e
-            );
-            errors.push(format!("{}: {}", shortcut.id, e));
+        for shortcut in defaults {
+            if let Err(e) = register_shortcut(
+                app.clone(),
+                shortcut.id.clone(),
+                shortcut.accelerator.clone(),
+                shortcut.description.clone(),
+            ) {
+                tracing::warn!(
+                    "Failed to register default shortcut '{}': {}",
+                    shortcut.id,
+                    e
+                );
+                errors.push(format!("{}: {}", shortcut.id, e));
+            }
         }
-    }
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(format!(
-            "Some default shortcuts failed to register: {}",
-            errors.join("; ")
-        )
-        .into())
-    }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "Some default shortcuts failed to register: {}",
+                errors.join("; ")
+            )
+            .into())
+        }
+    })
+    .await
 }
 
 /// Unregister all shortcuts
@@ -216,7 +216,6 @@ pub fn register_default_shortcuts(app: AppHandle) -> Result<(), Error> {
 /// * `Ok(())` on success
 /// * `Err(String)` if unregistration fails
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn unregister_all_shortcuts(app: AppHandle) -> Result<(), Error> {
     // Unregister all modifier shortcuts (thread stays alive for mode transitions)
     keyboard_service::unregister_all_modifier_shortcuts();
@@ -245,7 +244,6 @@ pub fn unregister_all_shortcuts(app: AppHandle) -> Result<(), Error> {
 /// # Returns
 /// A `RegistrationResult` indicating success or conflict with suggestions
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn try_register_shortcut(
     app: AppHandle,
     id: String,
@@ -312,49 +310,51 @@ pub fn try_register_shortcut(
 /// * `Ok(false)` if the shortcut is already registered by this app
 /// * `Err(String)` if the format is invalid
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn check_shortcut_available(app: AppHandle, accelerator: String) -> Result<bool, Error> {
-    // Modifier-only shortcuts are always "available" (we handle them ourselves)
-    if keyboard_service::is_modifier_shortcut(&accelerator) {
-        // Check if already registered as a modifier shortcut
-        let modifier_shortcuts = keyboard_service::list_modifier_shortcuts();
-        let in_use = modifier_shortcuts
-            .iter()
-            .any(|(_, acc, _)| acc == &accelerator);
-        return Ok(!in_use);
-    }
-
-    // Validate format
-    conflict::validate_shortcut_format(&accelerator)?;
-
-    // Check if already registered by us (platform-specific)
-    #[cfg(target_os = "linux")]
-    let registered = linux::list_registered();
-    #[cfg(not(target_os = "linux"))]
-    let registered = manager::list_registered();
-
-    let in_use = registered.iter().any(|s| s.accelerator == accelerator);
-
-    if in_use {
-        return Ok(false);
-    }
-
-    // On Wayland the compositor (and the user, via the portal dialog) decides
-    // the actual binding, so there is nothing to check ahead of time: the
-    // requested accelerator is only a preferred trigger. Report it as available
-    // and let the portal assign the real key (surfaced via the
-    // `wayland-shortcuts-status` event).
-    #[cfg(target_os = "linux")]
-    {
-        if linux::get_display_server() == linux::DisplayServer::Wayland {
-            return Ok(true);
+pub async fn check_shortcut_available(app: AppHandle, accelerator: String) -> Result<bool, Error> {
+    tauri_plugin_telemetry::traced("check_shortcut_available", async move {
+        // Modifier-only shortcuts are always "available" (we handle them ourselves)
+        if keyboard_service::is_modifier_shortcut(&accelerator) {
+            // Check if already registered as a modifier shortcut
+            let modifier_shortcuts = keyboard_service::list_modifier_shortcuts();
+            let in_use = modifier_shortcuts
+                .iter()
+                .any(|(_, acc, _)| acc == &accelerator);
+            return Ok(!in_use);
         }
-    }
 
-    use tauri_plugin_global_shortcut::GlobalShortcutExt;
-    let is_registered = app.global_shortcut().is_registered(accelerator.as_str());
+        // Validate format
+        conflict::validate_shortcut_format(&accelerator)?;
 
-    Ok(!is_registered)
+        // Check if already registered by us (platform-specific)
+        #[cfg(target_os = "linux")]
+        let registered = linux::list_registered();
+        #[cfg(not(target_os = "linux"))]
+        let registered = manager::list_registered();
+
+        let in_use = registered.iter().any(|s| s.accelerator == accelerator);
+
+        if in_use {
+            return Ok(false);
+        }
+
+        // On Wayland the compositor (and the user, via the portal dialog) decides
+        // the actual binding, so there is nothing to check ahead of time: the
+        // requested accelerator is only a preferred trigger. Report it as available
+        // and let the portal assign the real key (surfaced via the
+        // `wayland-shortcuts-status` event).
+        #[cfg(target_os = "linux")]
+        {
+            if linux::get_display_server() == linux::DisplayServer::Wayland {
+                return Ok(true);
+            }
+        }
+
+        use tauri_plugin_global_shortcut::GlobalShortcutExt;
+        let is_registered = app.global_shortcut().is_registered(accelerator.as_str());
+
+        Ok(!is_registered)
+    })
+    .await
 }
 
 /// Get alternative shortcut suggestions
@@ -368,7 +368,6 @@ pub fn check_shortcut_available(app: AppHandle, accelerator: String) -> Result<b
 /// # Returns
 /// A vector of suggested alternative shortcuts
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_shortcut_suggestions(shortcut: String) -> Vec<String> {
     conflict::suggest_alternatives(&shortcut)
 }

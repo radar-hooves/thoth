@@ -3,7 +3,6 @@
 //! Provides smart clipboard operations including auto-copy on transcription
 //! completion, clipboard history, and configurable formatting options.
 
-use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -282,30 +281,32 @@ fn get_manager() -> &'static Mutex<ClipboardManager> {
 /// Copies the provided text to the clipboard and optionally adds it to
 /// clipboard history.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn copy_to_clipboard(
     app: AppHandle,
     text: String,
     source: Option<String>,
 ) -> Result<(), Error> {
-    if text.is_empty() {
-        return Err("Cannot copy empty text to clipboard".to_string().into());
-    }
+    tauri_plugin_telemetry::traced("copy_to_clipboard", async move {
+        if text.is_empty() {
+            return Err("Cannot copy empty text to clipboard".to_string().into());
+        }
 
-    debug!("Copying {} chars to clipboard", text.len());
+        debug!("Copying {} chars to clipboard", text.len());
 
-    app.clipboard().write_text(&text).map_err(|e| {
-        error!("Failed to copy to clipboard: {}", e);
-        format!("Failed to copy to clipboard: {}", e)
-    })?;
+        app.clipboard().write_text(&text).map_err(|e| {
+            error!("Failed to copy to clipboard: {}", e);
+            format!("Failed to copy to clipboard: {}", e)
+        })?;
 
-    // Add to history
-    let source = source.unwrap_or_else(|| "manual".to_string());
-    let mut manager = get_manager().lock();
-    manager.add_to_history(text, &source);
+        // Add to history
+        let source = source.unwrap_or_else(|| "manual".to_string());
+        let mut manager = get_manager().lock();
+        manager.add_to_history(text, &source);
 
-    info!("Text copied to clipboard from source: {}", source);
-    Ok(())
+        info!("Text copied to clipboard from source: {}", source);
+        Ok(())
+    })
+    .await
 }
 
 /// Copy transcription to clipboard with auto-copy settings applied.
@@ -313,69 +314,70 @@ pub async fn copy_to_clipboard(
 /// This is the main entry point for copying transcription results. It checks
 /// the current settings and applies formatting as configured.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn copy_transcription(
     app: AppHandle,
     text: String,
     enhanced: bool,
 ) -> Result<bool, Error> {
-    let manager = get_manager().lock();
-    let settings = manager.settings().clone();
-    drop(manager);
+    tauri_plugin_telemetry::traced("copy_transcription", async move {
+        let manager = get_manager().lock();
+        let settings = manager.settings().clone();
+        drop(manager);
 
-    if !settings.auto_copy_enabled {
-        debug!("Auto-copy disabled, skipping clipboard copy");
-        return Ok(false);
-    }
-
-    // Preserve current clipboard content if configured
-    if settings.preserve_clipboard {
-        if let Ok(current) = app.clipboard().read_text() {
-            let mut manager = get_manager().lock();
-            manager.preserve_content(current);
+        if !settings.auto_copy_enabled {
+            debug!("Auto-copy disabled, skipping clipboard copy");
+            return Ok(false);
         }
-    }
 
-    // Format the text according to settings
-    let formatted_text = match settings.format {
-        ClipboardFormat::PlainText => text.clone(),
-        ClipboardFormat::RichText => text.clone(), // Rich text handled by clipboard plugin
-        ClipboardFormat::Markdown => {
-            // Wrap in code block if it looks like it might benefit
-            if text.contains('\n') {
-                format!("```\n{}\n```", text)
-            } else {
-                text.clone()
+        // Preserve current clipboard content if configured
+        if settings.preserve_clipboard {
+            if let Ok(current) = app.clipboard().read_text() {
+                let mut manager = get_manager().lock();
+                manager.preserve_content(current);
             }
         }
-    };
 
-    // Copy to clipboard
-    app.clipboard().write_text(&formatted_text).map_err(|e| {
-        error!("Failed to copy transcription: {}", e);
-        format!("Failed to copy transcription: {}", e)
-    })?;
+        // Format the text according to settings
+        let formatted_text = match settings.format {
+            ClipboardFormat::PlainText => text.clone(),
+            ClipboardFormat::RichText => text.clone(), // Rich text handled by clipboard plugin
+            ClipboardFormat::Markdown => {
+                // Wrap in code block if it looks like it might benefit
+                if text.contains('\n') {
+                    format!("```\n{}\n```", text)
+                } else {
+                    text.clone()
+                }
+            }
+        };
 
-    // Add to history
-    let source = if enhanced {
-        "enhanced_transcription"
-    } else {
-        "transcription"
-    };
-    let mut manager = get_manager().lock();
-    manager.add_to_history(text, source);
+        // Copy to clipboard
+        app.clipboard().write_text(&formatted_text).map_err(|e| {
+            error!("Failed to copy transcription: {}", e);
+            format!("Failed to copy transcription: {}", e)
+        })?;
 
-    info!(
-        "Transcription copied to clipboard (enhanced: {}, format: {:?})",
-        enhanced, settings.format
-    );
+        // Add to history
+        let source = if enhanced {
+            "enhanced_transcription"
+        } else {
+            "transcription"
+        };
+        let mut manager = get_manager().lock();
+        manager.add_to_history(text, source);
 
-    Ok(true)
+        info!(
+            "Transcription copied to clipboard (enhanced: {}, format: {:?})",
+            enhanced, settings.format
+        );
+
+        Ok(true)
+    })
+    .await
 }
 
 /// Get current clipboard settings.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_clipboard_settings() -> ClipboardSettings {
     let manager = get_manager().lock();
     manager.settings().clone()
@@ -383,16 +385,17 @@ pub fn get_clipboard_settings() -> ClipboardSettings {
 
 /// Update clipboard settings.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn set_clipboard_settings(settings: ClipboardSettings) -> Result<(), Error> {
-    let mut manager = get_manager().lock();
-    manager.update_settings(settings);
-    Ok(())
+pub async fn set_clipboard_settings(settings: ClipboardSettings) -> Result<(), Error> {
+    tauri_plugin_telemetry::traced("set_clipboard_settings", async move {
+        let mut manager = get_manager().lock();
+        manager.update_settings(settings);
+        Ok(())
+    })
+    .await
 }
 
 /// Get clipboard history.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_clipboard_history() -> Vec<ClipboardHistoryEntry> {
     let manager = get_manager().lock();
     manager.get_history()
@@ -400,7 +403,6 @@ pub fn get_clipboard_history() -> Vec<ClipboardHistoryEntry> {
 
 /// Clear clipboard history.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn clear_clipboard_history() {
     let mut manager = get_manager().lock();
     manager.clear_history();
@@ -408,7 +410,6 @@ pub fn clear_clipboard_history() {
 
 /// Remove a specific entry from clipboard history.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn remove_clipboard_history_entry(id: String) -> bool {
     let mut manager = get_manager().lock();
     manager.remove_from_history(&id)
@@ -416,50 +417,53 @@ pub fn remove_clipboard_history_entry(id: String) -> bool {
 
 /// Copy an entry from clipboard history to the clipboard.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn copy_from_history(app: AppHandle, id: String) -> Result<(), Error> {
-    let manager = get_manager().lock();
-    let entry = manager
-        .get_history()
-        .into_iter()
-        .find(|e| e.id == id)
-        .ok_or_else(|| "History entry not found".to_string())?;
-    drop(manager);
+    tauri_plugin_telemetry::traced("copy_from_history", async move {
+        let manager = get_manager().lock();
+        let entry = manager
+            .get_history()
+            .into_iter()
+            .find(|e| e.id == id)
+            .ok_or_else(|| "History entry not found".to_string())?;
+        drop(manager);
 
-    app.clipboard().write_text(&entry.text).map_err(|e| {
-        error!("Failed to copy from history: {}", e);
-        format!("Failed to copy from history: {}", e)
-    })?;
+        app.clipboard().write_text(&entry.text).map_err(|e| {
+            error!("Failed to copy from history: {}", e);
+            format!("Failed to copy from history: {}", e)
+        })?;
 
-    info!("Copied history entry {} to clipboard", id);
-    Ok(())
+        info!("Copied history entry {} to clipboard", id);
+        Ok(())
+    })
+    .await
 }
 
 /// Restore the preserved clipboard content.
 ///
 /// Call this after pasting to restore the user's original clipboard content.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn restore_clipboard(app: AppHandle) -> Result<bool, Error> {
-    let mut manager = get_manager().lock();
-    if let Some(content) = manager.take_preserved_content() {
-        drop(manager);
+    tauri_plugin_telemetry::traced("restore_clipboard", async move {
+        let mut manager = get_manager().lock();
+        if let Some(content) = manager.take_preserved_content() {
+            drop(manager);
 
-        app.clipboard().write_text(&content).map_err(|e| {
-            error!("Failed to restore clipboard: {}", e);
-            format!("Failed to restore clipboard: {}", e)
-        })?;
+            app.clipboard().write_text(&content).map_err(|e| {
+                error!("Failed to restore clipboard: {}", e);
+                format!("Failed to restore clipboard: {}", e)
+            })?;
 
-        debug!("Restored preserved clipboard content");
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+            debug!("Restored preserved clipboard content");
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    })
+    .await
 }
 
 /// Get the current restore delay setting in milliseconds.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all)]
 pub fn get_restore_delay() -> u64 {
     let manager = get_manager().lock();
     manager.settings().restore_delay_ms
@@ -473,111 +477,113 @@ pub fn get_restore_delay() -> u64 {
 /// 3. Paste at cursor position
 /// 4. Restore original clipboard after configured delay (backend-owned)
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub async fn paste_transcription(
     app: AppHandle,
     text: String,
     enhanced: bool,
 ) -> Result<(), Error> {
-    if text.is_empty() {
-        return Err("Cannot paste empty text".to_string().into());
-    }
-
-    let manager = get_manager().lock();
-    let settings = manager.settings().clone();
-    drop(manager);
-
-    // Save current clipboard BEFORE any modification. Captures an image when
-    // there is no text, so a screenshot on the clipboard survives a dictation
-    // paste instead of being silently destroyed (#101).
-    let saved_clipboard = if settings.preserve_clipboard {
-        SavedClipboard::capture()
-    } else {
-        None
-    };
-
-    // Format the text according to settings
-    let formatted_text = match settings.format {
-        ClipboardFormat::PlainText => text.clone(),
-        ClipboardFormat::RichText => text.clone(),
-        ClipboardFormat::Markdown => {
-            if text.contains('\n') {
-                format!("```\n{}\n```", text)
-            } else {
-                text.clone()
-            }
+    tauri_plugin_telemetry::traced("paste_transcription", async move {
+        if text.is_empty() {
+            return Err("Cannot paste empty text".to_string().into());
         }
-    };
 
-    // Copy to clipboard and paste
-    app.clipboard().write_text(&formatted_text).map_err(|e| {
-        error!("Failed to copy transcription for paste: {}", e);
-        format!("Failed to copy transcription: {}", e)
-    })?;
+        let manager = get_manager().lock();
+        let settings = manager.settings().clone();
+        drop(manager);
 
-    // Add to history
-    let source = if enhanced {
-        "enhanced_transcription"
-    } else {
-        "transcription"
-    };
-    {
-        let mut manager = get_manager().lock();
-        manager.add_to_history(text, source);
-    }
+        // Save current clipboard BEFORE any modification. Captures an image when
+        // there is no text, so a screenshot on the clipboard survives a dictation
+        // paste instead of being silently destroyed (#101).
+        let saved_clipboard = if settings.preserve_clipboard {
+            SavedClipboard::capture()
+        } else {
+            None
+        };
 
-    // Trailing space and auto-submit are transcription settings rather than
-    // clipboard settings, so they are read from the config here rather than
-    // from ClipboardSettings (#112).
-    let transcription_cfg = crate::config::get_config()
-        .map(|c| c.transcription)
-        .unwrap_or_default();
-
-    // Perform paste
-    let insert_text = crate::text_insert::apply_trailing_space(
-        &formatted_text,
-        transcription_cfg.append_trailing_space,
-    );
-    crate::text_insert::insert_text_by_paste(insert_text, Some(50)).map_err(|e| {
-        error!("Failed to paste transcription: {}", e);
-        format!("Failed to paste: {}", e)
-    })?;
-
-    // Only after the paste succeeded: submitting a failed paste would send an
-    // empty or half-written message.
-    if let Err(e) = crate::text_insert::send_auto_submit(transcription_cfg.auto_submit) {
-        tracing::warn!("Failed to send auto-submit key: {}", e);
-    }
-
-    info!(
-        "Transcription pasted (enhanced: {}, preserve: {})",
-        enhanced, settings.preserve_clipboard
-    );
-
-    // Restore original clipboard in the background after configured delay.
-    // This is backend-owned; the frontend does not need to call restore_clipboard.
-    //
-    // Ordering is safe across platforms: the paste above is synchronous, so the
-    // transcription is guaranteed to be on the clipboard when the paste keystroke
-    // fires; the restore only runs after the delay that follows. On Wayland,
-    // clipboard ownership is tied to a focused client, so a delayed restore is
-    // best-effort — if Thoth has lost focus by the time it fires the compositor
-    // may refuse the write. That only affects restoring the user's *previous*
-    // clipboard, never the correctness of the paste itself, and the failure is
-    // logged.
-    if let Some(original) = saved_clipboard {
-        let delay = settings.restore_delay_ms;
-        tokio::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
-            let what = original.describe();
-            match original.restore() {
-                Ok(()) => debug!("Clipboard restored ({what}) after {}ms", delay),
-                Err(e) => tracing::warn!("Failed to restore clipboard: {}", e),
+        // Format the text according to settings
+        let formatted_text = match settings.format {
+            ClipboardFormat::PlainText => text.clone(),
+            ClipboardFormat::RichText => text.clone(),
+            ClipboardFormat::Markdown => {
+                if text.contains('\n') {
+                    format!("```\n{}\n```", text)
+                } else {
+                    text.clone()
+                }
             }
-        });
-    }
+        };
 
-    Ok(())
+        // Copy to clipboard and paste
+        app.clipboard().write_text(&formatted_text).map_err(|e| {
+            error!("Failed to copy transcription for paste: {}", e);
+            format!("Failed to copy transcription: {}", e)
+        })?;
+
+        // Add to history
+        let source = if enhanced {
+            "enhanced_transcription"
+        } else {
+            "transcription"
+        };
+        {
+            let mut manager = get_manager().lock();
+            manager.add_to_history(text, source);
+        }
+
+        // Trailing space and auto-submit are transcription settings rather than
+        // clipboard settings, so they are read from the config here rather than
+        // from ClipboardSettings (#112).
+        let transcription_cfg = crate::config::get_config()
+            .map(|c| c.transcription)
+            .unwrap_or_default();
+
+        // Perform paste
+        let insert_text = crate::text_insert::apply_trailing_space(
+            &formatted_text,
+            transcription_cfg.append_trailing_space,
+        );
+        crate::text_insert::insert_text_by_paste(insert_text, Some(50)).map_err(|e| {
+            error!("Failed to paste transcription: {}", e);
+            format!("Failed to paste: {}", e)
+        })?;
+
+        // Only after the paste succeeded: submitting a failed paste would send an
+        // empty or half-written message.
+        if let Err(e) = crate::text_insert::send_auto_submit(transcription_cfg.auto_submit) {
+            tracing::warn!("Failed to send auto-submit key: {}", e);
+        }
+
+        info!(
+            "Transcription pasted (enhanced: {}, preserve: {})",
+            enhanced, settings.preserve_clipboard
+        );
+
+        // Restore original clipboard in the background after configured delay.
+        // This is backend-owned; the frontend does not need to call restore_clipboard.
+        //
+        // Ordering is safe across platforms: the paste above is synchronous, so the
+        // transcription is guaranteed to be on the clipboard when the paste keystroke
+        // fires; the restore only runs after the delay that follows. On Wayland,
+        // clipboard ownership is tied to a focused client, so a delayed restore is
+        // best-effort — if Thoth has lost focus by the time it fires the compositor
+        // may refuse the write. That only affects restoring the user's *previous*
+        // clipboard, never the correctness of the paste itself, and the failure is
+        // logged.
+        if let Some(original) = saved_clipboard {
+            let delay = settings.restore_delay_ms;
+            tokio::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
+                let what = original.describe();
+                match original.restore() {
+                    Ok(()) => debug!("Clipboard restored ({what}) after {}ms", delay),
+                    Err(e) => tracing::warn!("Failed to restore clipboard: {}", e),
+                }
+            });
+        }
+
+        Ok(())
+    })
+    .await
 }
 
 #[cfg(test)]

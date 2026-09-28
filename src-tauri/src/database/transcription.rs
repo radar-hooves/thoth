@@ -3,7 +3,6 @@
 //! Provides functions for creating, reading, updating, and deleting transcriptions
 //! in the SQLite database.
 
-use crate::TELEMETRY_TARGET;
 use chrono::Utc;
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -677,7 +676,6 @@ pub fn get_transcription_stats() -> Result<TranscriptionStats, DatabaseError> {
 
 /// Returns aggregated transcription statistics for the performance dashboard.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn get_transcription_stats_cmd() -> Result<TranscriptionStats, Error> {
     get_transcription_stats()
         .map_err(|e| {
@@ -690,8 +688,7 @@ pub fn get_transcription_stats_cmd() -> Result<TranscriptionStats, Error> {
 /// Saves a new transcription to the database.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn save_transcription(
+pub async fn save_transcription(
     text: String,
     raw_text: Option<String>,
     duration_seconds: Option<f64>,
@@ -703,30 +700,32 @@ pub fn save_transcription(
     enhancement_model_name: Option<String>,
     enhancement_duration_seconds: Option<f64>,
 ) -> Result<Transcription, Error> {
-    let transcription = Transcription::with_details(
-        text,
-        raw_text,
-        duration_seconds,
-        audio_path,
-        is_enhanced,
-        enhancement_prompt,
-        transcription_model_name,
-        transcription_duration_seconds,
-        enhancement_model_name,
-        enhancement_duration_seconds,
-    );
+    tauri_plugin_telemetry::traced("save_transcription", async move {
+        let transcription = Transcription::with_details(
+            text,
+            raw_text,
+            duration_seconds,
+            audio_path,
+            is_enhanced,
+            enhancement_prompt,
+            transcription_model_name,
+            transcription_duration_seconds,
+            enhancement_model_name,
+            enhancement_duration_seconds,
+        );
 
-    create_transcription(&transcription).map_err(|e| {
-        tracing::error!("Failed to save transcription: {}", e);
-        format!("Failed to save transcription: {}", e)
-    })?;
+        create_transcription(&transcription).map_err(|e| {
+            tracing::error!("Failed to save transcription: {}", e);
+            format!("Failed to save transcription: {}", e)
+        })?;
 
-    Ok(transcription)
+        Ok(transcription)
+    })
+    .await
 }
 
 /// Retrieves a transcription by its ID.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn get_transcription_by_id(id: String) -> Result<Option<Transcription>, Error> {
     get_transcription(&id)
         .map_err(|e| {
@@ -738,81 +737,93 @@ pub fn get_transcription_by_id(id: String) -> Result<Option<Transcription>, Erro
 
 /// Lists all transcriptions with optional pagination.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn list_all_transcriptions(
+pub async fn list_all_transcriptions(
     limit: Option<i64>,
     offset: Option<i64>,
 ) -> Result<Vec<Transcription>, Error> {
-    list_transcriptions(limit, offset)
-        .map_err(|e| {
-            tracing::error!("Failed to list transcriptions: {}", e);
-            format!("Failed to list transcriptions: {}", e)
-        })
-        .map_err(Into::into)
+    tauri_plugin_telemetry::traced("list_all_transcriptions", async move {
+        list_transcriptions(limit, offset)
+            .map_err(|e| {
+                tracing::error!("Failed to list transcriptions: {}", e);
+                format!("Failed to list transcriptions: {}", e)
+            })
+            .map_err(Into::into)
+    })
+    .await
 }
 
 /// Deletes a transcription by its ID.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn delete_transcription_by_id(id: String) -> Result<bool, Error> {
-    delete_transcription(&id)
-        .map_err(|e| {
-            tracing::error!("Failed to delete transcription {}: {}", id, e);
-            format!("Failed to delete transcription: {}", e)
-        })
-        .map_err(Into::into)
+pub async fn delete_transcription_by_id(id: String) -> Result<bool, Error> {
+    tauri_plugin_telemetry::traced("delete_transcription_by_id", async move {
+        delete_transcription(&id)
+            .map_err(|e| {
+                tracing::error!("Failed to delete transcription {}: {}", id, e);
+                format!("Failed to delete transcription: {}", e)
+            })
+            .map_err(Into::into)
+    })
+    .await
 }
 
 /// Deletes all transcriptions.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn delete_all_transcriptions_cmd() -> Result<usize, Error> {
-    delete_all_transcriptions()
-        .map_err(|e| {
-            tracing::error!("Failed to delete all transcriptions: {}", e);
-            format!("Failed to delete all transcriptions: {}", e)
-        })
-        .map_err(Into::into)
+pub async fn delete_all_transcriptions_cmd() -> Result<usize, Error> {
+    tauri_plugin_telemetry::traced("delete_all_transcriptions_cmd", async move {
+        delete_all_transcriptions()
+            .map_err(|e| {
+                tracing::error!("Failed to delete all transcriptions: {}", e);
+                format!("Failed to delete all transcriptions: {}", e)
+            })
+            .map_err(Into::into)
+    })
+    .await
 }
 
 /// Scans ~/.thoth/Recordings/ for WAV files not referenced by any DB row and
 /// removes them. Returns the number of files removed and bytes freed.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn reconcile_orphaned_recordings_cmd() -> Result<ReconcileResult, Error> {
-    reconcile_orphaned_recordings()
-        .map_err(|e| {
-            tracing::error!("Failed to reconcile orphaned recordings: {}", e);
-            format!("Failed to reconcile orphaned recordings: {}", e)
-        })
-        .map_err(Into::into)
+pub async fn reconcile_orphaned_recordings_cmd() -> Result<ReconcileResult, Error> {
+    tauri_plugin_telemetry::traced("reconcile_orphaned_recordings_cmd", async move {
+        reconcile_orphaned_recordings()
+            .map_err(|e| {
+                tracing::error!("Failed to reconcile orphaned recordings: {}", e);
+                format!("Failed to reconcile orphaned recordings: {}", e)
+            })
+            .map_err(Into::into)
+    })
+    .await
 }
 
 /// Searches transcriptions by text content.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn search_transcriptions_text(
+pub async fn search_transcriptions_text(
     query: String,
     limit: Option<i64>,
 ) -> Result<Vec<Transcription>, Error> {
-    search_transcriptions(&query, limit)
-        .map_err(|e| {
-            tracing::error!("Failed to search transcriptions: {}", e);
-            format!("Failed to search transcriptions: {}", e)
-        })
-        .map_err(Into::into)
+    tauri_plugin_telemetry::traced("search_transcriptions_text", async move {
+        search_transcriptions(&query, limit)
+            .map_err(|e| {
+                tracing::error!("Failed to search transcriptions: {}", e);
+                format!("Failed to search transcriptions: {}", e)
+            })
+            .map_err(Into::into)
+    })
+    .await
 }
 
 /// Counts transcriptions, optionally filtered by a search query.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn count_transcriptions_filtered(query: Option<String>) -> Result<usize, Error> {
-    count_transcriptions(query.as_deref())
-        .map_err(|e| {
-            tracing::error!("Failed to count transcriptions: {}", e);
-            format!("Failed to count transcriptions: {}", e)
-        })
-        .map_err(Into::into)
+pub async fn count_transcriptions_filtered(query: Option<String>) -> Result<usize, Error> {
+    tauri_plugin_telemetry::traced("count_transcriptions_filtered", async move {
+        count_transcriptions(query.as_deref())
+            .map_err(|e| {
+                tracing::error!("Failed to count transcriptions: {}", e);
+                format!("Failed to count transcriptions: {}", e)
+            })
+            .map_err(Into::into)
+    })
+    .await
 }
 
 #[cfg(test)]

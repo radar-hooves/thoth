@@ -3,7 +3,6 @@
 //! Provides commands for searching transcriptions and exporting them
 //! to various formats (JSON, CSV, TXT).
 
-use crate::TELEMETRY_TARGET;
 use crate::database;
 use crate::error::Error;
 use chrono::{DateTime, Utc};
@@ -383,7 +382,6 @@ fn export_txt(records: &[TranscriptionRecord], path: &Path) -> Result<(), String
 /// * `limit` - Maximum number of records to return (default: 100)
 /// * `offset` - Number of records to skip for pagination (default: 0)
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn search_history(
     query: Option<String>,
     from_date: Option<i64>,
@@ -436,35 +434,41 @@ where
 
 /// Exports transcription records to a JSON file.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn export_to_json(
+pub async fn export_to_json(
     ids: Vec<String>,
     path: String,
     search_params: Option<SearchParams>,
 ) -> Result<u32, Error> {
-    export_records(&ids, Path::new(&path), search_params, export_json).map_err(Into::into)
+    tauri_plugin_telemetry::traced("export_to_json", async move {
+        export_records(&ids, Path::new(&path), search_params, export_json).map_err(Into::into)
+    })
+    .await
 }
 
 /// Exports transcription records to a CSV file.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn export_to_csv(
+pub async fn export_to_csv(
     ids: Vec<String>,
     path: String,
     search_params: Option<SearchParams>,
 ) -> Result<u32, Error> {
-    export_records(&ids, Path::new(&path), search_params, export_csv).map_err(Into::into)
+    tauri_plugin_telemetry::traced("export_to_csv", async move {
+        export_records(&ids, Path::new(&path), search_params, export_csv).map_err(Into::into)
+    })
+    .await
 }
 
 /// Exports transcription records to a plain text file.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-pub fn export_to_txt(
+pub async fn export_to_txt(
     ids: Vec<String>,
     path: String,
     search_params: Option<SearchParams>,
 ) -> Result<u32, Error> {
-    export_records(&ids, Path::new(&path), search_params, export_txt).map_err(Into::into)
+    tauri_plugin_telemetry::traced("export_to_txt", async move {
+        export_records(&ids, Path::new(&path), search_params, export_txt).map_err(Into::into)
+    })
+    .await
 }
 
 #[cfg(test)]

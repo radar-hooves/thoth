@@ -3,7 +3,6 @@
 //! Provides cross-platform text insertion at cursor position in any application.
 //! Supports multiple insertion methods with configurable delays.
 
-use crate::TELEMETRY_TARGET;
 use crate::config::TypingTool;
 use crate::error::Error;
 use std::thread;
@@ -1003,7 +1002,6 @@ fn escape_for_applescript(text: &str) -> String {
 ///
 /// `Ok(())` on success, or an error message on failure.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn insert_text_by_typing(
     text: String,
     keystroke_delay_ms: Option<u64>,
@@ -1034,7 +1032,6 @@ pub fn insert_text_by_typing(
 ///
 /// `Ok(())` on success, or an error message on failure.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn insert_text_by_paste(text: String, initial_delay_ms: Option<u64>) -> Result<(), Error> {
     let config = InsertionConfig {
         method: InsertionMethod::Paste,
@@ -1060,7 +1057,6 @@ pub fn insert_text_by_paste(text: String, initial_delay_ms: Option<u64>) -> Resu
 ///
 /// `Ok(())` on success, or an error message on failure.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
 pub fn insert_text(text: String, method: Option<String>) -> Result<(), Error> {
     let insertion_method = method
         .as_deref()
