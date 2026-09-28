@@ -290,25 +290,38 @@
             outputHashes = {
               "fluidaudio-rs-0.10.0" = "sha256-z7c8tibtfevefrYAwh3hJM/sr/OWnbSrxjDS4Tda8+k=";
               # STILL fakeHash — blocked, not merely unrun. `radar-hooves/full-stack-app-template`
-              # is a PRIVATE repo (confirmed via `gh api repos/radar-hooves/full-stack-app-template`,
-              # 28/09/2026), unlike every other git dependency here (fluidaudio-rs, and the
+              # is a PRIVATE repo, unlike every other git dependency here (fluidaudio-rs, and the
               # telemetry-rs repo this crate moved out of) which are public. `nix build`'s
               # `fetchgit` FOD runs the git fetch inside Nix's build sandbox, which strips
               # `$HOME`/`~/.gitconfig`/credential helpers — confirmed by testing `netrc-file`,
               # `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_*` env vars and a plain public-repo control
-              # fetch (which succeeds) — so it cannot authenticate, and this hash cannot be
-              # discovered by running `nix build` from any machine, CI included, until one of:
-              # (a) the factory repo is made public (matches its own kit README, which documents
-              # a plain unauthenticated `git = "https://github.com/..."` dependency line with no
-              # credential step — the strongest signal this is a visibility oversight, not intent);
-              # (b) a cross-repo CI credential is provisioned for Thoth and `fetchgit`'s
-              # `netrcPhase`/`netrcImpureEnvVars` are wired in by hand (`cargoLock.outputHashes`
-              # has no extension point for this — it always calls plain `fetchgit { url; rev;
-              # sha256; }`, so this would mean not using `cargoLock.outputHashes` for this one
-              # dependency and vendoring it separately). This also blocks plain `cargo build` in
-              # `.github/workflows/ci.yaml` on the hosted `macos-15`/`ubuntu-22.04` runners, which
-              # have no cross-repo credential either. Once resolved, replace both `pkgs.lib.fakeHash`
-              # values below with what `nix build` reports.
+              # fetch (which succeeds) — so it cannot authenticate there, and this hash cannot be
+              # discovered by running `nix build` from any machine, CI included: not a fixable
+              # local-environment gap, a structural one in `cargoLock.outputHashes`, which always
+              # calls plain `fetchgit { url; rev; sha256; }` with no credential extension point
+              # (`fetchgit` itself supports `netrcPhase`/`netrcImpureEnvVars`, but nothing routes
+              # them through `outputHashes`).
+              #
+              # `.github/workflows/ci.yaml`'s plain `cargo build`/`test`/`clippy` on the hosted
+              # `macos-15`/`ubuntu-22.04` runners hit the same private-repo wall a different way —
+              # `actions/checkout`'s persisted `GITHUB_TOKEN` credential is scoped to Thoth only by
+              # default — fixed on 28/09/2026 by setting
+              # `radar-hooves/full-stack-app-template`'s own Settings → Actions → General →
+              # "Access" to organization-wide, so every radar-hooves repo's own `GITHUB_TOKEN` can
+              # read it (`gh api -X PUT repos/radar-hooves/full-stack-app-template/actions/permissions/access
+              # -f access_level=organization`; a curated per-repo list was tried first and refused
+              # with "Only 'none' and 'organization' access levels are allowed for this repository").
+              # That grant runs at the ordinary git/HTTP layer `actions/checkout` sets up outside
+              # any build sandbox, so it reaches plain `cargo`; it does not reach a Nix FOD builder,
+              # which strips that layer entirely, so `nix-check.yaml`'s "Flake build" tier is
+              # unaffected and still fails until: (a) the factory repo is made public (matches its
+              # own kit README, which documents a plain unauthenticated
+              # `git = "https://github.com/..."` dependency line with no credential step — the
+              # strongest signal this is a visibility oversight, not intent), or (b) `fetchgit`'s
+              # `netrcPhase`/`netrcImpureEnvVars` are wired in by hand, which means not using
+              # `cargoLock.outputHashes` for this one dependency and vendoring it separately. Once
+              # resolved, replace both `pkgs.lib.fakeHash` values below with what `nix build`
+              # reports.
               "telemetry-0.6.0" = pkgs.lib.fakeHash;
               "tauri-plugin-telemetry-0.1.0" = pkgs.lib.fakeHash;
             };
