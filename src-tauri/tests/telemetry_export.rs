@@ -10,15 +10,19 @@
 //! other caller to race.
 //!
 //! Since the move to `tauri_plugin_telemetry` (moved from the standalone
-//! telemetry-rs repo into the factory's `kits/rust`, `full-stack-app-template#55`),
-//! every Tauri IPC command's span is opened by the plugin's own
-//! `tauri_plugin_telemetry::traced` rather than a hand-rolled
-//! `#[tracing::instrument]`, on the plugin's own `COMMAND_SPAN_TARGET` — this
-//! test calls it directly, the same way a real command body does, to prove
-//! that path reaches the collector too, not only Thoth's own curated target.
+//! telemetry-rs repo into the factory's `kits/rust`, then onto the public
+//! radar-hooves/app-factory, master-project#233), every Tauri IPC command's
+//! span is opened by the plugin's own `tauri_plugin_telemetry::traced` (async
+//! commands) or `traced_sync` (a command that must stay `fn`, never
+//! `async fn` — Tauri's own setup hook, the tray-menu builder, and the 85 of
+//! Thoth's 156 commands that are also called directly as plain Rust
+//! functions elsewhere) rather than a hand-rolled `#[tracing::instrument]`,
+//! both on the plugin's own `COMMAND_SPAN_TARGET` — this test calls both
+//! directly, the same way a real command body does, to prove that path
+//! reaches the collector too, not only Thoth's own curated target.
 
 #[test]
-fn a_reported_error_a_curated_span_and_a_command_span_all_reach_the_collector() {
+fn a_reported_error_a_curated_span_and_both_command_span_shapes_all_reach_the_collector() {
     let mut server = mockito::Server::new();
     let logs_mock = server
         .mock("POST", "/v1/logs")
@@ -87,6 +91,15 @@ fn a_reported_error_a_curated_span_and_a_command_span_all_reach_the_collector() 
             async { Ok::<(), &'static str>(()) },
         ))
         .expect("the traced future's own Ok is untouched");
+
+    // The sync counterpart — Tauri's own setup hook, a tray-menu builder, and
+    // most of Thoth's own commands (config::get_config and the rest) call
+    // this, never `traced`, because they are also plain Rust functions called
+    // directly elsewhere and cannot become `async fn`.
+    tauri_plugin_telemetry::traced_sync("integration_test_sync_command", || {
+        Ok::<(), &'static str>(())
+    })
+    .expect("the traced_sync closure's own Ok is untouched");
 
     // Drop flushes both batch processors, bounded, before returning — see the
     // crate's own `Guard` docs. The exporter's HTTP client is blocking, so the
