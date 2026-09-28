@@ -363,18 +363,20 @@ fn position_at_bottom_centre(app: &AppHandle, indicator: &WebviewWindow) -> Resu
 /// already-mapped 58px borderless window is fast.
 #[tauri::command]
 pub fn hide_recording_indicator(app: AppHandle) -> Result<(), Error> {
-    tracing::info!("hide_recording_indicator called");
+    tauri_plugin_telemetry::traced_sync("hide_recording_indicator", || {
+        tracing::info!("hide_recording_indicator called");
 
-    // Stop mouse tracking before hiding
-    mouse_tracker::stop_tracking();
+        // Stop mouse tracking before hiding
+        mouse_tracker::stop_tracking();
 
-    let window = get_indicator_window(&app)
-        .ok_or_else(|| "Recording indicator window not found".to_string())?;
+        let window = get_indicator_window(&app)
+            .ok_or_else(|| "Recording indicator window not found".to_string())?;
 
-    window.hide().map_err(|e| e.to_string())?;
-    tracing::info!("Recording indicator hidden");
+        window.hide().map_err(|e| e.to_string())?;
+        tracing::info!("Recording indicator hidden");
 
-    Ok(())
+        Ok(())
+    })
 }
 
 /// Show the recording indicator immediately (generic version for shortcut handler).

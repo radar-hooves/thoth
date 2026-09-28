@@ -208,8 +208,14 @@ pub fn configure_backend(
 /// Check if the Ollama server is available
 #[tauri::command]
 pub async fn check_ollama_available() -> bool {
-    let client = get_backend().lock().ollama.clone();
-    client.is_available().await
+    tauri_plugin_telemetry::traced("check_ollama_available", async move {
+        Ok::<_, std::convert::Infallible>({
+            let client = get_backend().lock().ollama.clone();
+            client.is_available().await
+        })
+    })
+    .await
+    .unwrap()
 }
 
 /// List available Ollama models
@@ -232,11 +238,17 @@ pub async fn list_ollama_models() -> Result<Vec<String>, Error> {
 /// Check if the configured OpenAI-compatible server is available
 #[tauri::command]
 pub async fn check_openai_compat_available() -> bool {
-    let client = get_backend().lock().openai_compat.clone();
-    match client {
-        Some(c) => c.is_available().await,
-        None => false,
-    }
+    tauri_plugin_telemetry::traced("check_openai_compat_available", async move {
+        Ok::<_, std::convert::Infallible>({
+            let client = get_backend().lock().openai_compat.clone();
+            match client {
+                Some(c) => c.is_available().await,
+                None => false,
+            }
+        })
+    })
+    .await
+    .unwrap()
 }
 
 /// List available models from the OpenAI-compatible server

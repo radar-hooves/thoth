@@ -63,29 +63,31 @@ pub fn register_shortcut(
     accelerator: String,
     description: String,
 ) -> Result<(), Error> {
-    // Route modifier-only shortcuts to the keyboard service
-    if keyboard_service::is_modifier_shortcut(&accelerator) {
-        if keyboard_service::register_modifier_shortcut(
-            id.clone(),
-            accelerator.clone(),
-            description,
-        ) {
-            keyboard_service::restart_monitoring(app);
-            Ok(())
+    tauri_plugin_telemetry::traced_sync("register_shortcut", || {
+        // Route modifier-only shortcuts to the keyboard service
+        if keyboard_service::is_modifier_shortcut(&accelerator) {
+            if keyboard_service::register_modifier_shortcut(
+                id.clone(),
+                accelerator.clone(),
+                description,
+            ) {
+                keyboard_service::restart_monitoring(app);
+                Ok(())
+            } else {
+                Err(format!("Failed to register modifier shortcut: {}", accelerator).into())
+            }
         } else {
-            Err(format!("Failed to register modifier shortcut: {}", accelerator).into())
+            // Platform-specific registration
+            #[cfg(target_os = "linux")]
+            {
+                linux::register(&app, id, accelerator, description).map_err(Into::into)
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                manager::register(&app, id, accelerator, description).map_err(Into::into)
+            }
         }
-    } else {
-        // Platform-specific registration
-        #[cfg(target_os = "linux")]
-        {
-            linux::register(&app, id, accelerator, description).map_err(Into::into)
-        }
-        #[cfg(not(target_os = "linux"))]
-        {
-            manager::register(&app, id, accelerator, description).map_err(Into::into)
-        }
-    }
+    })
 }
 
 /// Unregister a shortcut by its ID
@@ -124,23 +126,28 @@ pub async fn unregister_shortcut(app: AppHandle, id: String) -> Result<(), Error
 /// A vector of `ShortcutInfo` for all registered shortcuts
 #[tauri::command]
 pub fn list_registered_shortcuts() -> Vec<ShortcutInfo> {
-    // Platform-specific listing
-    #[cfg(target_os = "linux")]
-    let mut shortcuts = linux::list_registered();
-    #[cfg(not(target_os = "linux"))]
-    let mut shortcuts = manager::list_registered();
+    tauri_plugin_telemetry::traced_sync("list_registered_shortcuts", || {
+        Ok::<_, std::convert::Infallible>({
+            // Platform-specific listing
+            #[cfg(target_os = "linux")]
+            let mut shortcuts = linux::list_registered();
+            #[cfg(not(target_os = "linux"))]
+            let mut shortcuts = manager::list_registered();
 
-    // Add modifier shortcuts
-    for (id, accelerator, description) in keyboard_service::list_modifier_shortcuts() {
-        shortcuts.push(ShortcutInfo {
-            id,
-            accelerator,
-            description,
-            is_enabled: true,
-        });
-    }
+            // Add modifier shortcuts
+            for (id, accelerator, description) in keyboard_service::list_modifier_shortcuts() {
+                shortcuts.push(ShortcutInfo {
+                    id,
+                    accelerator,
+                    description,
+                    is_enabled: true,
+                });
+            }
 
-    shortcuts
+            shortcuts
+        })
+    })
+    .unwrap()
 }
 
 /// Get the default shortcuts for Thoth
@@ -157,7 +164,10 @@ pub fn list_registered_shortcuts() -> Vec<ShortcutInfo> {
 /// A vector of `ShortcutInfo` describing the default shortcuts
 #[tauri::command]
 pub fn get_default_shortcuts() -> Vec<ShortcutInfo> {
-    manager::get_defaults()
+    tauri_plugin_telemetry::traced_sync("get_default_shortcuts", || {
+        Ok::<_, std::convert::Infallible>(manager::get_defaults())
+    })
+    .unwrap()
 }
 
 /// Register all default shortcuts
@@ -217,18 +227,20 @@ pub async fn register_default_shortcuts(app: AppHandle) -> Result<(), Error> {
 /// * `Err(String)` if unregistration fails
 #[tauri::command]
 pub fn unregister_all_shortcuts(app: AppHandle) -> Result<(), Error> {
-    // Unregister all modifier shortcuts (thread stays alive for mode transitions)
-    keyboard_service::unregister_all_modifier_shortcuts();
+    tauri_plugin_telemetry::traced_sync("unregister_all_shortcuts", || {
+        // Unregister all modifier shortcuts (thread stays alive for mode transitions)
+        keyboard_service::unregister_all_modifier_shortcuts();
 
-    // Platform-specific unregistration
-    #[cfg(target_os = "linux")]
-    {
-        linux::unregister_all(&app).map_err(Into::into)
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        manager::unregister_all(&app).map_err(Into::into)
-    }
+        // Platform-specific unregistration
+        #[cfg(target_os = "linux")]
+        {
+            linux::unregister_all(&app).map_err(Into::into)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            manager::unregister_all(&app).map_err(Into::into)
+        }
+    })
 }
 
 /// Register a shortcut with conflict detection
@@ -245,6 +257,27 @@ pub fn unregister_all_shortcuts(app: AppHandle) -> Result<(), Error> {
 /// A `RegistrationResult` indicating success or conflict with suggestions
 #[tauri::command]
 pub fn try_register_shortcut(
+    app: AppHandle,
+    id: String,
+    accelerator: String,
+    description: String,
+) -> RegistrationResult {
+    tauri_plugin_telemetry::traced_sync("try_register_shortcut", || {
+        Ok::<_, std::convert::Infallible>(try_register_shortcut_impl(
+            app,
+            id,
+            accelerator,
+            description,
+        ))
+    })
+    .unwrap()
+}
+
+/// [`try_register_shortcut`]'s own body, kept as its own function so the
+/// early `return`s inside stay plain `RegistrationResult` — wrapping them in
+/// `Ok(...)` to fit `traced_sync`'s `Result` bound would touch every one of
+/// them for no behavioural change.
+fn try_register_shortcut_impl(
     app: AppHandle,
     id: String,
     accelerator: String,
@@ -369,5 +402,8 @@ pub async fn check_shortcut_available(app: AppHandle, accelerator: String) -> Re
 /// A vector of suggested alternative shortcuts
 #[tauri::command]
 pub fn get_shortcut_suggestions(shortcut: String) -> Vec<String> {
-    conflict::suggest_alternatives(&shortcut)
+    tauri_plugin_telemetry::traced_sync("get_shortcut_suggestions", || {
+        Ok::<_, std::convert::Infallible>(conflict::suggest_alternatives(&shortcut))
+    })
+    .unwrap()
 }

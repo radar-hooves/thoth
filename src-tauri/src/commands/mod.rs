@@ -9,7 +9,10 @@ use tauri::{AppHandle, Manager};
 /// Greet command for testing
 #[tauri::command]
 pub fn greet(name: &str) -> String {
-    format!("Hello, {}! Welcome to Thoth.", name)
+    tauri_plugin_telemetry::traced_sync("greet", || {
+        Ok::<_, std::convert::Infallible>(format!("Hello, {}! Welcome to Thoth.", name))
+    })
+    .unwrap()
 }
 
 /// Show a window by label
@@ -83,9 +86,14 @@ pub async fn set_show_in_dock(app: AppHandle, show: bool) -> Result<(), Error> {
 /// Get current dock visibility setting
 #[tauri::command]
 pub fn get_show_in_dock() -> bool {
-    crate::config::get_config()
-        .map(|c| c.general.show_in_dock)
-        .unwrap_or(false)
+    tauri_plugin_telemetry::traced_sync("get_show_in_dock", || {
+        Ok::<_, std::convert::Infallible>({
+            crate::config::get_config()
+                .map(|c| c.general.show_in_dock)
+                .unwrap_or(false)
+        })
+    })
+    .unwrap()
 }
 
 /// Set the audio input device and persist to config
@@ -190,22 +198,27 @@ pub async fn relaunch_app(app: AppHandle) -> Result<(), Error> {
 /// arbitrary caller-supplied text, so carrying it is safe by construction.
 #[tauri::command]
 pub fn report_update_check(available: bool, version: Option<String>, error: Option<String>) {
-    match &error {
-        Some(e) => {
-            telemetry::report_error("update_check_failed");
-            tracing::warn!(
-                target: TELEMETRY_TARGET,
-                error = %e,
-                "update_check_failed"
-            );
+    tauri_plugin_telemetry::traced_sync("report_update_check", || {
+        match &error {
+            Some(e) => {
+                telemetry::report_error("update_check_failed");
+                tracing::warn!(
+                    target: TELEMETRY_TARGET,
+                    error = %e,
+                    "update_check_failed"
+                );
+            }
+            None => {
+                tracing::info!(
+                    target: TELEMETRY_TARGET,
+                    available,
+                    version = %version.as_deref().unwrap_or(""),
+                    "update_check_complete"
+                );
+            }
         }
-        None => {
-            tracing::info!(
-                target: TELEMETRY_TARGET,
-                available,
-                version = %version.as_deref().unwrap_or(""),
-                "update_check_complete"
-            );
-        }
-    }
+
+        Ok::<_, std::convert::Infallible>(())
+    })
+    .unwrap()
 }

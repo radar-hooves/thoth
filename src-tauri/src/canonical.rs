@@ -804,60 +804,68 @@ pub fn suggest_aliases_from_history(
 /// Return all registered canonical terms.
 #[tauri::command]
 pub fn get_canonical_terms() -> Result<Vec<CanonicalTerm>, Error> {
-    Ok(get_registry().read().terms.clone())
+    tauri_plugin_telemetry::traced_sync("get_canonical_terms", || {
+        Ok(get_registry().read().terms.clone())
+    })
 }
 
 /// Add a new canonical term.
 #[tauri::command]
 pub fn add_canonical_term(term: CanonicalTerm) -> Result<(), Error> {
-    if term.term.trim().is_empty() {
-        return Err("Term cannot be empty".to_string().into());
-    }
-    let mut registry = get_registry().write();
-    let term_lc = term.term.to_lowercase();
-    if registry
-        .terms
-        .iter()
-        .any(|t| t.term.to_lowercase() == term_lc)
-    {
-        return Err(format!("A canonical term for '{}' already exists", term.term).into());
-    }
-    registry.terms.push(term);
-    save_registry(&registry).map_err(Into::into)
+    tauri_plugin_telemetry::traced_sync("add_canonical_term", || {
+        if term.term.trim().is_empty() {
+            return Err("Term cannot be empty".to_string().into());
+        }
+        let mut registry = get_registry().write();
+        let term_lc = term.term.to_lowercase();
+        if registry
+            .terms
+            .iter()
+            .any(|t| t.term.to_lowercase() == term_lc)
+        {
+            return Err(format!("A canonical term for '{}' already exists", term.term).into());
+        }
+        registry.terms.push(term);
+        save_registry(&registry).map_err(Into::into)
+    })
 }
 
 /// Update an existing canonical term by index.
 #[tauri::command]
 pub fn update_canonical_term(index: usize, term: CanonicalTerm) -> Result<(), Error> {
-    if term.term.trim().is_empty() {
-        return Err("Term cannot be empty".to_string().into());
-    }
-    let mut registry = get_registry().write();
-    if index >= registry.terms.len() {
-        return Err(format!("Invalid index: {}", index).into());
-    }
-    let term_lc = term.term.to_lowercase();
-    if registry
-        .terms
-        .iter()
-        .enumerate()
-        .any(|(i, t)| i != index && t.term.to_lowercase() == term_lc)
-    {
-        return Err(format!("A canonical term for '{}' already exists", term.term).into());
-    }
-    registry.terms[index] = term;
-    save_registry(&registry).map_err(Into::into)
+    tauri_plugin_telemetry::traced_sync("update_canonical_term", || {
+        if term.term.trim().is_empty() {
+            return Err("Term cannot be empty".to_string().into());
+        }
+        let mut registry = get_registry().write();
+        if index >= registry.terms.len() {
+            return Err(format!("Invalid index: {}", index).into());
+        }
+        let term_lc = term.term.to_lowercase();
+        if registry
+            .terms
+            .iter()
+            .enumerate()
+            .any(|(i, t)| i != index && t.term.to_lowercase() == term_lc)
+        {
+            return Err(format!("A canonical term for '{}' already exists", term.term).into());
+        }
+        registry.terms[index] = term;
+        save_registry(&registry).map_err(Into::into)
+    })
 }
 
 /// Remove a canonical term by index.
 #[tauri::command]
 pub fn remove_canonical_term(index: usize) -> Result<(), Error> {
-    let mut registry = get_registry().write();
-    if index >= registry.terms.len() {
-        return Err(format!("Invalid index: {}", index).into());
-    }
-    registry.terms.remove(index);
-    save_registry(&registry).map_err(Into::into)
+    tauri_plugin_telemetry::traced_sync("remove_canonical_term", || {
+        let mut registry = get_registry().write();
+        if index >= registry.terms.len() {
+            return Err(format!("Invalid index: {}", index).into());
+        }
+        registry.terms.remove(index);
+        save_registry(&registry).map_err(Into::into)
+    })
 }
 
 // ---------------------------------------------------------------------------

@@ -677,12 +677,14 @@ pub fn get_transcription_stats() -> Result<TranscriptionStats, DatabaseError> {
 /// Returns aggregated transcription statistics for the performance dashboard.
 #[tauri::command]
 pub fn get_transcription_stats_cmd() -> Result<TranscriptionStats, Error> {
-    get_transcription_stats()
-        .map_err(|e| {
-            tracing::error!("Failed to get transcription stats: {}", e);
-            format!("Failed to get stats: {}", e)
-        })
-        .map_err(Into::into)
+    tauri_plugin_telemetry::traced_sync("get_transcription_stats_cmd", || {
+        get_transcription_stats()
+            .map_err(|e| {
+                tracing::error!("Failed to get transcription stats: {}", e);
+                format!("Failed to get stats: {}", e)
+            })
+            .map_err(Into::into)
+    })
 }
 
 /// Saves a new transcription to the database.
@@ -727,12 +729,14 @@ pub async fn save_transcription(
 /// Retrieves a transcription by its ID.
 #[tauri::command]
 pub fn get_transcription_by_id(id: String) -> Result<Option<Transcription>, Error> {
-    get_transcription(&id)
-        .map_err(|e| {
-            tracing::error!("Failed to get transcription {}: {}", id, e);
-            format!("Failed to get transcription: {}", e)
-        })
-        .map_err(Into::into)
+    tauri_plugin_telemetry::traced_sync("get_transcription_by_id", || {
+        get_transcription(&id)
+            .map_err(|e| {
+                tracing::error!("Failed to get transcription {}: {}", id, e);
+                format!("Failed to get transcription: {}", e)
+            })
+            .map_err(Into::into)
+    })
 }
 
 /// Lists all transcriptions with optional pagination.

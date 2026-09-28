@@ -390,17 +390,19 @@ pub fn search_history(
     limit: Option<u32>,
     offset: Option<u32>,
 ) -> Result<SearchResult, Error> {
-    let params = SearchParams {
-        query,
-        from_date,
-        to_date,
-        enhanced_only,
-        limit,
-        offset,
-    };
+    tauri_plugin_telemetry::traced_sync("search_history", || {
+        let params = SearchParams {
+            query,
+            from_date,
+            to_date,
+            enhanced_only,
+            limit,
+            offset,
+        };
 
-    tracing::debug!("Searching history with params: {:?}", params);
-    search_transcriptions_db(&params).map_err(Into::into)
+        tracing::debug!("Searching history with params: {:?}", params);
+        search_transcriptions_db(&params).map_err(Into::into)
+    })
 }
 
 /// Generic export function that handles record fetching and calls the format-specific exporter.

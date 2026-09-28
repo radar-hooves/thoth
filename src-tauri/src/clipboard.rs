@@ -379,8 +379,13 @@ pub async fn copy_transcription(
 /// Get current clipboard settings.
 #[tauri::command]
 pub fn get_clipboard_settings() -> ClipboardSettings {
-    let manager = get_manager().lock();
-    manager.settings().clone()
+    tauri_plugin_telemetry::traced_sync("get_clipboard_settings", || {
+        Ok::<_, std::convert::Infallible>({
+            let manager = get_manager().lock();
+            manager.settings().clone()
+        })
+    })
+    .unwrap()
 }
 
 /// Update clipboard settings.
@@ -397,22 +402,37 @@ pub async fn set_clipboard_settings(settings: ClipboardSettings) -> Result<(), E
 /// Get clipboard history.
 #[tauri::command]
 pub fn get_clipboard_history() -> Vec<ClipboardHistoryEntry> {
-    let manager = get_manager().lock();
-    manager.get_history()
+    tauri_plugin_telemetry::traced_sync("get_clipboard_history", || {
+        Ok::<_, std::convert::Infallible>({
+            let manager = get_manager().lock();
+            manager.get_history()
+        })
+    })
+    .unwrap()
 }
 
 /// Clear clipboard history.
 #[tauri::command]
 pub fn clear_clipboard_history() {
-    let mut manager = get_manager().lock();
-    manager.clear_history();
+    tauri_plugin_telemetry::traced_sync("clear_clipboard_history", || {
+        let mut manager = get_manager().lock();
+        manager.clear_history();
+
+        Ok::<_, std::convert::Infallible>(())
+    })
+    .unwrap()
 }
 
 /// Remove a specific entry from clipboard history.
 #[tauri::command]
 pub fn remove_clipboard_history_entry(id: String) -> bool {
-    let mut manager = get_manager().lock();
-    manager.remove_from_history(&id)
+    tauri_plugin_telemetry::traced_sync("remove_clipboard_history_entry", || {
+        Ok::<_, std::convert::Infallible>({
+            let mut manager = get_manager().lock();
+            manager.remove_from_history(&id)
+        })
+    })
+    .unwrap()
 }
 
 /// Copy an entry from clipboard history to the clipboard.
@@ -465,8 +485,13 @@ pub async fn restore_clipboard(app: AppHandle) -> Result<bool, Error> {
 /// Get the current restore delay setting in milliseconds.
 #[tauri::command]
 pub fn get_restore_delay() -> u64 {
-    let manager = get_manager().lock();
-    manager.settings().restore_delay_ms
+    tauri_plugin_telemetry::traced_sync("get_restore_delay", || {
+        Ok::<_, std::convert::Infallible>({
+            let manager = get_manager().lock();
+            manager.settings().restore_delay_ms
+        })
+    })
+    .unwrap()
 }
 
 /// Paste text at cursor with automatic clipboard restoration.

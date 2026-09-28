@@ -178,13 +178,18 @@ fn parse_item(bullet: &str) -> NotesItem {
 /// later.
 #[tauri::command]
 pub fn whats_new(version: String) -> Option<ReleaseNotes> {
-    let seen = crate::config::get_config()
-        .ok()
-        .and_then(|c| c.general.whats_new_seen_version);
-    if seen.as_deref() == Some(version.as_str()) {
-        return None;
-    }
-    release(&version)
+    tauri_plugin_telemetry::traced_sync("whats_new", || {
+        Ok::<_, std::convert::Infallible>({
+            let seen = crate::config::get_config()
+                .ok()
+                .and_then(|c| c.general.whats_new_seen_version);
+            if seen.as_deref() == Some(version.as_str()) {
+                return Ok(None);
+            }
+            release(&version)
+        })
+    })
+    .unwrap()
 }
 
 /// Record that this version's notes have been seen, so they are shown once.
@@ -200,7 +205,10 @@ pub async fn mark_whats_new_seen(version: String) -> Result<(), crate::error::Er
 /// About dialog can offer beyond the one release the modal shows.
 #[tauri::command]
 pub fn changelog_releases() -> Vec<ReleaseNotes> {
-    releases()
+    tauri_plugin_telemetry::traced_sync("changelog_releases", || {
+        Ok::<_, std::convert::Infallible>(releases())
+    })
+    .unwrap()
 }
 
 #[cfg(test)]

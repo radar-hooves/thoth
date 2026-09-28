@@ -130,136 +130,143 @@ fn spawn_idle_teardown(generation: u64) {
 /// Start recording audio to ~/.thoth/Recordings/
 #[tauri::command]
 pub fn start_recording() -> Result<String, Error> {
-    tracing::info!("Audio: start_recording called");
-    let mut recorder = get_recorder().lock();
+    tauri_plugin_telemetry::traced_sync("start_recording", || {
+        tracing::info!("Audio: start_recording called");
+        let mut recorder = get_recorder().lock();
 
-    if recorder.is_recording() {
-        tracing::warn!("Audio: Recording already in progress");
-        return Err("Recording already in progress".to_string().into());
-    }
+        if recorder.is_recording() {
+            tracing::warn!("Audio: Recording already in progress");
+            return Err("Recording already in progress".to_string().into());
+        }
 
-    // Bump the idle-teardown generation so any pending teardown timer (scheduled
-    // by a previous stop) is invalidated. Without this, a teardown timer from an
-    // earlier recording could fire DURING this new recording and tear down the
-    // warm stream mid-capture — silently killing the recording (data loss).
-    IDLE_GENERATION.fetch_add(1, Ordering::Relaxed);
+        // Bump the idle-teardown generation so any pending teardown timer (scheduled
+        // by a previous stop) is invalidated. Without this, a teardown timer from an
+        // earlier recording could fire DURING this new recording and tear down the
+        // warm stream mid-capture — silently killing the recording (data loss).
+        IDLE_GENERATION.fetch_add(1, Ordering::Relaxed);
 
-    // Generate output path in ~/.thoth/Recordings/
-    let home = dirs::home_dir().ok_or("Could not find home directory")?;
-    let recordings_dir = home.join(".thoth").join("Recordings");
-    std::fs::create_dir_all(&recordings_dir)
-        .map_err(|e| format!("Failed to create recordings directory: {}", e))?;
+        // Generate output path in ~/.thoth/Recordings/
+        let home = dirs::home_dir().ok_or("Could not find home directory")?;
+        let recordings_dir = home.join(".thoth").join("Recordings");
+        std::fs::create_dir_all(&recordings_dir)
+            .map_err(|e| format!("Failed to create recordings directory: {}", e))?;
 
-    let filename = format!(
-        "thoth_recording_{}.wav",
-        chrono::Utc::now().format("%Y%m%d_%H%M%S")
-    );
-    let output_path = recordings_dir.join(&filename);
+        let filename = format!(
+            "thoth_recording_{}.wav",
+            chrono::Utc::now().format("%Y%m%d_%H%M%S")
+        );
+        let output_path = recordings_dir.join(&filename);
 
-    tracing::info!("Recording will be saved to: {}", output_path.display());
+        tracing::info!("Recording will be saved to: {}", output_path.display());
 
-    let config = crate::config::get_config().map_err(|e| format!("Failed to get config: {}", e))?;
-    let use_warm = config.audio.warm_stream;
-    let device_id = config.audio.device_id.clone();
+        let config =
+            crate::config::get_config().map_err(|e| format!("Failed to get config: {}", e))?;
+        let use_warm = config.audio.warm_stream;
+        let device_id = config.audio.device_id.clone();
 
-    if use_warm {
-        // Warm path: when the stream is already warm we do NOT resolve the
-        // device again — the open stream already holds the correct device.
-        // Device resolution calls default_input_config() on CoreAudio and costs
-        // ~85-170ms; skipping it on the warm path is what makes repeat records
-        // feel instant. The device is only resolved on the cold warm-up below.
-        if !recorder.is_warm() {
-            tracing::info!("Audio: stream not warm — opening device (first record after idle)");
+        if use_warm {
+            // Warm path: when the stream is already warm we do NOT resolve the
+            // device again — the open stream already holds the correct device.
+            // Device resolution calls default_input_config() on CoreAudio and costs
+            // ~85-170ms; skipping it on the warm path is what makes repeat records
+            // feel instant. The device is only resolved on the cold warm-up below.
+            if !recorder.is_warm() {
+                tracing::info!("Audio: stream not warm — opening device (first record after idle)");
+                let audio_device = device::get_recording_device(device_id.as_deref())
+                    .ok_or_else(|| "No audio input device available".to_string())?;
+                // Store device name for pipeline.rs to read without a second resolution.
+                *get_last_device_name().lock() =
+                    Some(device::get_device_display_name(&audio_device));
+                // Metering buffer must be set before warm_up so the callback captures it.
+                let metering_buf = Arc::new(AudioRingBuffer::new());
+                recorder.set_metering_buffer(metering_buf.clone());
+                *get_metering_buffer().lock() = Some(metering_buf);
+
+                recorder.warm_up(&audio_device).map_err(|e| e.to_string())?;
+            } else {
+                tracing::info!("Audio: stream already warm — instant start");
+            }
+
+            // Arm: instant flag flip + writer thread spawn.
+            recorder.arm(&output_path).map_err(|e| e.to_string())?;
+        } else {
+            // Cold path (warm_stream disabled): open/close on every record.
             let audio_device = device::get_recording_device(device_id.as_deref())
                 .ok_or_else(|| "No audio input device available".to_string())?;
             // Store device name for pipeline.rs to read without a second resolution.
             *get_last_device_name().lock() = Some(device::get_device_display_name(&audio_device));
-            // Metering buffer must be set before warm_up so the callback captures it.
             let metering_buf = Arc::new(AudioRingBuffer::new());
             recorder.set_metering_buffer(metering_buf.clone());
             *get_metering_buffer().lock() = Some(metering_buf);
 
-            recorder.warm_up(&audio_device).map_err(|e| e.to_string())?;
-        } else {
-            tracing::info!("Audio: stream already warm — instant start");
+            recorder
+                .start(&audio_device, &output_path)
+                .map_err(|e| e.to_string())?;
         }
 
-        // Arm: instant flag flip + writer thread spawn.
-        recorder.arm(&output_path).map_err(|e| e.to_string())?;
-    } else {
-        // Cold path (warm_stream disabled): open/close on every record.
-        let audio_device = device::get_recording_device(device_id.as_deref())
-            .ok_or_else(|| "No audio input device available".to_string())?;
-        // Store device name for pipeline.rs to read without a second resolution.
-        *get_last_device_name().lock() = Some(device::get_device_display_name(&audio_device));
-        let metering_buf = Arc::new(AudioRingBuffer::new());
-        recorder.set_metering_buffer(metering_buf.clone());
-        *get_metering_buffer().lock() = Some(metering_buf);
-
-        recorder
-            .start(&audio_device, &output_path)
-            .map_err(|e| e.to_string())?;
-    }
-
-    Ok(output_path.to_string_lossy().to_string())
+        Ok(output_path.to_string_lossy().to_string())
+    })
 }
 
 /// Stop recording and return the path to the recorded file
 #[tauri::command]
 pub fn stop_recording() -> Result<String, Error> {
-    let mut recorder = get_recorder().lock();
+    tauri_plugin_telemetry::traced_sync("stop_recording", || {
+        let mut recorder = get_recorder().lock();
 
-    if !recorder.is_recording() {
-        return Err("No recording in progress".to_string().into());
-    }
-
-    let config = crate::config::get_config().map_err(|e| format!("Failed to get config: {}", e))?;
-    let use_warm = config.audio.warm_stream;
-
-    // Determine whether the device we ACTUALLY recorded from is Bluetooth, by
-    // checking the transport type of the device named in LAST_DEVICE_NAME. This
-    // is correct even when the system default differs from the recording device
-    // — e.g. when the default input is AirPods but recording was redirected to
-    // the built-in mic (get_recording_device's Bluetooth-avoidance). Querying
-    // the *default* input here would wrongly report Bluetooth and cool down the
-    // built-in stream, losing its warm-stream latency benefit.
-    let recording_is_bluetooth = get_last_device_name()
-        .lock()
-        .as_deref()
-        .map(crate::platform::device_name_is_bluetooth)
-        .unwrap_or(false);
-
-    let path = if use_warm {
-        let p = recorder.disarm().map_err(|e| e.to_string())?;
-
-        if recording_is_bluetooth {
-            // Never hold a Bluetooth input stream warm — that pins the
-            // device in HFP call mode and degrades the user's audio.
-            tracing::info!(
-                "Audio: recording device is Bluetooth — closing stream immediately instead of warming"
-            );
-            recorder.cool_down();
-            *get_metering_buffer().lock() = None;
-            // Bump generation so any pre-existing teardown timer aborts.
-            IDLE_GENERATION.fetch_add(1, Ordering::Relaxed);
-        } else {
-            // Built-in or USB device: keep warm for IDLE_TEARDOWN_SECS.
-            let idle_gen = IDLE_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
-            spawn_idle_teardown(idle_gen);
+        if !recorder.is_recording() {
+            return Err("No recording in progress".to_string().into());
         }
-        p
-    } else {
-        // Cold path: close the device immediately regardless of transport.
-        recorder.clear_metering_buffer();
-        *get_metering_buffer().lock() = None;
-        recorder.stop().map_err(|e| e.to_string())?
-    };
 
-    // In both paths the metering buffer is no longer needed by the pipeline
-    // caller — the preview emitter has its own reference and will stop when
-    // stop_recording_metering() is called by the pipeline.
+        let config =
+            crate::config::get_config().map_err(|e| format!("Failed to get config: {}", e))?;
+        let use_warm = config.audio.warm_stream;
 
-    Ok(path.to_string_lossy().to_string())
+        // Determine whether the device we ACTUALLY recorded from is Bluetooth, by
+        // checking the transport type of the device named in LAST_DEVICE_NAME. This
+        // is correct even when the system default differs from the recording device
+        // — e.g. when the default input is AirPods but recording was redirected to
+        // the built-in mic (get_recording_device's Bluetooth-avoidance). Querying
+        // the *default* input here would wrongly report Bluetooth and cool down the
+        // built-in stream, losing its warm-stream latency benefit.
+        let recording_is_bluetooth = get_last_device_name()
+            .lock()
+            .as_deref()
+            .map(crate::platform::device_name_is_bluetooth)
+            .unwrap_or(false);
+
+        let path = if use_warm {
+            let p = recorder.disarm().map_err(|e| e.to_string())?;
+
+            if recording_is_bluetooth {
+                // Never hold a Bluetooth input stream warm — that pins the
+                // device in HFP call mode and degrades the user's audio.
+                tracing::info!(
+                    "Audio: recording device is Bluetooth — closing stream immediately instead of warming"
+                );
+                recorder.cool_down();
+                *get_metering_buffer().lock() = None;
+                // Bump generation so any pre-existing teardown timer aborts.
+                IDLE_GENERATION.fetch_add(1, Ordering::Relaxed);
+            } else {
+                // Built-in or USB device: keep warm for IDLE_TEARDOWN_SECS.
+                let idle_gen = IDLE_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+                spawn_idle_teardown(idle_gen);
+            }
+            p
+        } else {
+            // Cold path: close the device immediately regardless of transport.
+            recorder.clear_metering_buffer();
+            *get_metering_buffer().lock() = None;
+            recorder.stop().map_err(|e| e.to_string())?
+        };
+
+        // In both paths the pipeline caller has nothing further to do with the
+        // metering buffer — the preview emitter holds its own reference and
+        // stops when the pipeline calls stop_recording_metering().
+
+        Ok(path.to_string_lossy().to_string())
+    })
 }
 
 #[cfg(test)]
@@ -304,5 +311,8 @@ mod tests {
 /// Check if recording is in progress
 #[tauri::command]
 pub fn is_recording() -> bool {
-    get_recorder().lock().is_recording()
+    tauri_plugin_telemetry::traced_sync("is_recording", || {
+        Ok::<_, std::convert::Infallible>(get_recorder().lock().is_recording())
+    })
+    .unwrap()
 }

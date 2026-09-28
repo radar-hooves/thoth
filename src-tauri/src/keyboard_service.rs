@@ -344,23 +344,33 @@ pub fn restart_monitoring(app: AppHandle) {
 /// Check if Input Monitoring permission is available (macOS)
 #[tauri::command]
 pub fn check_input_monitoring() -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        crate::platform::check_input_monitoring_permission()
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        true
-    }
+    tauri_plugin_telemetry::traced_sync("check_input_monitoring", || {
+        Ok::<_, std::convert::Infallible>({
+            #[cfg(target_os = "macos")]
+            {
+                crate::platform::check_input_monitoring_permission()
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                true
+            }
+        })
+    })
+    .unwrap()
 }
 
 /// Request Input Monitoring permission (opens System Preferences on macOS)
 #[tauri::command]
 pub fn request_input_monitoring() {
-    #[cfg(target_os = "macos")]
-    {
-        crate::platform::open_input_monitoring_settings();
-    }
+    tauri_plugin_telemetry::traced_sync("request_input_monitoring", || {
+        #[cfg(target_os = "macos")]
+        {
+            crate::platform::open_input_monitoring_settings();
+        }
+
+        Ok::<_, std::convert::Infallible>(())
+    })
+    .unwrap()
 }
 
 /// Try to start the keyboard monitoring service.
@@ -370,7 +380,12 @@ pub fn request_input_monitoring() {
 /// Idempotent: no-ops if already running or no modifier shortcuts are registered.
 #[tauri::command]
 pub fn try_start_keyboard_service(app: AppHandle) {
-    start_monitoring(app);
+    tauri_plugin_telemetry::traced_sync("try_start_keyboard_service", || {
+        start_monitoring(app);
+
+        Ok::<_, std::convert::Infallible>(())
+    })
+    .unwrap()
 }
 
 /// Enter capture mode for shortcut recording in the settings UI.

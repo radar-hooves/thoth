@@ -626,17 +626,26 @@ pub async fn fetch_model_manifest(force_refresh: bool) -> Result<Vec<ModelInfo>,
 /// Tauri command: Get manifest last update time
 #[tauri::command]
 pub fn get_manifest_update_time() -> Option<String> {
-    let cache_path = get_cache_path();
-    if !cache_path.exists() {
-        return None;
-    }
+    // `?` here short-circuits on `Option`, not `Result` — kept as its own
+    // closure so the `Ok`-wrapping traced_sync needs below doesn't change
+    // what `?` resolves against.
+    let compute = || -> Option<String> {
+        let cache_path = get_cache_path();
+        if !cache_path.exists() {
+            return None;
+        }
 
-    let data = std::fs::read_to_string(&cache_path).ok()?;
-    let cached: CachedManifest = serde_json::from_str(&data).ok()?;
+        let data = std::fs::read_to_string(&cache_path).ok()?;
+        let cached: CachedManifest = serde_json::from_str(&data).ok()?;
 
-    // Convert timestamp to ISO 8601
-    let datetime = chrono::DateTime::from_timestamp(cached.fetched_at as i64, 0)?;
-    Some(datetime.to_rfc3339())
+        // Convert timestamp to ISO 8601
+        let datetime = chrono::DateTime::from_timestamp(cached.fetched_at as i64, 0)?;
+        Some(datetime.to_rfc3339())
+    };
+    tauri_plugin_telemetry::traced_sync("get_manifest_update_time", || {
+        Ok::<_, std::convert::Infallible>(compute())
+    })
+    .unwrap()
 }
 
 #[cfg(test)]

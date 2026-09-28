@@ -297,113 +297,116 @@ impl Drop for ProcessingGuard {
 /// Also shows the recording indicator overlay and starts audio metering.
 #[tauri::command]
 pub fn pipeline_start_recording(app: AppHandle) -> Result<String, Error> {
-    tracing::info!("Pipeline: pipeline_start_recording called");
+    tauri_plugin_telemetry::traced_sync("pipeline_start_recording", || {
+        tracing::info!("Pipeline: pipeline_start_recording called");
 
-    if PIPELINE_RUNNING.swap(true, Ordering::SeqCst) {
-        tracing::warn!("Pipeline: Already running, rejecting start request");
-        return Err("Pipeline is already running".to_string().into());
-    }
+        if PIPELINE_RUNNING.swap(true, Ordering::SeqCst) {
+            tracing::warn!("Pipeline: Already running, rejecting start request");
+            return Err("Pipeline is already running".to_string().into());
+        }
 
-    // If the transcription model isn't loaded yet, decide whether we can record.
-    // We allow recording during an in-progress background load (the model is
-    // usually ready by the time the user stops speaking), but block outright when
-    // there is no usable model — either the selected model is not on disk, or a
-    // warmup has already proved that nothing (selected or fallback) can load.
-    // Otherwise the user records into a void and the pipeline hangs at the
-    // transcription stage waiting for a model that will never arrive.
-    if !transcription::is_transcription_ready() {
-        // A warmup that failed on a model which has already loaded here is a
-        // reload that went wrong, not proof that nothing can load (#105): the
-        // pipeline retries it rather than refusing to record until a restart.
-        let nothing_can_load = transcription::warmup_failed() && !transcription::model_has_loaded();
-        if nothing_can_load || !transcription::download::check_model_downloaded(None) {
-            PIPELINE_RUNNING.store(false, Ordering::SeqCst);
-            tracing::warn!("Pipeline: No usable transcription model, blocking recording");
-            telemetry::report_error("model_load_failed");
-            tracing::warn!(target: TELEMETRY_TARGET, reason = "no_usable_model", "model_load_failure");
-            let _ = crate::recording_indicator::hide_recording_indicator(app.clone());
-            return Err(
+        // If the transcription model isn't loaded yet, decide whether we can record.
+        // We allow recording during an in-progress background load (the model is
+        // usually ready by the time the user stops speaking), but block outright when
+        // there is no usable model — either the selected model is not on disk, or a
+        // warmup has already proved that nothing (selected or fallback) can load.
+        // Otherwise the user records into a void and the pipeline hangs at the
+        // transcription stage waiting for a model that will never arrive.
+        if !transcription::is_transcription_ready() {
+            // A warmup that failed on a model which has already loaded here is a
+            // reload that went wrong, not proof that nothing can load (#105): the
+            // pipeline retries it rather than refusing to record until a restart.
+            let nothing_can_load =
+                transcription::warmup_failed() && !transcription::model_has_loaded();
+            if nothing_can_load || !transcription::download::check_model_downloaded(None) {
+                PIPELINE_RUNNING.store(false, Ordering::SeqCst);
+                tracing::warn!("Pipeline: No usable transcription model, blocking recording");
+                telemetry::report_error("model_load_failed");
+                tracing::warn!(target: TELEMETRY_TARGET, reason = "no_usable_model", "model_load_failure");
+                let _ = crate::recording_indicator::hide_recording_indicator(app.clone());
+                return Err(
                 "No transcription model is ready. Open Settings \u{2192} Models to download or repair one."
                     .to_string()
                     .into(),
             );
-        }
-        tracing::info!("Pipeline: Model not loaded yet, starting eager background load");
-        std::thread::spawn(|| {
-            transcription::warmup_transcription();
-        });
-    }
-
-    // Emit recording state early so the UI updates before the device opens.
-    // Device name will be filled from audio::last_device_name() after start_recording
-    // returns; we emit a second progress event with the name then.
-    // Emitting the device name later avoids blocking on the ~90ms CoreAudio device-resolution call before the UI updates.
-    emit_progress(&app, PipelineState::Recording, "Recording audio...");
-
-    tracing::info!("Pipeline: Calling audio::start_recording");
-    match crate::audio::start_recording() {
-        Ok(path) => {
-            tracing::info!("Pipeline: Recording started at {}", path);
-
-            // Now that start_recording has resolved (and stored) the device name,
-            // emit a follow-up progress event that includes it for the UI.
-            let device_name = crate::audio::last_device_name();
-            tracing::info!(
-                target: TELEMETRY_TARGET,
-                event = "recording_started",
-                device = %device_name.as_deref().unwrap_or("unknown"),
-                "recording_started"
-            );
-            emit_progress_with_device(
-                &app,
-                PipelineState::Recording,
-                "Recording audio...",
-                device_name,
-            );
-
-            // Emit authoritative state: is_recording() is now true so
-            // get_pipeline_state() returns Recording.
-            emit_recording_state(&app);
-
-            // Update tray to show recording state
-            tray::set_recording_state(&app, true);
-
-            // NOTE: Recording indicator is shown instantly from the shortcut handler
-            // (show_indicator_instant) - no need to show it here again.
-            // The indicator window is pre-warmed at startup so no JS init wait needed.
-
-            // Start recording metering AFTER the indicator is visible
-            if let Err(e) = crate::audio::start_recording_metering(app.clone()) {
-                tracing::warn!("Pipeline: Failed to start recording metering: {}", e);
             }
+            tracing::info!("Pipeline: Model not loaded yet, starting eager background load");
+            std::thread::spawn(|| {
+                transcription::warmup_transcription();
+            });
+        }
 
-            // Hands-free (#88): let silence end the recording. Read fresh so a
-            // mode change in Settings applies to the very next press.
-            if let Ok(config) = crate::config::get_config()
-                && config.shortcuts.recording_mode == crate::config::RecordingMode::HandsFree
-            {
-                spawn_hands_free_watcher(app, config.shortcuts.hands_free_silence());
+        // Emit recording state early so the UI updates before the device opens.
+        // Device name will be filled from audio::last_device_name() after start_recording
+        // returns; we emit a second progress event with the name then.
+        // Emitting the device name later avoids blocking on the ~90ms CoreAudio device-resolution call before the UI updates.
+        emit_progress(&app, PipelineState::Recording, "Recording audio...");
+
+        tracing::info!("Pipeline: Calling audio::start_recording");
+        match crate::audio::start_recording() {
+            Ok(path) => {
+                tracing::info!("Pipeline: Recording started at {}", path);
+
+                // Now that start_recording has resolved (and stored) the device name,
+                // emit a follow-up progress event that includes it for the UI.
+                let device_name = crate::audio::last_device_name();
+                tracing::info!(
+                    target: TELEMETRY_TARGET,
+                    event = "recording_started",
+                    device = %device_name.as_deref().unwrap_or("unknown"),
+                    "recording_started"
+                );
+                emit_progress_with_device(
+                    &app,
+                    PipelineState::Recording,
+                    "Recording audio...",
+                    device_name,
+                );
+
+                // Emit authoritative state: is_recording() is now true so
+                // get_pipeline_state() returns Recording.
+                emit_recording_state(&app);
+
+                // Update tray to show recording state
+                tray::set_recording_state(&app, true);
+
+                // NOTE: Recording indicator is shown instantly from the shortcut handler
+                // (show_indicator_instant) - no need to show it here again.
+                // The indicator window is pre-warmed at startup so no JS init wait needed.
+
+                // Start recording metering AFTER the indicator is visible
+                if let Err(e) = crate::audio::start_recording_metering(app.clone()) {
+                    tracing::warn!("Pipeline: Failed to start recording metering: {}", e);
+                }
+
+                // Hands-free (#88): let silence end the recording. Read fresh so a
+                // mode change in Settings applies to the very next press.
+                if let Ok(config) = crate::config::get_config()
+                    && config.shortcuts.recording_mode == crate::config::RecordingMode::HandsFree
+                {
+                    spawn_hands_free_watcher(app, config.shortcuts.hands_free_silence());
+                }
+
+                Ok(path)
             }
-
-            Ok(path)
+            Err(e) => {
+                PIPELINE_RUNNING.store(false, Ordering::SeqCst);
+                telemetry::report_error_with_cause("audio_capture_failed", &e);
+                tracing::warn!(
+                    target: TELEMETRY_TARGET,
+                    reason = "audio_start_failed",
+                    error = %e,
+                    "audio_device_failure"
+                );
+                emit_progress(
+                    &app,
+                    PipelineState::Failed,
+                    &format!("Recording failed: {}", e),
+                );
+                Err(e)
+            }
         }
-        Err(e) => {
-            PIPELINE_RUNNING.store(false, Ordering::SeqCst);
-            telemetry::report_error_with_cause("audio_capture_failed", &e);
-            tracing::warn!(
-                target: TELEMETRY_TARGET,
-                reason = "audio_start_failed",
-                error = %e,
-                "audio_device_failure"
-            );
-            emit_progress(
-                &app,
-                PipelineState::Failed,
-                &format!("Recording failed: {}", e),
-            );
-            Err(e)
-        }
-    }
+    })
 }
 
 /// Generation counter for hands-free watchers.
@@ -653,14 +656,19 @@ pub async fn pipeline_cancel(app: AppHandle) -> Result<(), Error> {
 /// Get the current pipeline state
 #[tauri::command]
 pub fn get_pipeline_state() -> PipelineState {
-    if crate::audio::is_recording() {
-        PipelineState::Recording
-    } else if PROCESSING_COUNT.load(Ordering::SeqCst) > 0 {
-        // Capture has stopped but at least one detached process_audio task is running.
-        PipelineState::Transcribing
-    } else {
-        PipelineState::Idle
-    }
+    tauri_plugin_telemetry::traced_sync("get_pipeline_state", || {
+        Ok::<_, std::convert::Infallible>({
+            if crate::audio::is_recording() {
+                PipelineState::Recording
+            } else if PROCESSING_COUNT.load(Ordering::SeqCst) > 0 {
+                // Capture has stopped but at least one detached process_audio task is running.
+                PipelineState::Transcribing
+            } else {
+                PipelineState::Idle
+            }
+        })
+    })
+    .unwrap()
 }
 
 /// Run the synchronous, panic-prone post-transcription text transforms under

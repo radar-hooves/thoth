@@ -804,7 +804,7 @@ fn get_config_instance() -> &'static RwLock<Config> {
 /// and loaded from disk on first access.
 #[tauri::command]
 pub fn get_config() -> Result<Config, Error> {
-    Ok(get_config_instance().read().clone())
+    tauri_plugin_telemetry::traced_sync("get_config", || Ok(get_config_instance().read().clone()))
 }
 
 /// Return the built-in default configuration.
@@ -818,7 +818,10 @@ pub fn get_config() -> Result<Config, Error> {
 /// This reads nothing from disk and mutates nothing — it is `Config::default()`.
 #[tauri::command]
 pub fn get_default_config() -> Config {
-    Config::default()
+    tauri_plugin_telemetry::traced_sync("get_default_config", || {
+        Ok::<_, std::convert::Infallible>(Config::default())
+    })
+    .unwrap()
 }
 
 /// Update the configuration
@@ -827,109 +830,112 @@ pub fn get_default_config() -> Config {
 /// it to disk. The version field is automatically updated to the current schema.
 #[tauri::command]
 pub fn set_config(mut config: Config) -> Result<(), Error> {
-    // Ensure version is current
-    config.version = CURRENT_VERSION;
+    tauri_plugin_telemetry::traced_sync("set_config", || {
+        // Ensure version is current
+        config.version = CURRENT_VERSION;
 
-    // Preserve device_id if the incoming config has None but the current config
-    // has a device selected. This prevents other config saves (shortcuts, AI
-    // settings, etc.) from accidentally clearing the user's device preference.
-    // The dedicated set_audio_device command handles intentional device changes.
-    //
-    // Similarly, preserve prompt_id if the incoming value is the default but the
-    // cached value differs. This prevents the frontend's generic config save from
-    // overwriting a tray-initiated prompt change. The dedicated set_prompt_config
-    // function handles intentional prompt changes.
-    {
-        let current = get_config_instance().read();
-        if config.audio.device_id.is_none() && current.audio.device_id.is_some() {
-            tracing::debug!(
-                "Preserving device_id={:?} (incoming config had None)",
-                current.audio.device_id
-            );
-            config.audio.device_id = current.audio.device_id.clone();
-        }
-
-        if config.transcription.model_id.is_none() && current.transcription.model_id.is_some() {
-            tracing::debug!(
-                "Preserving model_id={:?} (incoming config had None)",
-                current.transcription.model_id
-            );
-            config.transcription.model_id = current.transcription.model_id.clone();
-        }
-
-        let default_prompt_id = EnhancementConfig::default().prompt_id;
-        if config.enhancement.prompt_id == default_prompt_id
-            && current.enhancement.prompt_id != default_prompt_id
+        // Preserve device_id if the incoming config has None but the current config
+        // has a device selected. This prevents other config saves (shortcuts, AI
+        // settings, etc.) from accidentally clearing the user's device preference.
+        // The dedicated set_audio_device command handles intentional device changes.
+        //
+        // Similarly, preserve prompt_id if the incoming value is the default but the
+        // cached value differs. This prevents the frontend's generic config save from
+        // overwriting a tray-initiated prompt change. The dedicated set_prompt_config
+        // function handles intentional prompt changes.
         {
-            tracing::debug!(
-                "Preserving prompt_id={:?} (incoming config had default)",
-                current.enhancement.prompt_id
-            );
-            config.enhancement.prompt_id = current.enhancement.prompt_id.clone();
+            let current = get_config_instance().read();
+            if config.audio.device_id.is_none() && current.audio.device_id.is_some() {
+                tracing::debug!(
+                    "Preserving device_id={:?} (incoming config had None)",
+                    current.audio.device_id
+                );
+                config.audio.device_id = current.audio.device_id.clone();
+            }
+
+            if config.transcription.model_id.is_none() && current.transcription.model_id.is_some() {
+                tracing::debug!(
+                    "Preserving model_id={:?} (incoming config had None)",
+                    current.transcription.model_id
+                );
+                config.transcription.model_id = current.transcription.model_id.clone();
+            }
+
+            let default_prompt_id = EnhancementConfig::default().prompt_id;
+            if config.enhancement.prompt_id == default_prompt_id
+                && current.enhancement.prompt_id != default_prompt_id
+            {
+                tracing::debug!(
+                    "Preserving prompt_id={:?} (incoming config had default)",
+                    current.enhancement.prompt_id
+                );
+                config.enhancement.prompt_id = current.enhancement.prompt_id.clone();
+            }
+
+            // Preserve toggle_recording_alt if the incoming config has the default but
+            // the cached config has a user-chosen value (e.g. "ShiftRight"). This prevents
+            // unrelated config saves from overwriting the user's shortcut preference.
+            let default_shortcuts = ShortcutConfig::default();
+            if config.shortcuts.toggle_recording_alt == default_shortcuts.toggle_recording_alt
+                && current.shortcuts.toggle_recording_alt != default_shortcuts.toggle_recording_alt
+            {
+                tracing::debug!(
+                    "Preserving toggle_recording_alt={:?} (incoming config had default)",
+                    current.shortcuts.toggle_recording_alt
+                );
+                config.shortcuts.toggle_recording_alt =
+                    current.shortcuts.toggle_recording_alt.clone();
+            }
+
+            // Preserve toggle_enhancement if incoming is None but cached has a user-set value.
+            if config.shortcuts.toggle_enhancement.is_none()
+                && current.shortcuts.toggle_enhancement.is_some()
+            {
+                tracing::debug!(
+                    "Preserving toggle_enhancement={:?} (incoming config had None)",
+                    current.shortcuts.toggle_enhancement
+                );
+                config.shortcuts.toggle_enhancement = current.shortcuts.toggle_enhancement.clone();
+            }
+
+            // Preserve copy_last if incoming is None but cached has a user-set value.
+            if config.shortcuts.copy_last.is_none() && current.shortcuts.copy_last.is_some() {
+                tracing::debug!(
+                    "Preserving copy_last={:?} (incoming config had None)",
+                    current.shortcuts.copy_last
+                );
+                config.shortcuts.copy_last = current.shortcuts.copy_last.clone();
+            }
+
+            // Preserve enhancement.api_key if the incoming config has None but the cached
+            // config has a key. The Settings panel sends api_key: null when the field is
+            // empty, so a generic full-config save must not wipe a stored key. Use the
+            // dedicated set_enhancement_api_key command for intentional key changes.
+            if config.enhancement.api_key.is_none() && current.enhancement.api_key.is_some() {
+                tracing::debug!("Preserving enhancement.api_key (incoming config had None)");
+                config.enhancement.api_key = current.enhancement.api_key.clone();
+            }
         }
 
-        // Preserve toggle_recording_alt if the incoming config has the default but
-        // the cached config has a user-chosen value (e.g. "ShiftRight"). This prevents
-        // unrelated config saves from overwriting the user's shortcut preference.
-        let default_shortcuts = ShortcutConfig::default();
-        if config.shortcuts.toggle_recording_alt == default_shortcuts.toggle_recording_alt
-            && current.shortcuts.toggle_recording_alt != default_shortcuts.toggle_recording_alt
+        // Save to disk first
+        save_to_disk(&config)?;
+
+        // Update cached config
         {
-            tracing::debug!(
-                "Preserving toggle_recording_alt={:?} (incoming config had default)",
-                current.shortcuts.toggle_recording_alt
+            let mut cached = get_config_instance().write();
+            *cached = config.clone();
+            tracing::info!(
+                "Configuration updated (device_id: {:?}, toggle_recording_alt: {:?})",
+                cached.audio.device_id,
+                cached.shortcuts.toggle_recording_alt
             );
-            config.shortcuts.toggle_recording_alt = current.shortcuts.toggle_recording_alt.clone();
         }
 
-        // Preserve toggle_enhancement if incoming is None but cached has a user-set value.
-        if config.shortcuts.toggle_enhancement.is_none()
-            && current.shortcuts.toggle_enhancement.is_some()
-        {
-            tracing::debug!(
-                "Preserving toggle_enhancement={:?} (incoming config had None)",
-                current.shortcuts.toggle_enhancement
-            );
-            config.shortcuts.toggle_enhancement = current.shortcuts.toggle_enhancement.clone();
-        }
+        // Reconfigure the enhancement backend to reflect any provider changes.
+        apply_enhancement_backend(&config.enhancement);
 
-        // Preserve copy_last if incoming is None but cached has a user-set value.
-        if config.shortcuts.copy_last.is_none() && current.shortcuts.copy_last.is_some() {
-            tracing::debug!(
-                "Preserving copy_last={:?} (incoming config had None)",
-                current.shortcuts.copy_last
-            );
-            config.shortcuts.copy_last = current.shortcuts.copy_last.clone();
-        }
-
-        // Preserve enhancement.api_key if the incoming config has None but the cached
-        // config has a key. The Settings panel sends api_key: null when the field is
-        // empty, so a generic full-config save must not wipe a stored key. Use the
-        // dedicated set_enhancement_api_key command for intentional key changes.
-        if config.enhancement.api_key.is_none() && current.enhancement.api_key.is_some() {
-            tracing::debug!("Preserving enhancement.api_key (incoming config had None)");
-            config.enhancement.api_key = current.enhancement.api_key.clone();
-        }
-    }
-
-    // Save to disk first
-    save_to_disk(&config)?;
-
-    // Update cached config
-    {
-        let mut cached = get_config_instance().write();
-        *cached = config.clone();
-        tracing::info!(
-            "Configuration updated (device_id: {:?}, toggle_recording_alt: {:?})",
-            cached.audio.device_id,
-            cached.shortcuts.toggle_recording_alt
-        );
-    }
-
-    // Reconfigure the enhancement backend to reflect any provider changes.
-    apply_enhancement_backend(&config.enhancement);
-
-    Ok(())
+        Ok(())
+    })
 }
 
 /// Set the audio device_id directly, bypassing set_config's preservation logic.
@@ -988,18 +994,20 @@ pub fn set_enhancement_enabled(enabled: bool) -> Result<(), String> {
 /// Pass `Some(key)` to store a new key, `None` to clear it.
 #[tauri::command]
 pub fn set_enhancement_api_key(key: Option<String>) -> Result<(), Error> {
-    let mut cached = get_config_instance().write();
-    cached.enhancement.api_key = key;
-    save_to_disk(&cached)?;
-    tracing::info!(
-        "Enhancement API key {}",
-        if cached.enhancement.api_key.is_some() {
-            "updated"
-        } else {
-            "cleared"
-        }
-    );
-    Ok(())
+    tauri_plugin_telemetry::traced_sync("set_enhancement_api_key", || {
+        let mut cached = get_config_instance().write();
+        cached.enhancement.api_key = key;
+        save_to_disk(&cached)?;
+        tracing::info!(
+            "Enhancement API key {}",
+            if cached.enhancement.api_key.is_some() {
+                "updated"
+            } else {
+                "cleared"
+            }
+        );
+        Ok(())
+    })
 }
 
 /// Record the running binary's version as `last_run_version`, persisting only
@@ -1100,7 +1108,10 @@ pub async fn reset_config() -> Result<Config, Error> {
 /// Returns the path to the config file for debugging or user information.
 #[tauri::command]
 pub fn get_config_path_cmd() -> String {
-    get_config_path().to_string_lossy().to_string()
+    tauri_plugin_telemetry::traced_sync("get_config_path_cmd", || {
+        Ok::<_, std::convert::Infallible>(get_config_path().to_string_lossy().to_string())
+    })
+    .unwrap()
 }
 
 #[cfg(test)]

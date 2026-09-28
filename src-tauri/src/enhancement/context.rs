@@ -126,8 +126,13 @@ fn get_context_capture() -> &'static Mutex<ContextCapture> {
 /// otherwise returns `None`.
 #[tauri::command]
 pub fn get_clipboard_context() -> Option<String> {
-    let mut capture = get_context_capture().lock();
-    capture.capture_clipboard()
+    tauri_plugin_telemetry::traced_sync("get_clipboard_context", || {
+        Ok::<_, std::convert::Infallible>({
+            let mut capture = get_context_capture().lock();
+            capture.capture_clipboard()
+        })
+    })
+    .unwrap()
 }
 
 /// Build an enhancement context combining transcription with optional clipboard content.
@@ -142,14 +147,19 @@ pub fn get_clipboard_context() -> Option<String> {
 /// A formatted context string ready for AI enhancement.
 #[tauri::command]
 pub fn build_enhancement_context(transcription: String, include_clipboard: bool) -> String {
-    let clipboard_content = if include_clipboard {
-        let mut capture = get_context_capture().lock();
-        capture.capture_clipboard()
-    } else {
-        None
-    };
+    tauri_plugin_telemetry::traced_sync("build_enhancement_context", || {
+        Ok::<_, std::convert::Infallible>({
+            let clipboard_content = if include_clipboard {
+                let mut capture = get_context_capture().lock();
+                capture.capture_clipboard()
+            } else {
+                None
+            };
 
-    build_context(&transcription, clipboard_content.as_deref())
+            build_context(&transcription, clipboard_content.as_deref())
+        })
+    })
+    .unwrap()
 }
 
 #[cfg(test)]

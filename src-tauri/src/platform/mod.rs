@@ -110,66 +110,68 @@ pub struct DetectedGpu {
 /// Get GPU information for the current system
 #[tauri::command]
 pub fn get_gpu_info() -> Result<SystemGpuInfo, Error> {
-    #[cfg(target_os = "linux")]
-    {
-        let detection = linux::detect_gpus();
-        Ok(SystemGpuInfo {
-            compiled_backend: detection.compiled_backend.to_string(),
-            gpu_available: detection.recommended_backend != linux::GpuBackend::Cpu,
-            gpu_name: detection.gpus.first().map(|g| g.name.clone()),
-            vram_mb: detection.gpus.first().and_then(|g| g.vram_mb),
-            detected_gpus: detection
-                .gpus
-                .iter()
-                .map(|g| DetectedGpu {
-                    backend: g.backend.to_string(),
-                    name: g.name.clone(),
-                    vram_mb: g.vram_mb,
-                })
-                .collect(),
-        })
-    }
+    tauri_plugin_telemetry::traced_sync("get_gpu_info", || {
+        #[cfg(target_os = "linux")]
+        {
+            let detection = linux::detect_gpus();
+            Ok(SystemGpuInfo {
+                compiled_backend: detection.compiled_backend.to_string(),
+                gpu_available: detection.recommended_backend != linux::GpuBackend::Cpu,
+                gpu_name: detection.gpus.first().map(|g| g.name.clone()),
+                vram_mb: detection.gpus.first().and_then(|g| g.vram_mb),
+                detected_gpus: detection
+                    .gpus
+                    .iter()
+                    .map(|g| DetectedGpu {
+                        backend: g.backend.to_string(),
+                        name: g.name.clone(),
+                        vram_mb: g.vram_mb,
+                    })
+                    .collect(),
+            })
+        }
 
-    #[cfg(target_os = "macos")]
-    {
-        Ok(SystemGpuInfo {
-            compiled_backend: "Metal".to_string(),
-            gpu_available: true,
-            gpu_name: get_macos_gpu_name(),
-            vram_mb: None,
-            detected_gpus: vec![DetectedGpu {
-                backend: "Metal".to_string(),
-                name: get_macos_gpu_name().unwrap_or_else(|| "Apple GPU".to_string()),
+        #[cfg(target_os = "macos")]
+        {
+            Ok(SystemGpuInfo {
+                compiled_backend: "Metal".to_string(),
+                gpu_available: true,
+                gpu_name: get_macos_gpu_name(),
                 vram_mb: None,
-            }],
-        })
-    }
+                detected_gpus: vec![DetectedGpu {
+                    backend: "Metal".to_string(),
+                    name: get_macos_gpu_name().unwrap_or_else(|| "Apple GPU".to_string()),
+                    vram_mb: None,
+                }],
+            })
+        }
 
-    #[cfg(target_os = "windows")]
-    {
-        Ok(SystemGpuInfo {
-            compiled_backend: if cfg!(feature = "cuda") {
-                "CUDA".to_string()
-            } else {
-                "CPU".to_string()
-            },
-            gpu_available: cfg!(feature = "cuda"),
-            gpu_name: None,
-            vram_mb: None,
-            detected_gpus: vec![],
-        })
-    }
+        #[cfg(target_os = "windows")]
+        {
+            Ok(SystemGpuInfo {
+                compiled_backend: if cfg!(feature = "cuda") {
+                    "CUDA".to_string()
+                } else {
+                    "CPU".to_string()
+                },
+                gpu_available: cfg!(feature = "cuda"),
+                gpu_name: None,
+                vram_mb: None,
+                detected_gpus: vec![],
+            })
+        }
 
-    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-    {
-        Ok(SystemGpuInfo {
-            compiled_backend: "CPU".to_string(),
-            gpu_available: false,
-            gpu_name: None,
-            vram_mb: None,
-            detected_gpus: vec![],
-        })
-    }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        {
+            Ok(SystemGpuInfo {
+                compiled_backend: "CPU".to_string(),
+                gpu_available: false,
+                gpu_name: None,
+                vram_mb: None,
+                detected_gpus: vec![],
+            })
+        }
+    })
 }
 
 /// Get macOS GPU name via system_profiler
@@ -251,42 +253,52 @@ pub fn is_screen_locked() -> bool {
 /// Check if accessibility permissions are available
 #[tauri::command]
 pub fn check_accessibility() -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        macos::check_accessibility_permission()
-    }
-    #[cfg(target_os = "linux")]
-    {
-        linux::check_accessibility_permission()
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    {
-        true // Not needed on other platforms
-    }
+    tauri_plugin_telemetry::traced_sync("check_accessibility", || {
+        Ok::<_, std::convert::Infallible>({
+            #[cfg(target_os = "macos")]
+            {
+                macos::check_accessibility_permission()
+            }
+            #[cfg(target_os = "linux")]
+            {
+                linux::check_accessibility_permission()
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+            {
+                true // Not needed on other platforms
+            }
+        })
+    })
+    .unwrap()
 }
 
 /// Request accessibility permission (opens settings if needed)
 #[tauri::command]
 pub fn request_accessibility() -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        if !macos::check_accessibility_permission() {
-            macos::open_accessibility_settings();
-            false
-        } else {
-            true
-        }
-    }
-    #[cfg(target_os = "linux")]
-    {
-        // X11 allows key grabbing and Wayland uses the XDG portal, so there is
-        // no per-app accessibility grant to request; it is always available.
-        true
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    {
-        true
-    }
+    tauri_plugin_telemetry::traced_sync("request_accessibility", || {
+        Ok::<_, std::convert::Infallible>({
+            #[cfg(target_os = "macos")]
+            {
+                if !macos::check_accessibility_permission() {
+                    macos::open_accessibility_settings();
+                    false
+                } else {
+                    true
+                }
+            }
+            #[cfg(target_os = "linux")]
+            {
+                // X11 allows key grabbing and Wayland uses the XDG portal, so there is
+                // no per-app accessibility grant to request; it is always available.
+                true
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+            {
+                true
+            }
+        })
+    })
+    .unwrap()
 }
 
 /// Check if Input Monitoring permission is granted
@@ -330,14 +342,19 @@ pub fn open_input_monitoring_settings() {
 /// call to confirm the permission is live.
 #[tauri::command]
 pub fn verify_accessibility_functional() -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        macos::verify_accessibility_functional()
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        true // Not needed on other platforms
-    }
+    tauri_plugin_telemetry::traced_sync("verify_accessibility_functional", || {
+        Ok::<_, std::convert::Infallible>({
+            #[cfg(target_os = "macos")]
+            {
+                macos::verify_accessibility_functional()
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                true // Not needed on other platforms
+            }
+        })
+    })
+    .unwrap()
 }
 
 /// Reset the permissions an app update is likely to have invalidated.
@@ -388,19 +405,24 @@ pub async fn reset_tcc_permissions(services: Vec<String>) -> Result<String, Erro
 /// - "unknown" - Unable to determine status
 #[tauri::command]
 pub fn check_microphone_permission() -> String {
-    #[cfg(target_os = "macos")]
-    {
-        macos::check_microphone_permission().to_string()
-    }
-    #[cfg(target_os = "linux")]
-    {
-        // Probes PulseAudio/PipeWire for an available capture source.
-        linux::check_microphone_permission().to_string()
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    {
-        "granted".to_string() // Not needed on other platforms
-    }
+    tauri_plugin_telemetry::traced_sync("check_microphone_permission", || {
+        Ok::<_, std::convert::Infallible>({
+            #[cfg(target_os = "macos")]
+            {
+                macos::check_microphone_permission().to_string()
+            }
+            #[cfg(target_os = "linux")]
+            {
+                // Probes PulseAudio/PipeWire for an available capture source.
+                linux::check_microphone_permission().to_string()
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+            {
+                "granted".to_string() // Not needed on other platforms
+            }
+        })
+    })
+    .unwrap()
 }
 
 /// Caret (text cursor) position on screen
@@ -450,39 +472,44 @@ pub fn get_caret_position() -> Option<CaretPosition> {
 /// this will open System Preferences instead.
 #[tauri::command]
 pub fn request_microphone_permission(app: tauri::AppHandle) {
-    #[cfg(target_os = "macos")]
-    {
-        let status = macos::check_microphone_permission();
-        match status {
-            macos::MicrophoneStatus::NotDetermined => {
-                // First time — trigger the system dialog. The completion
-                // handler emits permission-changed when the user responds.
-                macos::request_microphone_permission(app);
-            }
-            macos::MicrophoneStatus::Denied | macos::MicrophoneStatus::Restricted => {
-                // Already denied - open System Preferences
-                macos::open_microphone_settings();
-            }
-            macos::MicrophoneStatus::Authorized => {
-                // Already granted, nothing to do
-                tracing::info!("Microphone permission already granted");
-            }
-            macos::MicrophoneStatus::Unknown => {
-                // Try requesting anyway
-                macos::request_microphone_permission(app);
+    tauri_plugin_telemetry::traced_sync("request_microphone_permission", || {
+        #[cfg(target_os = "macos")]
+        {
+            let status = macos::check_microphone_permission();
+            match status {
+                macos::MicrophoneStatus::NotDetermined => {
+                    // First time — trigger the system dialog. The completion
+                    // handler emits permission-changed when the user responds.
+                    macos::request_microphone_permission(app);
+                }
+                macos::MicrophoneStatus::Denied | macos::MicrophoneStatus::Restricted => {
+                    // Already denied - open System Preferences
+                    macos::open_microphone_settings();
+                }
+                macos::MicrophoneStatus::Authorized => {
+                    // Already granted, nothing to do
+                    tracing::info!("Microphone permission already granted");
+                }
+                macos::MicrophoneStatus::Unknown => {
+                    // Try requesting anyway
+                    macos::request_microphone_permission(app);
+                }
             }
         }
-    }
-    #[cfg(target_os = "linux")]
-    {
-        let _ = app;
-        // PulseAudio/PipeWire grant capture access without a system dialogue.
-        linux::request_microphone_permission();
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    {
-        let _ = app;
-    }
+        #[cfg(target_os = "linux")]
+        {
+            let _ = app;
+            // PulseAudio/PipeWire grant capture access without a system dialogue.
+            linux::request_microphone_permission();
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        {
+            let _ = app;
+        }
+
+        Ok::<_, std::convert::Infallible>(())
+    })
+    .unwrap()
 }
 
 #[cfg(test)]

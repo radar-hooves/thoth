@@ -55,6 +55,17 @@ fn get_download_state() -> &'static Mutex<DownloadState> {
 /// Check if the model files are downloaded and valid
 #[tauri::command]
 pub fn check_model_downloaded(model_id: Option<String>) -> bool {
+    tauri_plugin_telemetry::traced_sync("check_model_downloaded", || {
+        Ok::<_, std::convert::Infallible>(check_model_downloaded_impl(model_id))
+    })
+    .unwrap()
+}
+
+/// [`check_model_downloaded`]'s own body, kept as its own function so the
+/// early `return`s inside stay plain `bool` — wrapping them in `Ok(...)` to
+/// fit `traced_sync`'s `Result` bound would touch every one of them for no
+/// behavioural change.
+fn check_model_downloaded_impl(model_id: Option<String>) -> bool {
     // Get the model info from manifest
     let manifest = get_fallback_manifest();
 
@@ -143,7 +154,10 @@ pub fn check_model_downloaded(model_id: Option<String>) -> bool {
 /// Get the current download progress state
 #[tauri::command]
 pub fn get_download_progress() -> DownloadState {
-    get_download_state().lock().clone()
+    tauri_plugin_telemetry::traced_sync("get_download_progress", || {
+        Ok::<_, std::convert::Infallible>(get_download_state().lock().clone())
+    })
+    .unwrap()
 }
 
 /// Download the model archive and extract it
@@ -785,28 +799,65 @@ fn emit_progress(app: &AppHandle, progress: DownloadProgress) {
 /// default was a trap with no user.
 #[tauri::command]
 pub fn delete_model(model_id: String) -> Result<(), Error> {
-    let manifest = get_fallback_manifest();
+    tauri_plugin_telemetry::traced_sync("delete_model", || {
+        let manifest = get_fallback_manifest();
 
-    let model = manifest
-        .models
-        .iter()
-        .find(|m| m.id == model_id)
-        .ok_or_else(|| format!("Model not found: {}", model_id))?;
+        let model = manifest
+            .models
+            .iter()
+            .find(|m| m.id == model_id)
+            .ok_or_else(|| format!("Model not found: {}", model_id))?;
 
-    // FluidAudio: remove the sentinel marker (actual models live in FluidAudio's cache)
-    if model.model_type == "fluidaudio_coreml" {
-        #[cfg(all(target_os = "macos", feature = "fluidaudio"))]
-        {
-            super::fluidaudio::remove_ready_marker()
-                .map_err(|e| format!("Failed to remove FluidAudio marker: {}", e))?;
+        // FluidAudio: remove the sentinel marker (actual models live in FluidAudio's cache)
+        if model.model_type == "fluidaudio_coreml" {
+            #[cfg(all(target_os = "macos", feature = "fluidaudio"))]
+            {
+                super::fluidaudio::remove_ready_marker()
+                    .map_err(|e| format!("Failed to remove FluidAudio marker: {}", e))?;
+            }
+            #[cfg(not(all(target_os = "macos", feature = "fluidaudio")))]
+            {
+                // Without the feature, just remove the marker file directly
+                let marker = get_model_directory(&model_id).join(".fluidaudio_ready");
+                if marker.exists() {
+                    std::fs::remove_file(&marker)
+                        .map_err(|e| format!("Failed to remove marker: {}", e))?;
+                }
+            }
+
+            // Reset download state
+            {
+                let mut state = get_download_state().lock();
+                *state = DownloadState::Idle;
+            }
+
+            tracing::info!(
+                "FluidAudio marker removed. CoreML cache remains at \
+             ~/Library/Application Support/FluidAudio/Models/ — \
+             delete manually to reclaim ~500 MB."
+            );
+            return Ok(());
         }
-        #[cfg(not(all(target_os = "macos", feature = "fluidaudio")))]
-        {
-            // Without the feature, just remove the marker file directly
-            let marker = get_model_directory(&model_id).join(".fluidaudio_ready");
-            if marker.exists() {
-                std::fs::remove_file(&marker)
-                    .map_err(|e| format!("Failed to remove marker: {}", e))?;
+
+        let model_dir = get_model_directory(&model_id);
+
+        for file in &model.required_files {
+            let path = model_dir.join(file);
+            if path.exists() {
+                std::fs::remove_file(&path)
+                    .map_err(|e| format!("Failed to delete {}: {}", file, e))?;
+                tracing::info!("Deleted model file: {}", path.display());
+            }
+        }
+
+        // Remove the model directory if it's now empty
+        if model_dir.exists() {
+            let is_empty = std::fs::read_dir(&model_dir)
+                .map(|mut entries| entries.next().is_none())
+                .unwrap_or(false);
+            if is_empty {
+                let _ = std::fs::remove_dir(&model_dir);
+                tracing::info!("Removed empty model directory: {}", model_dir.display());
             }
         }
 
@@ -816,51 +867,22 @@ pub fn delete_model(model_id: String) -> Result<(), Error> {
             *state = DownloadState::Idle;
         }
 
-        tracing::info!(
-            "FluidAudio marker removed. CoreML cache remains at \
-             ~/Library/Application Support/FluidAudio/Models/ — \
-             delete manually to reclaim ~500 MB."
-        );
-        return Ok(());
-    }
-
-    let model_dir = get_model_directory(&model_id);
-
-    for file in &model.required_files {
-        let path = model_dir.join(file);
-        if path.exists() {
-            std::fs::remove_file(&path).map_err(|e| format!("Failed to delete {}: {}", file, e))?;
-            tracing::info!("Deleted model file: {}", path.display());
-        }
-    }
-
-    // Remove the model directory if it's now empty
-    if model_dir.exists() {
-        let is_empty = std::fs::read_dir(&model_dir)
-            .map(|mut entries| entries.next().is_none())
-            .unwrap_or(false);
-        if is_empty {
-            let _ = std::fs::remove_dir(&model_dir);
-            tracing::info!("Removed empty model directory: {}", model_dir.display());
-        }
-    }
-
-    // Reset download state
-    {
-        let mut state = get_download_state().lock();
-        *state = DownloadState::Idle;
-    }
-
-    tracing::info!("Model {} files deleted", model_id);
-    Ok(())
+        tracing::info!("Model {} files deleted", model_id);
+        Ok(())
+    })
 }
 
 /// Reset the download state to idle
 #[tauri::command]
 pub fn reset_download_state() {
-    let mut state = get_download_state().lock();
-    *state = DownloadState::Idle;
-    tracing::info!("Download state reset to idle");
+    tauri_plugin_telemetry::traced_sync("reset_download_state", || {
+        let mut state = get_download_state().lock();
+        *state = DownloadState::Idle;
+        tracing::info!("Download state reset to idle");
+
+        Ok::<_, std::convert::Infallible>(())
+    })
+    .unwrap()
 }
 
 #[cfg(test)]
