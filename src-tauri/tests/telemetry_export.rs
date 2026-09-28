@@ -12,17 +12,18 @@
 //! Since the move to `tauri_plugin_telemetry` (moved from the standalone
 //! telemetry-rs repo into the factory's `kits/rust`, then onto the public
 //! radar-hooves/app-factory, master-project#233), every Tauri IPC command's
-//! span is opened by the plugin's own `tauri_plugin_telemetry::traced` (async
-//! commands) or `traced_sync` (a command that must stay `fn`, never
-//! `async fn` — Tauri's own setup hook, the tray-menu builder, and the 85 of
-//! Thoth's 156 commands that are also called directly as plain Rust
-//! functions elsewhere) rather than a hand-rolled `#[tracing::instrument]`,
-//! both on the plugin's own `COMMAND_SPAN_TARGET` — this test calls both
-//! directly, the same way a real command body does, to prove that path
-//! reaches the collector too, not only Thoth's own curated target.
+//! span is opened by the plugin's own `tauri_plugin_telemetry::traced` (an
+//! async command), `traced_sync` (a command that must stay `fn` and can
+//! fail), or `traced_sync_value` (v2026.9.34 — a command that must stay `fn`
+//! and cannot fail, so its span's outcome is always `ok` with no `Result`,
+//! `Infallible` or `.unwrap()` at the call site) — rather than a hand-rolled
+//! `#[tracing::instrument]`. All three land on the plugin's own
+//! `COMMAND_SPAN_TARGET`; this test calls each directly, the same way a real
+//! command body does, to prove all three reach the collector, not only
+//! Thoth's own curated target.
 
 #[test]
-fn a_reported_error_a_curated_span_and_both_command_span_shapes_all_reach_the_collector() {
+fn a_reported_error_a_curated_span_and_all_three_command_span_shapes_reach_the_collector() {
     let mut server = mockito::Server::new();
     let logs_mock = server
         .mock("POST", "/v1/logs")
@@ -92,14 +93,25 @@ fn a_reported_error_a_curated_span_and_both_command_span_shapes_all_reach_the_co
         ))
         .expect("the traced future's own Ok is untouched");
 
-    // The sync counterpart — Tauri's own setup hook, a tray-menu builder, and
-    // most of Thoth's own commands (config::get_config and the rest) call
-    // this, never `traced`, because they are also plain Rust functions called
-    // directly elsewhere and cannot become `async fn`.
+    // The sync counterpart for a fallible command — Tauri's own setup hook, a
+    // tray-menu builder, and many of Thoth's own commands (config::set_config
+    // and the rest) call this, never `traced`, because they are also plain
+    // Rust functions called directly elsewhere and cannot become `async fn`.
     tauri_plugin_telemetry::traced_sync("integration_test_sync_command", || {
         Ok::<(), &'static str>(())
     })
     .expect("the traced_sync closure's own Ok is untouched");
+
+    // The sync counterpart for a command that cannot fail at all — most of
+    // Thoth's own sync commands (config::get_config and the rest): no
+    // `Result`, `Infallible` or `.unwrap()` anywhere at the call site, and
+    // the span's own outcome is always `ok`.
+    let value =
+        tauri_plugin_telemetry::traced_sync_value("integration_test_sync_value_command", || 42);
+    assert_eq!(
+        value, 42,
+        "the traced_sync_value closure's own return is untouched"
+    );
 
     // Drop flushes both batch processors, bounded, before returning — see the
     // crate's own `Guard` docs. The exporter's HTTP client is blocking, so the
