@@ -292,8 +292,10 @@
               # kits/rust moved again, off the private full-stack-app-template onto the public
               # radar-hooves/app-factory (master-project#233); every commit id in it is new, so
               # both hashes need a fresh discovery regardless of the previous ones.
-              "telemetry-0.6.0" = "sha256-OXOIC6AcVaNLj/1atpBJFXjoNEr9g1oPt6kaC2eQQwA=";
-              "tauri-plugin-telemetry-0.1.0" = "sha256-OXOIC6AcVaNLj/1atpBJFXjoNEr9g1oPt6kaC2eQQwA=";
+              # v2026.9.34: traced_sync_value added, no crate version bump — the
+              # commit id still moves, so the hash does too.
+              "telemetry-0.6.0" = "sha256-E+gP30vCPN7YaFVLkmzfriNo+ILvgJbc7fmlT/bewgY=";
+              "tauri-plugin-telemetry-0.1.0" = "sha256-E+gP30vCPN7YaFVLkmzfriNo+ILvgJbc7fmlT/bewgY=";
             };
           };
 

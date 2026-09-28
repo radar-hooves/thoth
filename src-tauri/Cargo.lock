@@ -5855,7 +5855,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-telemetry"
 version = "0.1.0"
-source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.9.33#98f2ff11ac4e0620d74ba12453f5e7103defb830"
+source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.9.34#e99bd0a1c08cc2e894415b5319a15877f090eb82"
 dependencies = [
  "serde",
  "serde_json",
@@ -6002,7 +6002,7 @@ dependencies = [
 [[package]]
 name = "telemetry"
 version = "0.6.0"
-source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.9.33#98f2ff11ac4e0620d74ba12453f5e7103defb830"
+source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.9.34#e99bd0a1c08cc2e894415b5319a15877f090eb82"
 dependencies = [
  "async-trait",
  "http",
