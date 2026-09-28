@@ -33,6 +33,7 @@
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-clear",
     "updater:default",
-    "process:default"
+    "process:default",
+    "telemetry:default"
   ]
 }

@@ -116,7 +116,7 @@
 
   async function loadTelemetry(): Promise<void> {
     try {
-      const next = await invoke<TelemetryStatus>('telemetry_get');
+      const next = await invoke<TelemetryStatus>('plugin:telemetry|telemetry_get');
       telemetry = next;
       // Where the environment owns the exporter, the fields show what it set.
       endpoint = next.fromEnv ? next.endpoint : next.savedEndpoint;
@@ -130,7 +130,7 @@
     isTesting = true;
     probe = null;
     try {
-      await invoke('telemetry_probe', { endpoint, headersHelper });
+      await invoke('plugin:telemetry|telemetry_probe', { endpoint, headersHelper });
       probe = { ok: true, message: 'Ok' };
     } catch (e) {
       probe = { ok: false, message: e instanceof Error ? e.message : String(e) };

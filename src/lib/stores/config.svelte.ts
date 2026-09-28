@@ -61,14 +61,7 @@ export type RecordingMode = 'toggle' | 'hands_free' | 'hold_to_record';
  *
  * Mirrors the Rust `TypingTool` enum; serialised snake_case over IPC.
  */
-export type TypingTool =
-  | 'auto'
-  | 'wtype'
-  | 'kwtype'
-  | 'dotool'
-  | 'ydotool'
-  | 'xdotool'
-  | 'enigo';
+export type TypingTool = 'auto' | 'wtype' | 'kwtype' | 'dotool' | 'ydotool' | 'xdotool' | 'enigo';
 
 /**
  * Key combination sent after a successful insertion.
@@ -168,14 +161,7 @@ export interface GeneralConfig {
 }
 
 /** Recorder window position options */
-export type RecorderPosition =
-  | 'cursor'
-  | 'tray-icon'
-  | 'top-left'
-  | 'top-right'
-  | 'bottom-left'
-  | 'bottom-right'
-  | 'centre';
+export type RecorderPosition = 'cursor' | 'tray-icon' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'centre';
 
 /** Recorder window configuration */
 export interface RecorderConfig {
@@ -560,9 +546,7 @@ function createConfigStore() {
    */
   async function save(): Promise<boolean> {
     if (!isInitialised) {
-      console.warn(
-        '[ConfigStore] save() called before config was loaded — ignoring to prevent overwriting persisted settings with defaults'
-      );
+      console.warn('[ConfigStore] save() called before config was loaded — ignoring to prevent overwriting persisted settings with defaults');
       return false;
     }
 
@@ -619,10 +603,7 @@ function createConfigStore() {
   /**
    * Update a specific transcription config field
    */
-  function updateTranscription<K extends keyof TranscriptionConfig>(
-    key: K,
-    value: TranscriptionConfig[K]
-  ): void {
+  function updateTranscription<K extends keyof TranscriptionConfig>(key: K, value: TranscriptionConfig[K]): void {
     config.transcription[key] = value;
   }
 
@@ -636,10 +617,7 @@ function createConfigStore() {
   /**
    * Update a specific enhancement config field
    */
-  function updateEnhancement<K extends keyof EnhancementConfig>(
-    key: K,
-    value: EnhancementConfig[K]
-  ): void {
+  function updateEnhancement<K extends keyof EnhancementConfig>(key: K, value: EnhancementConfig[K]): void {
     config.enhancement[key] = value;
   }
 
@@ -660,10 +638,7 @@ function createConfigStore() {
   /**
    * Update a specific integrations config field
    */
-  function updateIntegrations<K extends keyof IntegrationsConfig>(
-    key: K,
-    value: IntegrationsConfig[K]
-  ): void {
+  function updateIntegrations<K extends keyof IntegrationsConfig>(key: K, value: IntegrationsConfig[K]): void {
     config.integrations[key] = value;
   }
 
@@ -693,12 +668,9 @@ function createConfigStore() {
    * Updating the local copy afterwards is what stops the next generic save()
    * from writing the stale section back over it.
    */
-  async function setTelemetry(
-    endpoint: string,
-    headersHelper: string
-  ): Promise<TelemetryStatus | null> {
+  async function setTelemetry(endpoint: string, headersHelper: string): Promise<TelemetryStatus | null> {
     try {
-      const status = await invoke<TelemetryStatus>('telemetry_set', {
+      const status = await invoke<TelemetryStatus>('plugin:telemetry|telemetry_set', {
         endpoint,
         headersHelper,
       });

@@ -2,9 +2,7 @@
 //!
 //! Desktop application for macOS and Linux.
 
-use std::sync::Mutex;
-
-use tauri::{Manager, RunEvent};
+use tauri::Manager;
 
 use crate::error::Error;
 
@@ -31,7 +29,6 @@ pub mod shortcuts;
 pub mod sound;
 pub mod storage;
 pub mod telemetry_metrics;
-pub mod telemetry_settings;
 pub mod text_insert;
 #[cfg(target_os = "macos")]
 mod traffic_lights;
@@ -81,17 +78,19 @@ fn register_single_shortcut(
 /// Unregisters everything first, then registers from the current config.
 /// Called by the frontend after clearing or resetting a shortcut.
 #[tauri::command]
-#[tracing::instrument(target = TELEMETRY_TARGET, skip_all, err)]
-fn reregister_shortcuts(app: tauri::AppHandle) -> Result<(), Error> {
-    // Unregister everything
-    shortcuts::unregister_all_shortcuts(app.clone())?;
+async fn reregister_shortcuts(app: tauri::AppHandle) -> Result<(), Error> {
+    tauri_plugin_telemetry::traced("reregister_shortcuts", async move {
+        // Unregister everything
+        shortcuts::unregister_all_shortcuts(app.clone())?;
 
-    // Re-register from config
-    let cfg = config::get_config().map_err(|e| format!("Failed to load config: {}", e))?;
-    register_shortcuts_from_config(&app, &cfg);
+        // Re-register from config
+        let cfg = config::get_config().map_err(|e| format!("Failed to load config: {}", e))?;
+        register_shortcuts_from_config(&app, &cfg);
 
-    tracing::info!("Re-registered all shortcuts from config");
-    Ok(())
+        tracing::info!("Re-registered all shortcuts from config");
+        Ok(())
+    })
+    .await
 }
 
 /// Register shortcuts from saved configuration
@@ -181,6 +180,37 @@ pub(crate) fn ensure_crypto_provider() {
 /// leak by mistake.
 pub(crate) const TELEMETRY_TARGET: &str = "telemetry";
 
+/// Bridges the plugin's live exporter to Thoth's own config file — the plugin
+/// owns the LIVE pipeline; persistence stays each app's own.
+struct ConfigTelemetryStore;
+
+impl tauri_plugin_telemetry::TelemetryStore for ConfigTelemetryStore {
+    fn load(&self) -> Option<telemetry::Exporter> {
+        let cfg = config::get_config().ok()?.telemetry;
+        let endpoint = cfg.endpoint.trim();
+        if endpoint.is_empty() {
+            return None;
+        }
+        let helper = cfg.headers_helper.trim();
+        Some(telemetry::Exporter {
+            endpoint: endpoint.to_owned(),
+            headers_helper: (!helper.is_empty()).then(|| helper.to_owned()),
+        })
+    }
+
+    fn save(&self, exporter: Option<telemetry::Exporter>) -> Result<(), String> {
+        let (endpoint, headers_helper) = match exporter {
+            Some(e) => (e.endpoint, e.headers_helper.unwrap_or_default()),
+            None => (String::new(), String::new()),
+        };
+        config::set_telemetry_config(config::TelemetryConfig {
+            endpoint,
+            headers_helper,
+        })
+        .map_err(|e| e.to_string())
+    }
+}
+
 /// The process's one outbound HTTP client: `reqwest` under the middleware that
 /// opens a client span and carries W3C `traceparent`, so a call to Ollama or an
 /// OpenAI-compatible endpoint joins the trace it was made from.
@@ -213,7 +243,13 @@ pub fn run() {
             Some(vec!["--autostarted"]),
         ))
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_process::init());
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_telemetry::init(
+            "thoth",
+            env!("CARGO_PKG_VERSION"),
+            &[TELEMETRY_TARGET],
+            ConfigTelemetryStore,
+        ));
 
     // Updater plugin only on desktop platforms (not mobile)
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -223,27 +259,18 @@ pub fn run() {
 
     builder
         .setup(|app| {
-            // The whole subscriber, installed before anything logs. On the main
-            // thread, never inside a Tokio task: `init` builds the exporters'
-            // blocking HTTP client. Where the fleet has set no
-            // OTEL_EXPORTER_OTLP_ENDPOINT — a stranger's Mac — this is stderr and
-            // nothing else.
-            //
-            // Managing the Guard is only half of it: Tauri drops NO managed state
-            // at exit, so the RunEvent::Exit arm below is what actually drops it
-            // and flushes the batch processors. Mutex<Option<_>> because
-            // Manager::unmanage is deprecated and documented as unsafe.
-            app.manage(Mutex::new(Some(telemetry::init(
-                "thoth",
-                env!("CARGO_PKG_VERSION"),
-                &[TELEMETRY_TARGET],
-            ))));
-
-            // On a machine the fleet does not configure there is no
+            // `tauri_plugin_telemetry::init` above already ran `telemetry::init`
+            // in its own setup hook, managed the `Guard`, and spawned the process
+            // sampler. On a machine the fleet does not configure there is no
             // environment to read — a Dock-launched app inherits none — so the
             // saved endpoint from Settings is what points the exporter. Where
-            // the environment set one it wins and this is a no-op.
-            telemetry_settings::apply_saved(app.handle());
+            // the environment set one it wins and this is a no-op. Read here,
+            // after config is available, and not before: the plugin's own setup
+            // hook runs before this one.
+            tauri_plugin_telemetry::apply_saved(
+                app.handle(),
+                tauri_plugin_telemetry::TelemetryStore::load(&ConfigTelemetryStore),
+            );
 
             tracing::info!("Thoth starting");
 
@@ -258,9 +285,10 @@ pub fn run() {
                 "app_start"
             );
 
-            // Own-process RSS/CPU on a slow clock, so a memory or CPU trend is
-            // visible without the operator having to reproduce it live.
-            telemetry_metrics::spawn_periodic_sampler();
+            // Own-process RSS/CPU on a slow clock is the plugin's own
+            // `sample_process_metrics`, spawned in its setup hook above; this app
+            // only adds the curated `model_loaded`/`transcription_complete`
+            // samples (`telemetry_metrics::sample`).
 
             // Store the app handle for the few deep paths that emit user-facing
             // events without a handle of their own (e.g. audio device fallback).
@@ -690,25 +718,11 @@ pub fn run() {
             control_api::get_api_token,
             control_api::rotate_api_token,
             control_api::set_api_port,
-            // Telemetry
-            telemetry_settings::telemetry_get,
-            telemetry_settings::telemetry_set,
-            telemetry_settings::telemetry_probe,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app, event| {
-            if let RunEvent::Exit = event {
-                // The only thing that flushes whatever the batch processors are
-                // still holding. On the main thread, which is where the Guard
-                // must drop: after its bounded flush it joins the exporters'
-                // blocking client's own runtime thread.
-                let guard = app
-                    .state::<Mutex<Option<telemetry::Guard>>>()
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .take();
-                drop(guard);
-            }
+        .run(|_app, _event| {
+            // `tauri_plugin_telemetry`'s own `on_event` hook takes and drops the
+            // `Guard` on `RunEvent::Exit`; nothing left for this app to do here.
         });
 }
