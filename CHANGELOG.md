@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026.9.6] - 2026-09-28
+
+### Added
+
+- **Thoth's telemetry now covers what actually goes wrong, not just the lifecycle events around it.** If you've pointed Thoth at your own collector, every failure a dictation can actually have — a transcription that errored, a model that wouldn't load, a microphone that dropped out, a paste or type that didn't land, an AI enhancement that was skipped or discarded, a config that failed to load or save, or the local Control API/MCP server refusing to start — now reports as its own event, carrying the real error message and its full cause chain rather than a bare category label. The update check reports too, since it's the one network call the webview itself makes.
+- **Every one of Thoth's internal commands now shows up in your trace collector by name, with how long it took and whether it succeeded** — including every Settings pane, so a slow pane switch is something you can go look at rather than guess about. No argument ever leaves with it: what a command was called with stays off the wire by construction.
+- **Thoth now samples its own memory and CPU use** — every minute, right after a transcription model finishes loading, and right after each dictation — so "is this thing a memory hog" is a question your own collector can answer from real use.
+- Enhancement events now name which prompt ran (never its text), transcription events carry a word count alongside the existing character count, recording-started now names the input device, and startup now records the behaviour-shaping settings (recording mode, auto-paste, enhancement backend, filters) it loaded.
+
 ## [2026.9.5] - 2026-09-28
 
 ### Added
