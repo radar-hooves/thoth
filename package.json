@@ -56,7 +56,7 @@
     "formsnap": "^2.0.1",
     "impeccable": "3.5.0",
     "jsdom": "^30.0.0",
-    "postcss-html": "^1.8.1",
+    "postcss-html": "^2.0.0",
     "prettier": "^3.8.3",
     "prettier-plugin-svelte": "^4.1.0",
     "shadcn-svelte": "^1.3.0",
