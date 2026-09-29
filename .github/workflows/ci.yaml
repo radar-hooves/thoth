@@ -10,12 +10,6 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
-  # Manual trigger so the Linux build can be run from the Actions tab on a
-  # feature branch (e.g. fix/linux-wayland-parity) without opening a PR — the
-  # only way to compile-check the Linux-only code before it reaches main.
   workflow_dispatch:
 
 permissions:
