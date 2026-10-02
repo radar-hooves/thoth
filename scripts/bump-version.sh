@@ -106,7 +106,7 @@ fi
 # Matches a *declaration* — `version = "X"` or `"version": "X"` — rather than a
 # bare occurrence of the version string. Prose legitimately discusses old
 # versions (CHANGELOG entries, the comment in flake.nix explaining this very
-# bug, the evidence list in .claude/CLAUDE.md); a bare-string grep flags all of
+# bug); a bare-string grep flags all of
 # those and trains everyone to ignore it. A declaration is the thing that
 # actually rots.
 #
