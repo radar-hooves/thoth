@@ -255,7 +255,7 @@ mod tests {
     /// catches a release cut without renaming the CHANGELOG's `[Unreleased]`
     /// heading to the new version first: `bump-version.sh` deliberately does
     /// not touch CHANGELOG.md (release notes are hand-written prose, not a
-    /// mechanical rewrite), so that rename is a manual step `git-release.md`
+    /// mechanical rewrite), so that rename is a manual step `/master:git-release`
     /// takes before running the script — done in the same commit as the
     /// version bump, since both need the same date and version.
     #[test]

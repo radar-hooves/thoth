@@ -27,9 +27,7 @@ Version bumps: `scripts/bump-version.sh`, the authority on which files carry a v
 
 Thoth's divergences from `canonical-app-shape.md` live in `.canonical-exceptions`.
 
-### The app shell is deliberately not adopted
-
-`@poodle64/ui` ships `AppShell`, and Thoth's settings window does not use it. This is an argued deviation, not drift: the settings window is **frameless**, and its 54px title bar is the window's chrome — `app-region: drag`, the live recording/processing status, and, on Linux with decorations disabled, the close/minimise controls. `AppShell`'s `<header>` has no drag-region concept, so hosting one means the compatibility shim `canonical-app-shape.md` forbids. The deviation covers the **shell only**.
+- The settings window takes the factory's tokens and primitives, not the web app shell (`canonical-app-shape.md` §Applicability); its frameless 54px title bar is the window's chrome.
 
 ## Pitfalls
 

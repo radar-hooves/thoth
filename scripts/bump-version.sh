@@ -4,7 +4,7 @@ set -euo pipefail
 # Bump the release version across every file that carries it.
 #
 # This script is the single authority on which files carry a version (see the
-# "Single source of truth" rule in .claude/CLAUDE.md). .claude/commands/git-release.md
+# "Single source of truth" rule in .claude/CLAUDE.md). /master:git-release
 # defers to it rather than restating the list. Adding a version to a new file
 # means adding it to VERSION_FILES here in the same commit — the stray-declaration
 # guard below fails the release otherwise.
