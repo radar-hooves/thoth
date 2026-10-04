@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026.10.0] - 2026-10-05
+
+### Changed
+
+- **Thoth's telemetry now runs on the household's shared telemetry plugin, and every command still reports its timing.** If you send telemetry to your own collector, the traces, the failure events and the memory/CPU samples from the last release carry on as before, now including the 85 commands that had briefly dropped out of the trace. The telemetry fields in Settings → Integrations work the same way.
+- **Thoth is built against the factory's latest shared kit** (app-factory v2026.9.34), so it picks up that kit's fixes.
+
+### Fixed
+
+- **The Linux build no longer needs a private repository to compile.** The telemetry dependency now comes from the public source, so building Thoth from a fresh checkout works without special access.
+
 ## [2026.9.6] - 2026-09-28
 
 ### Added
