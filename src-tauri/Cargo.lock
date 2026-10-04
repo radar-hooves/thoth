@@ -802,15 +802,15 @@ dependencies = [
 
 [[package]]
 name = "cocoa"
-version = "0.26.1"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad36507aeb7e16159dfe68db81ccc27571c3ccd4b76fb2fb72fc59e7a4b1b64c"
+checksum = "1e0d7076fd2bf3e3864683161b46e8b72277cdd0d304d6291faceea6e7db9a14"
 dependencies = [
  "bitflags 2.12.1",
  "block",
  "cocoa-foundation",
  "core-foundation 0.10.1",
- "core-graphics 0.24.0",
+ "core-graphics",
  "foreign-types",
  "libc",
  "objc",
@@ -904,19 +904,6 @@ name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
-
-[[package]]
-name = "core-graphics"
-version = "0.24.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa95a34622365fa5bbf40b20b75dba8dfa8c94c734aea8ac9a5ca38af14316f1"
-dependencies = [
- "bitflags 2.12.1",
- "core-foundation 0.10.1",
- "core-graphics-types",
- "foreign-types",
- "libc",
-]
 
 [[package]]
 name = "core-graphics"
@@ -1498,7 +1485,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71c6c56e50f7acae2906a0dcbb34529ca647e40421119ad5d12e7f8ba6e50010"
 dependencies = [
  "core-foundation 0.10.1",
- "core-graphics 0.25.0",
+ "core-graphics",
  "foreign-types-shared",
  "libc",
  "log",
@@ -3499,6 +3486,16 @@ dependencies = [
  "block2",
  "libc",
  "objc2",
+ "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-io-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33fafba39597d6dc1fb709123dfa8289d39406734be322956a69f0931c73bb15"
+dependencies = [
+ "libc",
  "objc2-core-foundation",
 ]
 
@@ -5510,6 +5507,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sysinfo"
+version = "0.39.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2071df9448915b71c4fe6d25deaf1c22f12bd234f01540b77312bb8e41361e6"
+dependencies = [
+ "libc",
+ "memchr",
+ "ntapi",
+ "objc2-core-foundation",
+ "objc2-io-kit",
+ "windows 0.62.2",
+]
+
+[[package]]
 name = "system-configuration"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5552,7 +5563,7 @@ dependencies = [
  "bitflags 2.12.1",
  "block2",
  "core-foundation 0.10.1",
- "core-graphics 0.25.0",
+ "core-graphics",
  "crossbeam-channel",
  "dbus",
  "dispatch2",
@@ -5855,7 +5866,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-telemetry"
 version = "0.1.0"
-source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.9.34#e99bd0a1c08cc2e894415b5319a15877f090eb82"
+source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.10.1#bbc9a34952bb6ee1271649b1b65513159380619e"
 dependencies = [
  "serde",
  "serde_json",
@@ -6002,7 +6013,7 @@ dependencies = [
 [[package]]
 name = "telemetry"
 version = "0.6.0"
-source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.9.34#e99bd0a1c08cc2e894415b5319a15877f090eb82"
+source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.10.1#bbc9a34952bb6ee1271649b1b65513159380619e"
 dependencies = [
  "async-trait",
  "http",
@@ -6020,7 +6031,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
- "sysinfo",
+ "sysinfo 0.33.1",
  "tokio",
  "tracing",
  "tracing-opentelemetry",
@@ -6104,7 +6115,7 @@ dependencies = [
  "chrono",
  "cocoa",
  "core-foundation 0.10.1",
- "core-graphics 0.25.0",
+ "core-graphics",
  "cpal",
  "crossbeam-channel",
  "csv",
@@ -6142,7 +6153,7 @@ dependencies = [
  "strsim",
  "subtle",
  "symphonia",
- "sysinfo",
+ "sysinfo 0.39.6",
  "tar",
  "tauri",
  "tauri-build",

@@ -83,14 +83,14 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "str
 # into the factory's kits/rust (telemetry-rs#55, then full-stack-app-template#55
 # onto the public app-factory repo, master-project#233); the Tauri wiring is
 # the plugin below.
-telemetry = { git = "https://github.com/radar-hooves/app-factory", tag = "v2026.9.34" }
+telemetry = { git = "https://github.com/radar-hooves/app-factory", tag = "v2026.10.1" }
 # The one `.plugin(...)` call that switches the telemetry contract on: init off
 # the async runtime, the Guard dropped on RunEvent::Exit, allow-listed command
 # spans with no argument capture (traced for an async command, traced_sync for
 # one that must stay sync and can fail, traced_sync_value — v2026.9.34 — for
 # one that must stay sync and cannot), the Settings-pane commands, the process
 # sampler.
-tauri-plugin-telemetry = { git = "https://github.com/radar-hooves/app-factory", tag = "v2026.9.34" }
+tauri-plugin-telemetry = { git = "https://github.com/radar-hooves/app-factory", tag = "v2026.10.1" }
 # `json` for the request builders; the crate forwards it to reqwest.
 reqwest-middleware = { version = "0.5", features = ["json"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "tls12", "std"] }
@@ -133,7 +133,7 @@ chrono = { version = "0.4", features = ["serde"] }
 parking_lot = "0.12"
 dirs = "6.0"
 # Process RSS/CPU sampling for telemetry (own process only, no whole-system scan).
-sysinfo = { version = "0.33", default-features = false, features = ["system"] }
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 arboard = "3.4"
 enigo = "0.6"
 open = "5"
@@ -152,7 +152,7 @@ tauri-plugin-updater = "2.10"
 [target.'cfg(target_os = "macos")'.dependencies]
 # whisper-rs with Metal GPU acceleration on macOS
 whisper-rs = { version = "0.16", features = ["metal"] }
-cocoa = "0.26"
+cocoa = "0.27"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSGeometry", "NSNotification", "NSOperation", "NSString", "NSObject", "NSURL"] }
 objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSView", "NSButton", "NSResponder", "NSControl", "NSWorkspace"] }
