@@ -44,7 +44,7 @@ concurrency:
 jobs:
   eval:
     name: Flake eval
-    runs-on: ubuntu-22.04 # by-exception (2026-09-08): install-nix-action cannot install Nix on the NixOS runner
+    runs-on: ubuntu-26.04 # by-exception (2026-09-08): install-nix-action cannot install Nix on the NixOS runner
     timeout-minutes: 20
 
     # Needed to push the regenerated pnpmDeps hash back to a PR branch.
@@ -194,7 +194,7 @@ jobs:
     name: Flake build
     needs: eval
     if: needs.eval.outputs.packaging-changed == 'true'
-    runs-on: ubuntu-22.04 # by-exception (2026-09-08): install-nix-action cannot install Nix on the NixOS runner
+    runs-on: ubuntu-26.04 # by-exception (2026-09-08): install-nix-action cannot install Nix on the NixOS runner
 
     # Generous, because a cold build compiles the Rust tree and whisper.cpp
     # from scratch — but still a ceiling, so a stalled fetch cannot sit for
