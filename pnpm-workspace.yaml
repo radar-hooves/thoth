@@ -6,4 +6,4 @@ overrides:
   # and stylelint -> table. Neither dependant pins it, so the floor lifts both.
   # Capped below 4 because ajv@8 declares ^3.0.1: an unbounded floor resolved to
   # 4.1.3, which is patched but outside the range its dependant asked for.
-  fast-uri@<3.1.5: '>=3.1.5 <4'
+  fast-uri@<3.1.5: '>=3.1.5 <5'
