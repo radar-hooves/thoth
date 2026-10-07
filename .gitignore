@@ -36,25 +36,6 @@ desktop.ini
 .claude/agents/
 .claude/scheduled_tasks.lock
 
-# Symlinks into the household Claude harness, which lives in the sibling
-# nephalemsec/master-project checkout (~/Desktop/Github/master-project).
-#
-# DELIBERATE DEVIATION from master rule git/22-ignore-files.md ("Master Symlinks
-# (Always Tracked)"), which mandates tracking these two and states the deviation
-# is not warranted by repo visibility. Overridden for thoth by maintainer
-# decision: this repo is public, and a tracked symlink that resolves only on a
-# machine with master-project as a sibling gives every other clone a dangling
-# link. Revisit if that rule is amended.
-.claude/rules/master
-docs/master
-
-# Legacy harness symlinks, superseded by the mimir plugin (see the master
-# setup-symlinks command). Ignored so they cannot be re-committed if a tool
-# recreates them.
-.claude/commands/master
-.claude/hooks/master
-.claude/skills
-
 # ============================================================================
 # Environment & Secrets
 # ============================================================================
