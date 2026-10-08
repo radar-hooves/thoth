@@ -128,6 +128,17 @@ static VOICE_COMMAND_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
         .unwrap()
 });
 
+/// The token Parakeet emits for a character its `SentencePiece` vocabulary
+/// lacks: `&` among them, so it says `<unk>` where an ampersand belongs.
+const UNK_TOKEN: &str = "<unk>";
+
+/// Two single capital letters joined by an ampersand, or by the word the model
+/// heard in its place: "S & P", "S and P", "S n P", "Pn L". Group 2 is the
+/// spoken "and" / "n" (absent for a written `&`), group 3 the glued "n".
+static LETTER_PAIR_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\b([A-Z])(?:[ \t]*&[ \t]*|[ \t]+(and|n)[ \t]+|(n)[ \t]+)([A-Z])\b").unwrap()
+});
+
 /// Output filter for transcription text
 #[derive(Debug, Default)]
 pub struct OutputFilter {
@@ -232,6 +243,60 @@ pub fn cleanup_punctuation(text: &str) -> String {
     MISSING_SPACE_AFTER_PUNCT_PATTERN
         .replace_all(&result, "$1 $2")
         .to_string()
+}
+
+/// Write every letter-and-letter term one way, and never leave `<unk>` behind.
+///
+/// A `<unk>` between two letters becomes `&`, keeping its spacing ("S<unk>P" ->
+/// "S&P"); any other `<unk>` is dropped, since what it stood for is unknowable.
+/// Then two single capitals joined by `&`, "and" or "n" become one term: "S & P",
+/// "S and P" and "Pn L" read "S&P" and "P&L".
+///
+/// A spoken "and" stays prose where the operator's own dictations show it is
+/// not a term: beside the pronoun ("D and I know"), between neighbouring
+/// letters, which enumerate ("both A and B", "X and Y"), and in "An", "In",
+/// "On" and "Un", which are words. A bare "S P" keeps no trace of the ampersand
+/// and reads exactly like spelling ("C I C D"), so it is a dictionary entry's job.
+pub fn repair_ampersands(text: &str) -> String {
+    let mut unk_free = String::with_capacity(text.len());
+    let mut last = 0;
+    for (start, _) in text.match_indices(UNK_TOKEN) {
+        let end = start + UNK_TOKEN.len();
+        let before = &text[last..start];
+        let joins_words = text[..start]
+            .trim_end_matches([' ', '\t'])
+            .ends_with(char::is_alphabetic)
+            && text[end..]
+                .trim_start_matches([' ', '\t'])
+                .starts_with(char::is_alphabetic);
+        if joins_words {
+            unk_free.push_str(before);
+            unk_free.push('&');
+        } else {
+            unk_free.push_str(before.trim_end_matches([' ', '\t']));
+            // Dropping a glued `<unk>` must not fuse its neighbours into one word.
+            if unk_free.ends_with(char::is_alphanumeric)
+                && text[end..].starts_with(char::is_alphanumeric)
+            {
+                unk_free.push(' ');
+            }
+        }
+        last = end;
+    }
+    unk_free.push_str(&text[last..]);
+
+    LETTER_PAIR_PATTERN
+        .replace_all(&unk_free, |caps: &regex::Captures| {
+            let (left, right) = (caps[1].as_bytes()[0], caps[4].as_bytes()[0]);
+            let spoken = caps.get(2).is_some() || caps.get(3).is_some();
+            let is_word = caps.get(3).is_some() && matches!(left, b'A' | b'I' | b'O' | b'U');
+            if spoken && (left == b'I' || right == b'I' || left.abs_diff(right) == 1 || is_word) {
+                caps[0].to_string()
+            } else {
+                format!("{}&{}", &caps[1], &caps[4])
+            }
+        })
+        .into_owned()
 }
 
 /// Convert standalone spoken formatting commands into line breaks.
@@ -970,6 +1035,92 @@ mod tests {
     fn test_collapse_repeated_commas() {
         assert_eq!(cleanup_punctuation("was, , thinking"), "was, thinking");
         assert_eq!(cleanup_punctuation("a,,b"), "a, b");
+    }
+
+    // Ampersand repair tests. The inputs are Parakeet's own output, verbatim
+    // from the operator's history: his test of 08/10/2026 and every earlier
+    // dictation that carried a `<unk>`.
+
+    #[test]
+    fn spoken_ampersand_terms_come_out_one_way() {
+        for (heard, written) in [
+            ("P and L.", "P&L."),
+            ("Pn L", "P&L"),
+            ("P<unk>L.", "P&L."),
+            ("S and P", "S&P"),
+            ("S and P futures.", "S&P futures."),
+            (
+                "it could be S<unk>P futures, it could be",
+                "it could be S&P futures, it could be",
+            ),
+            ("An M<unk>S digital twin?", "An M&S digital twin?"),
+            ("a 100% V<unk>V or smoke test", "a 100% V&V or smoke test"),
+            ("I'll V and V it.", "I'll V&V it."),
+            ("For R and D stuff", "For R&D stuff"),
+            ("all the T and E's", "all the T&E's"),
+            ("the Q<unk>A session", "the Q&A session"),
+            ("an M and A deal", "an M&A deal"),
+            ("S & P", "S&P"),
+            ("S n P", "S&P"),
+        ] {
+            assert_eq!(repair_ampersands(heard), written, "from {heard:?}");
+        }
+    }
+
+    #[test]
+    fn a_letter_pair_with_no_trace_of_the_ampersand_is_left_alone() {
+        // "S P" is how Parakeet wrote S&P three times in five, and how it writes
+        // spelled-out letters every time; only the dictionary can tell them apart.
+        for text in [
+            "S P 500.",
+            "S P.",
+            "S P Futures.",
+            "C I C D",
+            "S U P A T O O L",
+        ] {
+            assert_eq!(repair_ampersands(text), text);
+        }
+    }
+
+    #[test]
+    fn a_spoken_and_that_is_not_a_term_is_left_alone() {
+        for text in [
+            "is fact D and I know that",
+            "a mix of both A and B.",
+            "somewhere between C and D.",
+            "through the X and Y coordinates.",
+            "both B and A.",
+            "I and I went into the settings",
+            "On I go.",
+            "An L L M can reason",
+            "In A minor",
+        ] {
+            assert_eq!(repair_ampersands(text), text);
+        }
+    }
+
+    #[test]
+    fn unk_never_survives() {
+        assert_eq!(repair_ampersands("AT<unk>T"), "AT&T");
+        assert_eq!(repair_ampersands("Tom <unk> Jerry"), "Tom & Jerry");
+        // C#, most likely, but no symbol can be read back from a lone `<unk>`.
+        assert_eq!(
+            repair_ampersands("like Swift, or C or C<unk>. And on"),
+            "like Swift, or C or C. And on"
+        );
+        assert_eq!(repair_ampersands("ends here <unk>"), "ends here");
+        assert_eq!(repair_ampersands("<unk>"), "");
+        // Between digits it is as likely `+` or `=`, so no symbol is guessed,
+        // and the two numbers stay two.
+        assert_eq!(repair_ampersands("2<unk>2"), "2 2");
+        assert_eq!(repair_ampersands("C++ is C<unk><unk>"), "C++ is C");
+    }
+
+    #[test]
+    fn a_written_ampersand_is_untouched() {
+        for text in ["S&P 500", "P&L", "AT&T", "Marks & Spencer"] {
+            assert_eq!(repair_ampersands(text), text);
+        }
     }
 
     // Sentence case tests

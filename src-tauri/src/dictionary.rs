@@ -486,6 +486,29 @@ pub fn get_vocabulary_for_context() -> Vec<String> {
 mod tests {
     use super::*;
 
+    /// The filter joins every S&P that kept a trace of its ampersand; a bare
+    /// "S P" kept none, and one case-sensitive entry finishes the job. The
+    /// inputs are Parakeet's output for "S&P" in the operator's test of
+    /// 08/10/2026, verbatim.
+    #[test]
+    fn every_heard_form_of_s_and_p_comes_out_one_way() {
+        for (heard, written) in [
+            ("S P 500.", "S&P 500."),
+            ("S P.", "S&P."),
+            ("S and P", "S&P"),
+            ("S P Futures.", "S&P Futures."),
+            ("S and P futures.", "S&P futures."),
+            ("could be S<unk>P futures", "could be S&P futures"),
+        ] {
+            let filtered = crate::transcription::filter::repair_ampersands(heard);
+            assert_eq!(
+                replace_whole_word(&filtered, "S P", "S&P", true),
+                written,
+                "from {heard:?}"
+            );
+        }
+    }
+
     // =========================================================================
     // Whole-word replacement tests (#57)
     // =========================================================================

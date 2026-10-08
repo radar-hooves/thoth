@@ -706,6 +706,8 @@ pub(crate) fn apply_text_post_processing(
     text: String,
     config: &PipelineConfig,
 ) -> Result<String, String> {
+    // Not a stage: `<unk>` is a model artefact, so no setting may let it through.
+    let text = transcription::filter::repair_ampersands(&text);
     if !config.apply_filtering && !config.apply_dictionary {
         return Ok(text);
     }
@@ -1721,6 +1723,14 @@ mod tests {
             .expect("post-processing must not fail");
 
         assert_eq!(out, input, "no stage was enabled, so nothing may change");
+    }
+
+    #[test]
+    fn post_processing_repairs_ampersands_with_every_stage_disabled() {
+        let out = apply_text_post_processing("P<unk>L and S and P".to_string(), &bare_config())
+            .expect("post-processing must not fail");
+
+        assert_eq!(out, "P&L and S&P");
     }
 
     #[test]
