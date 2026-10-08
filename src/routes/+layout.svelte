@@ -40,4 +40,4 @@
   {@render children()}
 {/if}
 
-<Toaster position="bottom-center" richColors />
+<Toaster />

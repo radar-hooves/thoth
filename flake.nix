@@ -123,6 +123,7 @@
 
           # Build tools
           cmake
+          jq
         ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
           glib
           libsecret
@@ -308,7 +309,7 @@
           pnpmDeps = pkgs.fetchPnpmDeps {
             inherit (finalAttrs) pname version src;
             fetcherVersion = 3;
-            hash = "sha256-BmfIZTXKC4/DB1BfK5dsD7kF/JCZSb9Yc3coQxTB9J0=";
+            hash = "sha256-0YlLmM0AT5aL8KyLy5ubF3P81ELnIhVD7tQV57nz2H4=";
           };
 
           nativeBuildInputs = with pkgs; [

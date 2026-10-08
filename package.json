@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@poodle64/design-tokens": "^2026.8.0",
-    "@poodle64/ui": "^2026.8.15",
+    "@poodle64/ui": "^2026.10.8",
     "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-autostart": "2.5.1",
     "@tauri-apps/plugin-clipboard-manager": "2.3.2",

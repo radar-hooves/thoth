@@ -132,6 +132,8 @@ export interface TelemetryStatus {
   endpoint: string;
   /** The helper command behind it */
   headersHelper: string;
+  /** Log and span providers are installed; not proof the collector is reachable */
+  started: boolean;
   /** True when the environment set it, so the card shows it read-only */
   fromEnv: boolean;
   /** The saved endpoint, which the environment overrides where it is set */

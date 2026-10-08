@@ -2,8 +2,10 @@
   import { onMount } from 'svelte';
   import { getVersion } from '@tauri-apps/api/app';
   import { invoke } from '@tauri-apps/api/core';
+  import { writeText } from '@tauri-apps/plugin-clipboard-manager';
   import * as Dialog from '@poodle64/ui/dialog';
   import { Button } from '@poodle64/ui/button';
+  import { About } from '@poodle64/ui/about';
 
   interface Props {
     open: boolean;
@@ -22,8 +24,26 @@
     }
   });
 
-  function openExternal(url: string) {
-    invoke('open_url', { url }).catch((err) => console.error('Failed to open URL:', err));
+  const links = [
+    { label: 'GitHub', href: 'https://github.com/radar-hooves/thoth' },
+    { label: 'MIT Licence', href: 'https://github.com/radar-hooves/thoth/blob/main/LICENCE' },
+    { label: 'poodle64', href: 'https://github.com/poodle64' },
+    { label: 'nephalemsec', href: 'https://github.com/nephalemsec' }
+  ];
+
+  const diagnostics = {
+    Platform: navigator.platform,
+    'Built with': 'Tauri · Svelte · whisper.cpp · Sherpa-ONNX · Ollama'
+  };
+
+  // The webview does not open target=_blank itself; hand http(s) links to the OS.
+  function openExternal(event: MouseEvent) {
+    const link = (event.target as Element).closest('a[href^="http"]');
+    if (!link) return;
+    event.preventDefault();
+    invoke('open_url', { url: link.getAttribute('href') }).catch((err) =>
+      console.error('Failed to open URL:', err)
+    );
   }
 </script>
 
@@ -33,64 +53,22 @@
     if (!v) onclose();
   }}
 >
-  <Dialog.Content class="max-w-sm text-center" showCloseButton={false}>
-    <Dialog.Header class="items-center">
-      <span class="text-7xl leading-none mb-2">𓅝</span>
-      <Dialog.Title class="text-xl font-bold tracking-wide">Thoth</Dialog.Title>
-      <Dialog.Description class="italic">Scribe to the gods. Typist to you.</Dialog.Description>
-      {#if version}
-        <p class="text-xs text-muted-foreground tabular-nums">Version {version}</p>
-      {/if}
-    </Dialog.Header>
-
-    <div class="flex flex-col gap-1 text-sm text-muted-foreground">
-      <p>
-        Created by
-        <Button
-          variant="link"
-          class="h-auto p-0 text-sm"
-          onclick={() => openExternal('https://github.com/poodle64')}
-        >
-          poodle64
-        </Button>
-      </p>
-      <p>
-        Contributions from
-        <Button
-          variant="link"
-          class="h-auto p-0 text-sm"
-          onclick={() => openExternal('https://github.com/nephalemsec')}
-        >
-          nephalemsec
-        </Button>
-      </p>
-    </div>
-
-    <div class="flex items-center justify-center gap-2 text-xs">
-      <Button
-        variant="link"
-        class="h-auto p-0 text-xs"
-        onclick={() => openExternal('https://github.com/radar-hooves/thoth')}
+  <Dialog.Content class="max-w-md" showCloseButton={false}>
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+    <div onclick={openExternal}>
+      <About
+        name="Thoth"
+        {version}
+        description="Scribe to the gods. Typist to you."
+        {links}
+        {diagnostics}
+        writeClipboard={writeText}
       >
-        GitHub
-      </Button>
-      <span class="text-muted-foreground">·</span>
-      <Button
-        variant="link"
-        class="h-auto p-0 text-xs"
-        onclick={() => openExternal('https://github.com/radar-hooves/thoth/blob/main/LICENCE')}
-      >
-        MIT Licence
-      </Button>
+        {#snippet brand()}
+          <span class="block text-center text-7xl leading-none">𓅝</span>
+        {/snippet}
+      </About>
     </div>
-
-    <div class="border-t pt-4 flex flex-col gap-1">
-      <p class="text-xs text-muted-foreground uppercase tracking-wide">Built with</p>
-      <p class="text-xs text-muted-foreground leading-relaxed">
-        Tauri · Svelte · whisper.cpp · Sherpa-ONNX · Ollama
-      </p>
-    </div>
-
     <Dialog.Footer class="justify-center sm:justify-center">
       <Dialog.Close>
         {#snippet child({ props })}

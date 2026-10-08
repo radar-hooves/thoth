@@ -1247,6 +1247,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "desktop-shell"
+version = "0.1.0"
+source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.10.11#ad4d180d0659a159ea7f41776ab5768333c96537"
+dependencies = [
+ "objc2",
+ "objc2-foundation",
+ "tauri",
+ "tracing",
+]
+
+[[package]]
 name = "device_query"
 version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5855,7 +5866,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-telemetry"
 version = "0.1.0"
-source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.9.34#e99bd0a1c08cc2e894415b5319a15877f090eb82"
+source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.10.11#ad4d180d0659a159ea7f41776ab5768333c96537"
 dependencies = [
  "serde",
  "serde_json",
@@ -6002,7 +6013,7 @@ dependencies = [
 [[package]]
 name = "telemetry"
 version = "0.6.0"
-source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.9.34#e99bd0a1c08cc2e894415b5319a15877f090eb82"
+source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.10.11#ad4d180d0659a159ea7f41776ab5768333c96537"
 dependencies = [
  "async-trait",
  "http",
@@ -6109,6 +6120,7 @@ dependencies = [
  "cpal",
  "crossbeam-channel",
  "csv",
+ "desktop-shell",
  "device_query",
  "dirs 6.0.0",
  "enigo",

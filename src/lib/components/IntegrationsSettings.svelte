@@ -427,6 +427,20 @@
         />
       </div>
 
+      {#if telemetry}
+        {#if telemetry.endpoint && !telemetry.started}
+          <p class="text-xs text-status-error m-0" role="alert">
+            An endpoint is configured but the exporter did not start. Nothing is being sent.
+          </p>
+        {:else if telemetry.started}
+          <p class="text-xs text-muted-foreground m-0">
+            Exporter started. Use Test to check the collector answers.
+          </p>
+        {:else}
+          <p class="text-xs text-muted-foreground m-0">Off: no endpoint is set.</p>
+        {/if}
+      {/if}
+
       {#if telemetry?.fromEnv}
         <p class="text-xs text-muted-foreground m-0">Set by this machine's environment.</p>
       {/if}

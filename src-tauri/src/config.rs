@@ -1314,9 +1314,7 @@ mod tests {
     /// `getDefaultConfig()` in config.svelte.ts needs type-complete values for
     /// the instant before `get_config` resolves, and a boolean has no inert
     /// form the way a shortcut string does — so this copy is guarded rather
-    /// than removed. `australian_spelling` sat in it as `false` while Rust
-    /// defaulted it on, the same drift shape as #127, and any filter default
-    /// that drifts again fails this test.
+    /// than removed. Any filter default that drifts fails this test.
     #[test]
     fn transcription_defaults_match_typescript() {
         let ts_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

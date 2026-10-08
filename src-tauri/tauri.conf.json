@@ -4,9 +4,11 @@
   "version": "2026.10.1",
   "identifier": "com.poodle64.thoth",
   "build": {
+    "runner": "../scripts/cargo-codesign.sh",
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1422",
     "beforeBuildCommand": "npm run build",
+    "beforeBundleCommand": "bash scripts/cargo-codesign.sh check-bundle",
     "frontendDist": "../build"
   },
   "app": {
@@ -89,6 +91,7 @@
     "longDescription": "Thoth is a privacy-first, offline-capable voice transcription application that converts speech to text with near-instantaneous processing.",
     "macOS": {
       "minimumSystemVersion": "14.0",
+      "signingIdentity": "-",
       "entitlements": "./Entitlements.plist",
       "dmg": {
         "windowSize": {
