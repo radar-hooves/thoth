@@ -6,10 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026.10.2] - 2026-10-08
+
 ### Added
 
 - **Your word lists can now be published to a file on a WebDAV server, so other tools share the same corrections.** An optional toggle in Settings → Integrations (off by default) writes the dictionary and the canonical terms to one shared JSON file whenever they change. Thoth is the single writer — publishing is one-way; the format is documented in [docs/word-list-publish.md](docs/word-list-publish.md) for second consumers.
 - **An assistant can now search your transcription history through Thoth's MCP server, not just page through the latest 100.** The `transcription` tool's `list` takes a `query`, matching what the History search box does, and a `limit`.
+
+### Changed
+
+- **The About window and notifications now come from the household's shared design layer.** About lists the version, links and a "Copy diagnostics" button; toasts appear top-right in the shared style. The Telemetry card now says whether the exporter actually started, separately from whether an endpoint is set.
+- **Mac builds are signed with one stable certificate, and each release is checked before it is published.**
 
 ### Fixed
 
