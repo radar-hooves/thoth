@@ -418,6 +418,11 @@ function getDefaultConfig(): Config {
       playSounds: true,
       soundVolume: 1,
     },
+    // Transcription defaults are a guarded copy of TranscriptionConfig::default()
+    // in src-tauri/src/config.rs: the placeholder must be type-complete and a
+    // boolean has no inert form, so unlike the shortcut defaults below this
+    // block carries the real values. transcription_defaults_match_typescript in
+    // config.rs fails the build if it drifts from the Rust defaults.
     transcription: {
       autoCopy: false,
       autoPaste: true,
@@ -425,7 +430,7 @@ function getDefaultConfig(): Config {
       appendTrailingSpace: false,
       autoSubmit: 'off',
       removeFillers: true,
-      australianSpelling: false,
+      australianSpelling: true,
       spokenNumbersToDigits: false,
       normaliseWhitespace: true,
       cleanupPunctuation: true,

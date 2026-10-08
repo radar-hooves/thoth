@@ -1289,6 +1289,63 @@ mod tests {
         );
     }
 
+    /// The TypeScript transcription placeholder must match
+    /// `TranscriptionConfig::default()`.
+    ///
+    /// `getDefaultConfig()` in config.svelte.ts needs type-complete values for
+    /// the instant before `get_config` resolves, and a boolean has no inert
+    /// form the way a shortcut string does — so this copy is guarded rather
+    /// than removed. `australian_spelling` sat in it as `false` while Rust
+    /// defaulted it on, the same drift shape as #127, and any filter default
+    /// that drifts again fails this test.
+    #[test]
+    fn transcription_defaults_match_typescript() {
+        let ts_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../src/lib/stores/config.svelte.ts");
+        let source = std::fs::read_to_string(&ts_path)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", ts_path.display()));
+
+        // Anchor on the function first: `transcription: {` also appears in
+        // parseConfig()'s mapper, which is earlier in the file.
+        let fn_start = source
+            .find("function getDefaultConfig()")
+            .expect("getDefaultConfig() not found — update this test");
+        let rest = &source[fn_start..];
+        let start = rest
+            .find("transcription: {")
+            .expect("getDefaultConfig() no longer has a transcription block — update this test");
+        let end = rest[start..]
+            .find("},")
+            .expect("unterminated transcription block")
+            + start;
+        let block = &rest[start..end];
+
+        let defaults = TranscriptionConfig::default();
+        let filter_fields = [
+            ("removeFillers", defaults.remove_fillers),
+            ("normaliseWhitespace", defaults.normalise_whitespace),
+            ("cleanupPunctuation", defaults.cleanup_punctuation),
+            ("sentenceCase", defaults.sentence_case),
+            ("australianSpelling", defaults.australian_spelling),
+            ("spokenNumbersToDigits", defaults.spoken_numbers_to_digits),
+            (
+                "voiceFormattingCommands",
+                defaults.voice_formatting_commands,
+            ),
+        ];
+        for (field, value) in filter_fields {
+            let literal = format!("{field}: {value}");
+            assert!(
+                block.contains(&literal),
+                "src/lib/stores/config.svelte.ts does not carry `{literal}` in its \
+                 transcription placeholder, but TranscriptionConfig::default() sets \
+                 {field} to {value}. The placeholder is a guarded copy of the Rust \
+                 defaults — update it to match, or the Settings UI advertises \
+                 defaults the backend does not hold."
+            );
+        }
+    }
+
     #[test]
     fn test_enhancement_config_defaults() {
         let enhancement = EnhancementConfig::default();

@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **An assistant can now search your transcription history through Thoth's MCP server, not just page through the latest 100.** The `transcription` tool's `list` takes a `query`, matching what the History search box does, and a `limit`.
 
+### Fixed
+
+- **"Reset to defaults" in Output Filtering leaves Australian spelling on.** The button now resets to the defaults the app itself holds rather than a copy the window carried, which said Australian spelling was off when it defaults on — so resetting the filters no longer silently turns it off, and the button no longer shows when nothing has changed.
+
 ## [2026.10.1] - 2026-10-08
 
 ### Fixed

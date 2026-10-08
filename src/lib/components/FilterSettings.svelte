@@ -11,6 +11,7 @@
   import { Switch } from '@poodle64/ui/switch';
   import { Textarea } from '@poodle64/ui/textarea';
   import { Label } from '@poodle64/ui/label';
+  import { configStore } from '../stores/config.svelte';
 
   /** Filter options matching the Rust FilterOptions struct */
   interface FilterOptions {
@@ -24,8 +25,8 @@
   }
 
   interface Props {
-    /** Initial filter options */
-    initialOptions?: FilterOptions;
+    /** Initial filter options, from the loaded transcription config */
+    initialOptions: FilterOptions;
     /** Callback when options change */
     onchange?: (options: FilterOptions) => void;
     /** Callback to navigate to dictionary settings */
@@ -34,20 +35,38 @@
 
   let { initialOptions, onchange, onOpenDictionary }: Props = $props();
 
-  /** Default filter options matching Rust defaults */
-  const defaultOptions: FilterOptions = {
-    remove_fillers: true,
-    normalise_whitespace: true,
-    cleanup_punctuation: true,
-    sentence_case: false,
-    australian_spelling: false,
-    spoken_numbers_to_digits: false,
-    voice_formatting_commands: true,
-  };
-
   /** Current filter options state - intentionally captures initialOptions once */
   // svelte-ignore state_referenced_locally
-  let options = $state<FilterOptions>(initialOptions ?? { ...defaultOptions });
+  let options = $state<FilterOptions>(initialOptions);
+
+  /**
+   * Default options, from the backend. Rust owns them (TranscriptionConfig's
+   * Default impl, reached through get_default_config); this component holds no
+   * copy of the values.
+   */
+  let defaultOptions = $state<FilterOptions | null>(null);
+
+  /** Load the backend's filter defaults into defaultOptions */
+  async function loadDefaults() {
+    try {
+      const defaults = await configStore.loadDefaults();
+      defaultOptions = {
+        remove_fillers: defaults.transcription.removeFillers,
+        normalise_whitespace: defaults.transcription.normaliseWhitespace,
+        cleanup_punctuation: defaults.transcription.cleanupPunctuation,
+        sentence_case: defaults.transcription.sentenceCase,
+        australian_spelling: defaults.transcription.australianSpelling,
+        spoken_numbers_to_digits: defaults.transcription.spokenNumbersToDigits,
+        voice_formatting_commands: defaults.transcription.voiceFormattingCommands,
+      };
+    } catch (e) {
+      // Without defaults there is nothing to reset to, so the reset button
+      // never appears; the toggles keep working from the loaded config.
+      console.error('Failed to load filter defaults:', e);
+    }
+  }
+
+  void loadDefaults();
 
   /** Sample text for preview */
   let sampleText = $state(
@@ -95,23 +114,20 @@
   }
 
   /**
-   * Reset all options to defaults
+   * Reset all options to the backend's defaults
    */
   function resetToDefaults() {
+    if (!defaultOptions) return;
     options = { ...defaultOptions };
     onchange?.(options);
   }
 
-  /** Whether any option differs from default */
-  let hasChanges = $derived(
-    options.remove_fillers !== defaultOptions.remove_fillers ||
-      options.normalise_whitespace !== defaultOptions.normalise_whitespace ||
-      options.cleanup_punctuation !== defaultOptions.cleanup_punctuation ||
-      options.sentence_case !== defaultOptions.sentence_case ||
-      options.australian_spelling !== defaultOptions.australian_spelling ||
-      options.spoken_numbers_to_digits !== defaultOptions.spoken_numbers_to_digits ||
-      options.voice_formatting_commands !== defaultOptions.voice_formatting_commands
-  );
+  /** Whether any option differs from the backend's defaults */
+  let hasChanges = $derived.by(() => {
+    const defaults = defaultOptions;
+    if (!defaults) return false;
+    return filterDefinitions.some((filter) => options[filter.key] !== defaults[filter.key]);
+  });
 
   /** Filter option definitions for rendering */
   const filterDefinitions = [
