@@ -24,7 +24,7 @@ jobs:
           # macOS ARM64 (all backends: Whisper Metal + Parakeet + FluidAudio Neural Engine)
           # on huginn, whose runner declares APPLE_SIGNING_IDENTITY: the one
           # certificate source (scripts/cargo-codesign.sh). Swift 6.0+ comes
-          # from the flake devShell (FluidAudio dependency).
+          # from its Xcode (FluidAudio dependency).
           - platform: huginn
             args: '--target aarch64-apple-darwin'
             rustflags: ''
@@ -124,7 +124,7 @@ jobs:
           CXXFLAGS: ${{ matrix.platform == 'huginn' && '-march=armv8-a' || '' }}
           RUSTFLAGS: ${{ matrix.rustflags }}
         with:
-          # huginn: build in the flake devShell, then verify the signed bundles
+          # huginn: build with its Xcode toolchain, then verify the signed bundles
           # before this action packages or uploads anything.
           tauriScript: ${{ matrix.platform == 'huginn' && 'bash scripts/tauri-release.sh' || '' }}
           tagName: v__VERSION__
