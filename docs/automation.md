@@ -45,7 +45,7 @@ Once connected, the assistant can call these tools:
 | `dictionary`               | List, add, update, delete, import, or export flat dictionary entries                     |
 | `canonical`                | List, add, update, remove, or suggest canonical terms (see the [Dictionary guide](dictionary.md)) |
 | `setting`                  | Read or change a setting                                                                 |
-| `transcription`            | List past transcriptions, fetch one, or get stats                                        |
+| `transcription`            | List or search past transcriptions, fetch one, or get stats                              |
 | `transcribe_file`          | Transcribe a local audio file as a background job                                        |
 | `transcribe_status`        | Check on a `transcribe_file` job                                                         |
 | `get_state` / `get_system` | Read the app's current state and system/model info                                       |

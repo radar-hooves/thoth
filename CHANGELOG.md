@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **An assistant can now search your transcription history through Thoth's MCP server, not just page through the latest 100.** The `transcription` tool's `list` takes a `query`, matching what the History search box does, and a `limit`.
+
 ## [2026.10.1] - 2026-10-08
 
 ### Fixed

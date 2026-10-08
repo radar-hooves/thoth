@@ -115,6 +115,13 @@ pub struct TranscriptionParams {
     /// For `get`: the transcription id.
     #[serde(default)]
     pub id: Option<String>,
+    /// For `list`: keep only records whose text contains this (case-insensitive),
+    /// as the history search in the app does.
+    #[serde(default)]
+    pub query: Option<String>,
+    /// For `list`: how many records, newest first. Default 100.
+    #[serde(default)]
+    pub limit: Option<i64>,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -441,7 +448,7 @@ impl ThothMcp {
     }
 
     #[tool(
-        description = "Read transcription history and quality. Action: list (up to 100 most recent records, newest first), get (one by id), stats (counts, average duration, per-model throughput). get requires id. Returns: records (list), a record (get), or summary statistics (stats)."
+        description = "Read transcription history and quality. Action: list (most recent records, newest first: `limit` of them, default 100; `query` keeps only those whose text contains it), get (one by id), stats (counts, average duration, per-model throughput). get requires id. Returns: records (list), a record (get), or summary statistics (stats)."
     )]
     async fn transcription(
         &self,
@@ -464,8 +471,12 @@ impl ThothMcp {
                 }
             }
             "list" => {
-                let records = crate::database::transcription::list_transcriptions(None, None)
-                    .map_err(|e| core_err(e.to_string()))?;
+                let limit = Some(p.limit.unwrap_or(100));
+                let records = match p.query.as_deref() {
+                    Some(q) => crate::database::transcription::search_transcriptions(q, limit),
+                    None => crate::database::transcription::list_transcriptions(limit, None),
+                }
+                .map_err(|e| core_err(e.to_string()))?;
                 json_result(&records)
             }
             other => Err(core_err(format!(
