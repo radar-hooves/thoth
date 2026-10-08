@@ -104,6 +104,27 @@ export interface TelemetryConfig {
   headersHelper: string;
 }
 
+/** Word-list sync (WebDAV) configuration. Off by default. */
+export interface SyncConfig {
+  /** Whether the sync loop runs */
+  enabled: boolean;
+  /** The WebDAV URL of the shared word-list file; empty means unset */
+  url: string;
+  /** The WebDAV username (basic auth); empty for anonymous */
+  username: string;
+}
+
+/** What the word-list sync card shows. Never the password itself. */
+export interface SyncStatus {
+  enabled: boolean;
+  urlSet: boolean;
+  hasPassword: boolean;
+  /** RFC 3339 timestamp of the last successful sync, or null */
+  lastSyncAt: string | null;
+  /** The last cycle's failure, or null once it succeeds again */
+  lastError: string | null;
+}
+
 /**
  * What the Telemetry card shows: the live exporter, whether the environment
  * owns it, and the saved values underneath.
@@ -195,6 +216,8 @@ export interface Config {
   integrations: IntegrationsConfig;
   /** Telemetry exporter settings */
   telemetry: TelemetryConfig;
+  /** Word-list sync settings */
+  sync: SyncConfig;
 }
 
 /** Raw config from backend (snake_case fields) */
@@ -263,6 +286,11 @@ interface ConfigRaw {
   telemetry?: {
     endpoint: string;
     headers_helper: string;
+  };
+  sync?: {
+    enabled: boolean;
+    url: string;
+    username: string;
   };
 }
 
@@ -334,6 +362,11 @@ function parseConfig(raw: ConfigRaw): Config {
       endpoint: raw.telemetry?.endpoint ?? '',
       headersHelper: raw.telemetry?.headers_helper ?? '',
     },
+    sync: {
+      enabled: raw.sync?.enabled ?? false,
+      url: raw.sync?.url ?? '',
+      username: raw.sync?.username ?? '',
+    },
   };
 }
 
@@ -404,6 +437,11 @@ function serialiseConfig(config: Config): ConfigRaw {
     telemetry: {
       endpoint: config.telemetry.endpoint,
       headers_helper: config.telemetry.headersHelper,
+    },
+    sync: {
+      enabled: config.sync.enabled,
+      url: config.sync.url,
+      username: config.sync.username,
     },
   };
 }
@@ -489,6 +527,15 @@ function getDefaultConfig(): Config {
     telemetry: {
       endpoint: '',
       headersHelper: '',
+    },
+    // Sync defaults are a guarded copy of SyncConfig::default() in
+    // src-tauri/src/config.rs (off, empty URL and username): the strings are
+    // inert empty, and sync_defaults_match_typescript in config.rs guards the
+    // block against drift from the Rust defaults.
+    sync: {
+      enabled: false,
+      url: '',
+      username: '',
     },
   };
 }
@@ -648,6 +695,13 @@ function createConfigStore() {
   }
 
   /**
+   * Update a specific word-list sync config field
+   */
+  function updateSync<K extends keyof SyncConfig>(key: K, value: SyncConfig[K]): void {
+    config.sync[key] = value;
+  }
+
+  /**
    * Set or clear the enhancement API key via the dedicated backend command.
    *
    * This is the only correct way to change the API key. The generic save()
@@ -738,6 +792,9 @@ function createConfigStore() {
     get integrations() {
       return config.integrations;
     },
+    get sync() {
+      return config.sync;
+    },
 
     // Actions
     load,
@@ -752,6 +809,7 @@ function createConfigStore() {
     updateGeneral,
     updateRecorder,
     updateIntegrations,
+    updateSync,
     setEnhancementApiKey,
     setTelemetry,
     clearError,

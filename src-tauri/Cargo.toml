@@ -143,6 +143,8 @@ strsim = "0.11"
 unicode-normalization = "0.1"
 num_cpus = "1.17"
 tempfile = "3.25"
+# Basic-auth header for the word-list sync WebDAV client.
+base64 = "0.22"
 
 # Desktop-specific (macOS, Windows, Linux)
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
@@ -196,6 +198,15 @@ x11rb = { version = "0.14", features = ["allow-unsafe-code"] }
 # Windows - CPU mode with optional GPU via features
 [target.'cfg(target_os = "windows")'.dependencies]
 whisper-rs = { version = "0.16", default-features = false }
+
+# Word-list sync password: the OS keyring on release builds, where a desktop
+# app's credentials belong. Debug builds (and macOS, where no Apple-issued
+# certificate means the keychain's partition gate would prompt on every
+# rebuild — see rules-library stacks/tauri.md) use the owner-only file store
+# in sync::password_store instead.
+[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "windows-native"] }
+
 [dev-dependencies]
 mockito = "1"
 serial_test = "3"

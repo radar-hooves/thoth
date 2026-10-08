@@ -403,7 +403,7 @@ impl ThothMcp {
     }
 
     #[tool(
-        description = "Read or change Thoth's settings (AI enhancement on/off, backend, prompt; output filters; Australian spelling; selected model; sounds). Action: get | update. update requires patch — a JSON object of fields to change, merged onto the current config. Returns: the full settings object."
+        description = "Read or change Thoth's settings (AI enhancement on/off, backend, prompt; output filters; Australian spelling; selected model; sounds; word list sync with a WebDAV file). Action: get | update. update requires patch — a JSON object of fields to change, merged onto the current config. Returns: the full settings object."
     )]
     async fn setting(
         &self,

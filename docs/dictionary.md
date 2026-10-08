@@ -67,6 +67,8 @@ The flat dictionary can be exported to and imported from a JSON file, which is t
 
 The canonical registry is a plain JSON file at `~/.thoth/canonical_terms.json`, so backing it up is a matter of copying that file.
 
+There is also an optional word-list sync that keeps **both** lists in step with a shared file on a WebDAV server, so other tools can use the same corrections; see [word-list-sync.md](word-list-sync.md).
+
 ## Managing it
 
 ### Through the app
@@ -108,6 +110,7 @@ The flat dictionary has its own `dictionary` MCP tool (list, add, update, delete
 ## See also
 
 - [Getting started](getting-started.md): install Thoth and record your first dictation.
+- [Word list sync](word-list-sync.md): share these lists with other tools through a WebDAV file.
 - [Custom prompts](custom-prompts-guide.md): shape how AI enhancement rewrites your text.
 - [Automation](automation.md): control Thoth from an AI assistant via the MCP server.
 - [Troubleshooting](troubleshooting.md): when corrections are not being applied.

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-  import { configStore, type TelemetryStatus } from '../stores/config.svelte';
+  import { configStore, type SyncStatus, type TelemetryStatus } from '../stores/config.svelte';
   import { toast } from 'svelte-sonner';
   import { Switch } from '@poodle64/ui/switch';
   import { Button } from '@poodle64/ui/button';
@@ -13,6 +13,7 @@
   import Copy from '@lucide/svelte/icons/copy';
   import Check from '@lucide/svelte/icons/check';
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 
   interface IntegrationsStatus {
     apiEnabled: boolean;
@@ -43,6 +44,12 @@
   let tokenRevealed = $state(false);
   let copied = $state(false);
   let showRotateDialog = $state(false);
+
+  // Word-list sync. The password field is write-only: nothing loads it back.
+  let syncStatus = $state<SyncStatus | null>(null);
+  let syncPassword = $state('');
+  let isSavingSync = $state(false);
+  let isSyncingNow = $state(false);
 
   async function refreshStatus(): Promise<void> {
     try {
@@ -154,6 +161,92 @@
     }
   }
 
+  async function refreshSyncStatus(): Promise<void> {
+    try {
+      syncStatus = await invoke<SyncStatus>('get_sync_status');
+    } catch (e) {
+      console.error('Failed to load word-list sync status:', e);
+    }
+  }
+
+  /** Enable/disable saves immediately and kicks a first sync on the way on. */
+  async function handleSyncToggle(enabled: boolean): Promise<void> {
+    configStore.updateSync('enabled', enabled);
+    if (!(await configStore.save())) {
+      toast.error('Failed to save word-list sync settings');
+      return;
+    }
+    await refreshSyncStatus();
+    if (enabled) {
+      await runSyncNow();
+    }
+  }
+
+  function handleSyncUrlInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    configStore.updateSync('url', input.value);
+  }
+
+  function handleSyncUsernameInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    configStore.updateSync('username', input.value);
+  }
+
+  /** Persist URL + username (+ password when typed) and sync right away. */
+  async function handleSaveSync(): Promise<void> {
+    isSavingSync = true;
+    try {
+      configStore.updateSync('url', configStore.sync.url.trim());
+      configStore.updateSync('username', configStore.sync.username.trim());
+      if (!(await configStore.save())) {
+        toast.error('Failed to save word-list sync settings');
+        return;
+      }
+      if (syncPassword !== '') {
+        try {
+          await invoke('set_sync_password', { password: syncPassword });
+        } catch (e) {
+          toast.error('Failed to store the password', {
+            description: e instanceof Error ? e.message : String(e),
+          });
+          return;
+        }
+        syncPassword = '';
+      }
+      await refreshSyncStatus();
+      if (configStore.sync.enabled) {
+        await runSyncNow();
+      } else {
+        toast.success('Word list sync settings saved');
+      }
+    } finally {
+      isSavingSync = false;
+    }
+  }
+
+  async function runSyncNow(): Promise<void> {
+    isSyncingNow = true;
+    try {
+      syncStatus = await invoke<SyncStatus>('sync_now');
+    } catch (e) {
+      toast.error('Word list sync failed', {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      isSyncingNow = false;
+    }
+  }
+
+  const syncStatusMessage = $derived.by(() => {
+    if (!syncStatus) return null;
+    if (syncStatus.lastError) return { ok: false as const, text: syncStatus.lastError };
+    if (syncStatus.lastSyncAt) {
+      const when = new Date(syncStatus.lastSyncAt).toLocaleString();
+      return { ok: true as const, text: `Last synced ${when}` };
+    }
+    return null;
+  });
+
   const maskedToken = $derived(token ? '••••••••••••••••••••••••••••••••' : null);
   const displayToken = $derived(tokenRevealed ? token : maskedToken);
 
@@ -161,6 +254,7 @@
     await refreshStatus();
     await loadToken();
     await loadTelemetry();
+    await refreshSyncStatus();
   });
 </script>
 
@@ -365,6 +459,118 @@
               aria-hidden="true"
             ></span>
             {probe.message}
+          </span>
+        {/if}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 4: Word list sync -->
+<section class="flex flex-col">
+  <div class="mb-3">
+    <h2 class="text-base font-semibold text-foreground m-0">Word list sync</h2>
+    <p class="text-xs text-muted-foreground m-0">
+      Keep your dictionary and canonical terms in step with a file on a WebDAV server
+      (Nextcloud, ownCloud), so other tools can share the same corrections.
+    </p>
+  </div>
+  <div class="flex flex-col gap-2">
+    <div
+      class="flex items-center justify-between gap-4 rounded-md border border-border bg-card p-3"
+    >
+      <div class="flex flex-1 flex-col gap-1">
+        <span class="text-sm font-medium text-foreground">Enable word list sync</span>
+        <span class="text-xs text-muted-foreground">
+          Off by default — the built-in local lists stay the whole experience until you
+          turn this on.
+        </span>
+      </div>
+      <Switch
+        checked={configStore.sync.enabled}
+        onCheckedChange={handleSyncToggle}
+      />
+    </div>
+
+    <div class="flex flex-col gap-3 rounded-md border border-border bg-card p-3">
+      <div class="flex flex-col gap-0.5">
+        <span class="text-sm font-medium text-foreground">File URL</span>
+        <span class="text-xs text-muted-foreground">
+          The file's full WebDAV address, e.g.
+          <code class="rounded bg-muted px-1 py-0.5 font-mono text-xs"
+            >https://cloud.example/remote.php/dav/files/me/thoth-words.json</code
+          >
+        </span>
+        <Input
+          type="url"
+          value={configStore.sync.url}
+          oninput={handleSyncUrlInput}
+          placeholder="https://your-nextcloud/remote.php/dav/files/you/thoth-words.json"
+          class="font-mono text-xs mt-1"
+          aria-label="Word list file URL"
+        />
+      </div>
+
+      <div class="flex flex-col gap-0.5">
+        <span class="text-sm font-medium text-foreground">Username</span>
+        <Input
+          value={configStore.sync.username}
+          oninput={handleSyncUsernameInput}
+          placeholder="you@example.com (empty for no auth)"
+          class="mt-1"
+          aria-label="WebDAV username"
+        />
+      </div>
+
+      <div class="flex flex-col gap-0.5">
+        <span class="text-sm font-medium text-foreground">Password</span>
+        <span class="text-xs text-muted-foreground">
+          {#if syncStatus?.hasPassword}
+            Stored. Enter a new one to replace it.
+          {:else}
+            A Nextcloud app password (Settings → Security), not your login password.
+          {/if}
+        </span>
+        <Input
+          type="password"
+          bind:value={syncPassword}
+          placeholder={syncStatus?.hasPassword ? '••••••••' : 'App password'}
+          class="mt-1"
+          aria-label="WebDAV password"
+        />
+      </div>
+
+      <div class="flex items-center gap-2">
+        <Button
+          size="sm"
+          onclick={handleSaveSync}
+          disabled={isSavingSync || isSyncingNow}
+        >
+          {isSavingSync ? 'Saving…' : 'Save'}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onclick={runSyncNow}
+          disabled={isSyncingNow || isSavingSync}
+        >
+          <RefreshCw size={13} class={isSyncingNow ? 'animate-spin' : undefined} />
+          {isSyncingNow ? 'Syncing…' : 'Sync now'}
+        </Button>
+        {#if syncStatusMessage}
+          <span
+            class="text-xs flex items-center gap-1.5 {syncStatusMessage.ok
+              ? 'text-status-success'
+              : 'text-status-error'}"
+            role="status"
+          >
+            <span
+              class="inline-block h-1.5 w-1.5 rounded-full flex-shrink-0 {syncStatusMessage.ok
+                ? 'bg-status-success'
+                : 'bg-status-error'}"
+              aria-hidden="true"
+            ></span>
+            {syncStatusMessage.text}
           </span>
         {/if}
       </div>

@@ -165,6 +165,7 @@ through downloading a model, granting permissions, and your first dictation.
 | ------------------------------------------------------ | -------------------------------------------------------------------------- |
 | [Getting Started](docs/getting-started.md)             | First-run setup: download a model, grant permissions, your first dictation |
 | [Personal Dictionary](docs/dictionary.md)              | Custom vocabulary and smart name correction (the canonical registry)       |
+| [Word List Sync](docs/word-list-sync.md)               | Optional sync of both word lists with a shared WebDAV file                 |
 | [AI Enhancement Prompts](docs/custom-prompts-guide.md) | Writing effective prompts for the optional Ollama post-processing          |
 | [Automation and MCP](docs/automation.md)               | The control API and MCP server for driving Thoth from an LLM assistant     |
 | [Troubleshooting](docs/troubleshooting.md)             | Hotkeys, permissions, paste, GPU, and Wayland gotchas                      |

@@ -47,7 +47,7 @@ pub enum SnapPolicy {
 }
 
 /// A canonical term with its variants and matching policy.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CanonicalTerm {
     /// The canonical spelling to snap to.
@@ -160,6 +160,12 @@ fn save_registry(registry: &CanonicalRegistry) -> Result<(), String> {
     let content = serde_json::to_string_pretty(registry)
         .map_err(|e| format!("Failed to serialise: {}", e))?;
     fs::write(&path, content).map_err(|e| format!("Failed to write canonical terms: {}", e))?;
+
+    // Every registry mutation lands here whatever drove it (UI, MCP) — tell
+    // sync so it pushes within seconds. Harmless when sync is off or no loop
+    // is running.
+    crate::sync::notify_local_change();
+
     tracing::debug!("Canonical registry saved to {:?}", path);
     Ok(())
 }
@@ -866,6 +872,23 @@ pub fn remove_canonical_term(index: usize) -> Result<(), Error> {
         registry.terms.remove(index);
         save_registry(&registry).map_err(Into::into)
     })
+}
+
+/// Replace the whole term list in one write (the word-list sync apply path).
+///
+/// Not a command: `sync::apply_local` is the only caller. Drops empty-term
+/// rows and keeps the first row per `term` key, then writes through the same
+/// save path as every other mutation.
+pub fn replace_all_terms(terms: Vec<CanonicalTerm>) -> Result<(), Error> {
+    let mut seen = std::collections::HashSet::new();
+    let valid: Vec<_> = terms
+        .into_iter()
+        .filter(|t| !t.term.trim().is_empty() && seen.insert(t.term.to_lowercase()))
+        .collect();
+
+    let mut registry = get_registry().write();
+    registry.terms = valid;
+    save_registry(&registry).map_err(Error::from)
 }
 
 // ---------------------------------------------------------------------------
