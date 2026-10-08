@@ -24,11 +24,11 @@ pub mod mcp_server;
 pub mod mouse_tracker;
 pub mod pipeline;
 pub mod platform;
+pub mod publish;
 pub mod recording_indicator;
 pub mod shortcuts;
 pub mod sound;
 pub mod storage;
-pub mod sync;
 pub mod telemetry_metrics;
 pub mod text_insert;
 #[cfg(target_os = "macos")]
@@ -356,7 +356,7 @@ pub fn run() {
                     australian_spelling = cfg.transcription.australian_spelling,
                     api_enabled = cfg.integrations.api_enabled,
                     mcp_enabled = cfg.integrations.mcp_enabled,
-                    sync_enabled = cfg.sync.enabled,
+                    publish_enabled = cfg.publish.enabled,
                     "config_loaded"
                 );
 
@@ -536,11 +536,11 @@ pub fn run() {
             // each tick, so it does not need restarting when they do.
             transcription::spawn_idle_unload_watcher();
 
-            // Keep the dictionary and canonical terms in step with a shared
-            // WebDAV file when the user turns that on in the Integrations
-            // pane. The loop is self-gating: disabled costs one config read
-            // per tick and no network.
-            sync::spawn_sync_loop();
+            // Write the dictionary and canonical terms to the shared WebDAV
+            // file when the user turns publishing on in the Integrations
+            // pane. The loop wakes only on a save; a wake with publishing
+            // disabled costs one config read and no network.
+            publish::spawn_publish_loop();
 
             // Re-warm the model after wake-from-sleep (CoreML cache eviction)
             #[cfg(target_os = "macos")]
@@ -726,10 +726,10 @@ pub fn run() {
             control_api::get_api_token,
             control_api::rotate_api_token,
             control_api::set_api_port,
-            // Word-list sync
-            sync::get_sync_status,
-            sync::set_sync_password,
-            sync::sync_now,
+            // Word-list publishing
+            publish::get_publish_status,
+            publish::set_publish_password,
+            publish::publish_now,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

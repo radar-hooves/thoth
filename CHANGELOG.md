@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- **Your word lists can now sync with a file on a WebDAV server, so other tools share the same corrections.** An optional toggle in Settings → Integrations (off by default) keeps the dictionary and the canonical terms in step with one shared JSON file — edits in Thoth reach the file within seconds, edits in the file reach Thoth within a minute, and when the same entry changed on both sides, Thoth's version wins. The format is documented in [docs/word-list-sync.md](docs/word-list-sync.md) for second consumers.
+- **Your word lists can now be published to a file on a WebDAV server, so other tools share the same corrections.** An optional toggle in Settings → Integrations (off by default) writes the dictionary and the canonical terms to one shared JSON file whenever they change. Thoth is the single writer — publishing is one-way; the format is documented in [docs/word-list-publish.md](docs/word-list-publish.md) for second consumers.
 - **An assistant can now search your transcription history through Thoth's MCP server, not just page through the latest 100.** The `transcription` tool's `list` takes a `query`, matching what the History search box does, and a `limit`.
 
 ### Fixed

@@ -104,9 +104,9 @@ export interface TelemetryConfig {
   headersHelper: string;
 }
 
-/** Word-list sync (WebDAV) configuration. Off by default. */
-export interface SyncConfig {
-  /** Whether the sync loop runs */
+/** Word-list publishing (WebDAV) configuration. Off by default. */
+export interface PublishConfig {
+  /** Whether edits are published to the WebDAV file */
   enabled: boolean;
   /** The WebDAV URL of the shared word-list file; empty means unset */
   url: string;
@@ -114,14 +114,12 @@ export interface SyncConfig {
   username: string;
 }
 
-/** What the word-list sync card shows. Never the password itself. */
-export interface SyncStatus {
-  enabled: boolean;
-  urlSet: boolean;
+/** What the word-list publishing card shows. Never the password itself. */
+export interface PublishStatus {
   hasPassword: boolean;
-  /** RFC 3339 timestamp of the last successful sync, or null */
-  lastSyncAt: string | null;
-  /** The last cycle's failure, or null once it succeeds again */
+  /** RFC 3339 timestamp of the last successful publish, or null */
+  lastPublishAt: string | null;
+  /** The last publish's failure, or null once it succeeds again */
   lastError: string | null;
 }
 
@@ -216,8 +214,8 @@ export interface Config {
   integrations: IntegrationsConfig;
   /** Telemetry exporter settings */
   telemetry: TelemetryConfig;
-  /** Word-list sync settings */
-  sync: SyncConfig;
+  /** Word-list publishing settings */
+  publish: PublishConfig;
 }
 
 /** Raw config from backend (snake_case fields) */
@@ -287,7 +285,7 @@ interface ConfigRaw {
     endpoint: string;
     headers_helper: string;
   };
-  sync?: {
+  publish?: {
     enabled: boolean;
     url: string;
     username: string;
@@ -362,10 +360,10 @@ function parseConfig(raw: ConfigRaw): Config {
       endpoint: raw.telemetry?.endpoint ?? '',
       headersHelper: raw.telemetry?.headers_helper ?? '',
     },
-    sync: {
-      enabled: raw.sync?.enabled ?? false,
-      url: raw.sync?.url ?? '',
-      username: raw.sync?.username ?? '',
+    publish: {
+      enabled: raw.publish?.enabled ?? false,
+      url: raw.publish?.url ?? '',
+      username: raw.publish?.username ?? '',
     },
   };
 }
@@ -438,10 +436,10 @@ function serialiseConfig(config: Config): ConfigRaw {
       endpoint: config.telemetry.endpoint,
       headers_helper: config.telemetry.headersHelper,
     },
-    sync: {
-      enabled: config.sync.enabled,
-      url: config.sync.url,
-      username: config.sync.username,
+    publish: {
+      enabled: config.publish.enabled,
+      url: config.publish.url,
+      username: config.publish.username,
     },
   };
 }
@@ -528,11 +526,11 @@ function getDefaultConfig(): Config {
       endpoint: '',
       headersHelper: '',
     },
-    // Sync defaults are a guarded copy of SyncConfig::default() in
+    // Publish defaults are a guarded copy of PublishConfig::default() in
     // src-tauri/src/config.rs (off, empty URL and username): the strings are
-    // inert empty, and sync_defaults_match_typescript in config.rs guards the
-    // block against drift from the Rust defaults.
-    sync: {
+    // inert empty, and publish_defaults_match_typescript in config.rs guards
+    // the block against drift from the Rust defaults.
+    publish: {
       enabled: false,
       url: '',
       username: '',
@@ -695,10 +693,10 @@ function createConfigStore() {
   }
 
   /**
-   * Update a specific word-list sync config field
+   * Update a specific word-list publishing config field
    */
-  function updateSync<K extends keyof SyncConfig>(key: K, value: SyncConfig[K]): void {
-    config.sync[key] = value;
+  function updatePublish<K extends keyof PublishConfig>(key: K, value: PublishConfig[K]): void {
+    config.publish[key] = value;
   }
 
   /**
@@ -792,8 +790,8 @@ function createConfigStore() {
     get integrations() {
       return config.integrations;
     },
-    get sync() {
-      return config.sync;
+    get publish() {
+      return config.publish;
     },
 
     // Actions
@@ -809,7 +807,7 @@ function createConfigStore() {
     updateGeneral,
     updateRecorder,
     updateIntegrations,
-    updateSync,
+    updatePublish,
     setEnhancementApiKey,
     setTelemetry,
     clearError,

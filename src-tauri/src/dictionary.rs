@@ -7,23 +7,20 @@ use crate::error::Error;
 use parking_lot::RwLock;
 use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
 /// A dictionary entry for word replacement
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DictionaryEntry {
     /// The text to search for and replace
     pub from: String,
     /// The replacement text
     pub to: String,
-    /// Whether the match should be case-sensitive. Optional on read so a
-    /// hand-edited or second-consumer row can omit it (defaults to false);
-    /// Thoth always writes it.
-    #[serde(default)]
+    /// Whether the match should be case-sensitive
     pub case_sensitive: bool,
 }
 
@@ -89,9 +86,9 @@ fn save_dictionary(dictionary: &Dictionary) -> Result<(), String> {
     fs::write(&path, content).map_err(|e| format!("Failed to write dictionary: {}", e))?;
 
     // Every dictionary mutation lands here whatever drove it (UI, MCP,
-    // import) — tell sync so it pushes within seconds. Harmless when sync
-    // is off or no loop is running.
-    crate::sync::notify_local_change();
+    // import) — tell publishing so it writes the shared file within seconds.
+    // Harmless when publishing is off or no loop is running.
+    crate::publish::notify_local_change();
 
     tracing::debug!("Dictionary saved to {:?}", path);
     Ok(())
@@ -326,9 +323,8 @@ fn parse_import_entries(json_content: &str) -> Result<Vec<DictionaryEntry>, Stri
     };
     serde_json::from_value(entries_value).map_err(|e| {
         format!(
-            "Invalid entry: {}. Each entry needs \"from\" (string) and \"to\" (string); \
-             \"caseSensitive\" (bool) is optional and defaults to false — the rows \
-             `export` and `list` return",
+            "Invalid entry: {}. Each entry needs \"from\" (string), \"to\" (string) and \
+             \"caseSensitive\" (bool) — the rows `export` and `list` return",
             e
         )
     })
@@ -410,27 +406,6 @@ pub fn export_dictionary() -> Result<String, Error> {
             .map_err(|e| format!("Failed to serialise: {}", e))
             .map_err(Into::into)
     })
-}
-
-/// Replace the whole dictionary in one write (the word-list sync apply path).
-///
-/// Not a command: `sync::apply_local` is the only caller. Filters what import
-/// filters (rows with an empty side) and keeps the first row per `from` key,
-/// then writes through the same save path as every other mutation.
-pub fn replace_all_entries(entries: Vec<DictionaryEntry>) -> Result<(), Error> {
-    let mut seen = HashSet::new();
-    let valid: Vec<_> = entries
-        .into_iter()
-        .filter(|e| {
-            !e.from.trim().is_empty()
-                && !e.to.trim().is_empty()
-                && seen.insert(e.from.to_lowercase())
-        })
-        .collect();
-
-    let mut dictionary = get_dictionary().write();
-    dictionary.entries = valid;
-    save_dictionary(&dictionary).map_err(Error::from)
 }
 
 /// Apply dictionary replacements to text
@@ -934,26 +909,9 @@ mod tests {
 
     #[test]
     fn test_import_entry_missing_field_names_the_field() {
-        // `to` is required; the error names it.
-        let json = r#"[{"from":"x","caseSensitive":false}]"#;
+        let json = r#"[{"from":"x","to":"y"}]"#;
         let err = parse_import_entries(json).unwrap_err();
-        assert!(err.contains("\"to\""), "error: {}", err);
-    }
-
-    /// `caseSensitive` became optional when the shared word-list format
-    /// allowed a second consumer to omit it; a row without it imports as
-    /// case-insensitive rather than erroring.
-    #[test]
-    fn test_import_entry_without_case_sensitive_defaults_to_false() {
-        let entries = parse_import_entries(r#"[{"from":"x","to":"y"}]"#).unwrap();
-        assert_eq!(
-            entries,
-            vec![DictionaryEntry {
-                from: "x".to_string(),
-                to: "y".to_string(),
-                case_sensitive: false
-            }]
-        );
+        assert!(err.contains("caseSensitive"), "error: {}", err);
     }
 
     #[test]

@@ -53,15 +53,15 @@ impl Default for IntegrationsConfig {
     }
 }
 
-/// Word-list sync configuration (WebDAV). Off by default: a user who never
-/// opens the Integrations pane keeps the purely local built-in lists.
+/// Word-list publishing configuration (WebDAV). Off by default: a user who
+/// never opens the Integrations pane keeps the purely local built-in lists.
 ///
-/// The password never lives in config.json — `sync::password_store` holds it
-/// (OS keyring on Linux/Windows release builds, an owner-only file elsewhere).
+/// The password never lives in config.json — `publish` holds it in a
+/// dedicated owner-only file, the same pattern as the control-API token.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
-pub struct SyncConfig {
-    /// Whether the word-list sync loop runs
+pub struct PublishConfig {
+    /// Whether edits are published to the WebDAV file
     pub enabled: bool,
     /// The WebDAV URL of the shared word-list file
     pub url: String,
@@ -91,8 +91,8 @@ pub struct Config {
     pub integrations: IntegrationsConfig,
     /// Telemetry exporter settings
     pub telemetry: TelemetryConfig,
-    /// Word-list sync settings (WebDAV)
-    pub sync: SyncConfig,
+    /// Word-list publishing settings (WebDAV)
+    pub publish: PublishConfig,
 }
 
 impl Default for Config {
@@ -107,7 +107,7 @@ impl Default for Config {
             recorder: RecorderConfig::default(),
             integrations: IntegrationsConfig::default(),
             telemetry: TelemetryConfig::default(),
-            sync: SyncConfig::default(),
+            publish: PublishConfig::default(),
         }
     }
 }
@@ -1365,7 +1365,7 @@ mod tests {
         }
     }
 
-    /// The TypeScript sync placeholder must match `SyncConfig::default()`.
+    /// The TypeScript publish placeholder must match `PublishConfig::default()`.
     ///
     /// Same drift shape as `transcription_defaults_match_typescript`: the
     /// placeholder in `getDefaultConfig()` is a guarded copy, not a free one.
@@ -1373,17 +1373,17 @@ mod tests {
     /// the boolean is the one that can silently disagree, so it is checked
     /// against the Rust default rather than a restated literal.
     #[test]
-    fn sync_defaults_match_typescript() {
-        let defaults = SyncConfig::default();
+    fn publish_defaults_match_typescript() {
+        let defaults = PublishConfig::default();
         assert!(
             !defaults.enabled,
-            "SyncConfig::default() turned sync on — the off-by-default contract \
+            "PublishConfig::default() turned publishing on — the off-by-default contract \
              (and the TypeScript placeholder with it) must change deliberately, \
              not by a default flip"
         );
         assert!(
             defaults.url.is_empty() && defaults.username.is_empty(),
-            "SyncConfig::default() carries a non-empty url/username — the \
+            "PublishConfig::default() carries a non-empty url/username — the \
              TypeScript placeholder asserts they are inert empty"
         );
 
@@ -1392,23 +1392,26 @@ mod tests {
         let source = std::fs::read_to_string(&ts_path)
             .unwrap_or_else(|e| panic!("cannot read {}: {e}", ts_path.display()));
 
-        // Anchor on the function first: `sync: {` also appears in
+        // Anchor on the function first: `publish: {` also appears in
         // parseConfig()'s mapper, which is earlier in the file.
         let fn_start = source
             .find("function getDefaultConfig()")
             .expect("getDefaultConfig() not found — update this test");
         let rest = &source[fn_start..];
         let start = rest
-            .find("sync: {")
-            .expect("getDefaultConfig() no longer has a sync block — update this test");
-        let end = rest[start..].find("},").expect("unterminated sync block") + start;
+            .find("publish: {")
+            .expect("getDefaultConfig() no longer has a publish block — update this test");
+        let end = rest[start..]
+            .find("},")
+            .expect("unterminated publish block")
+            + start;
         let block = &rest[start..end];
 
         for literal in ["enabled: false", "url: ''", "username: ''"] {
             assert!(
                 block.contains(literal),
-                "src/lib/stores/config.svelte.ts does not carry `{literal}` in its sync \
-                 placeholder, but SyncConfig::default() is off with empty url and \
+                "src/lib/stores/config.svelte.ts does not carry `{literal}` in its publish \
+                 placeholder, but PublishConfig::default() is off with empty url and \
                  username. The placeholder is a guarded copy of the Rust defaults — \
                  update it to match."
             );
@@ -1622,7 +1625,7 @@ mod tests {
                 endpoint: "https://otlp.example".to_string(),
                 headers_helper: "print-headers otlp".to_string(),
             },
-            sync: SyncConfig::default(),
+            publish: PublishConfig::default(),
         };
 
         let json = serde_json::to_string_pretty(&config).unwrap();

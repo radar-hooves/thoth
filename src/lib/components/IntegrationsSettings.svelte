@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-  import { configStore, type SyncStatus, type TelemetryStatus } from '../stores/config.svelte';
+  import { configStore, type PublishStatus, type TelemetryStatus } from '../stores/config.svelte';
   import { toast } from 'svelte-sonner';
   import { Switch } from '@poodle64/ui/switch';
   import { Button } from '@poodle64/ui/button';
@@ -45,11 +45,11 @@
   let copied = $state(false);
   let showRotateDialog = $state(false);
 
-  // Word-list sync. The password field is write-only: nothing loads it back.
-  let syncStatus = $state<SyncStatus | null>(null);
-  let syncPassword = $state('');
-  let isSavingSync = $state(false);
-  let isSyncingNow = $state(false);
+  // Word-list publishing. The password field is write-only: nothing loads it back.
+  let publishStatus = $state<PublishStatus | null>(null);
+  let publishPassword = $state('');
+  let isSavingPublish = $state(false);
+  let isPublishingNow = $state(false);
 
   async function refreshStatus(): Promise<void> {
     try {
@@ -161,88 +161,88 @@
     }
   }
 
-  async function refreshSyncStatus(): Promise<void> {
+  async function refreshPublishStatus(): Promise<void> {
     try {
-      syncStatus = await invoke<SyncStatus>('get_sync_status');
+      publishStatus = await invoke<PublishStatus>('get_publish_status');
     } catch (e) {
-      console.error('Failed to load word-list sync status:', e);
+      console.error('Failed to load word-list publishing status:', e);
     }
   }
 
-  /** Enable/disable saves immediately and kicks a first sync on the way on. */
-  async function handleSyncToggle(enabled: boolean): Promise<void> {
-    configStore.updateSync('enabled', enabled);
+  /** Enable/disable saves immediately and publishes once on the way on. */
+  async function handlePublishToggle(enabled: boolean): Promise<void> {
+    configStore.updatePublish('enabled', enabled);
     if (!(await configStore.save())) {
-      toast.error('Failed to save word-list sync settings');
+      toast.error('Failed to save word-list publishing settings');
       return;
     }
-    await refreshSyncStatus();
+    await refreshPublishStatus();
     if (enabled) {
-      await runSyncNow();
+      await runPublishNow();
     }
   }
 
-  function handleSyncUrlInput(event: Event): void {
+  function handlePublishUrlInput(event: Event): void {
     const input = event.target as HTMLInputElement;
-    configStore.updateSync('url', input.value);
+    configStore.updatePublish('url', input.value);
   }
 
-  function handleSyncUsernameInput(event: Event): void {
+  function handlePublishUsernameInput(event: Event): void {
     const input = event.target as HTMLInputElement;
-    configStore.updateSync('username', input.value);
+    configStore.updatePublish('username', input.value);
   }
 
-  /** Persist URL + username (+ password when typed) and sync right away. */
-  async function handleSaveSync(): Promise<void> {
-    isSavingSync = true;
+  /** Persist URL + username (+ password when typed) and publish right away. */
+  async function handleSavePublish(): Promise<void> {
+    isSavingPublish = true;
     try {
-      configStore.updateSync('url', configStore.sync.url.trim());
-      configStore.updateSync('username', configStore.sync.username.trim());
+      configStore.updatePublish('url', configStore.publish.url.trim());
+      configStore.updatePublish('username', configStore.publish.username.trim());
       if (!(await configStore.save())) {
-        toast.error('Failed to save word-list sync settings');
+        toast.error('Failed to save word-list publishing settings');
         return;
       }
-      if (syncPassword !== '') {
+      if (publishPassword !== '') {
         try {
-          await invoke('set_sync_password', { password: syncPassword });
+          await invoke('set_publish_password', { password: publishPassword });
         } catch (e) {
           toast.error('Failed to store the password', {
             description: e instanceof Error ? e.message : String(e),
           });
           return;
         }
-        syncPassword = '';
+        publishPassword = '';
       }
-      await refreshSyncStatus();
-      if (configStore.sync.enabled) {
-        await runSyncNow();
+      await refreshPublishStatus();
+      if (configStore.publish.enabled) {
+        await runPublishNow();
       } else {
-        toast.success('Word list sync settings saved');
+        toast.success('Word list publishing settings saved');
       }
     } finally {
-      isSavingSync = false;
+      isSavingPublish = false;
     }
   }
 
-  async function runSyncNow(): Promise<void> {
-    isSyncingNow = true;
+  async function runPublishNow(): Promise<void> {
+    isPublishingNow = true;
     try {
-      syncStatus = await invoke<SyncStatus>('sync_now');
+      publishStatus = await invoke<PublishStatus>('publish_now');
     } catch (e) {
-      toast.error('Word list sync failed', {
+      toast.error('Word list publishing failed', {
         description: e instanceof Error ? e.message : String(e),
       });
     } finally {
-      isSyncingNow = false;
+      isPublishingNow = false;
     }
   }
 
-  const syncStatusMessage = $derived.by(() => {
-    if (!syncStatus) return null;
-    if (syncStatus.lastError) return { ok: false as const, text: syncStatus.lastError };
-    if (syncStatus.lastSyncAt) {
-      const when = new Date(syncStatus.lastSyncAt).toLocaleString();
-      return { ok: true as const, text: `Last synced ${when}` };
+  const publishStatusMessage = $derived.by(() => {
+    if (!publishStatus) return null;
+    if (publishStatus.lastError) return { ok: false as const, text: publishStatus.lastError };
+    if (publishStatus.lastPublishAt) {
+      const when = new Date(publishStatus.lastPublishAt).toLocaleString();
+      return { ok: true as const, text: `Last published ${when}` };
     }
     return null;
   });
@@ -254,7 +254,7 @@
     await refreshStatus();
     await loadToken();
     await loadTelemetry();
-    await refreshSyncStatus();
+    await refreshPublishStatus();
   });
 </script>
 
@@ -466,13 +466,13 @@
   </div>
 </section>
 
-<!-- Section 4: Word list sync -->
+<!-- Section 4: Word list publishing -->
 <section class="flex flex-col">
   <div class="mb-3">
-    <h2 class="text-base font-semibold text-foreground m-0">Word list sync</h2>
+    <h2 class="text-base font-semibold text-foreground m-0">Word list publishing</h2>
     <p class="text-xs text-muted-foreground m-0">
-      Keep your dictionary and canonical terms in step with a file on a WebDAV server
-      (Nextcloud, ownCloud), so other tools can share the same corrections.
+      Write your dictionary and canonical terms to a file on a WebDAV server
+      (Nextcloud, ownCloud), so other tools can read the same corrections.
     </p>
   </div>
   <div class="flex flex-col gap-2">
@@ -480,15 +480,15 @@
       class="flex items-center justify-between gap-4 rounded-md border border-border bg-card p-3"
     >
       <div class="flex flex-1 flex-col gap-1">
-        <span class="text-sm font-medium text-foreground">Enable word list sync</span>
+        <span class="text-sm font-medium text-foreground">Enable word list publishing</span>
         <span class="text-xs text-muted-foreground">
           Off by default — the built-in local lists stay the whole experience until you
           turn this on.
         </span>
       </div>
       <Switch
-        checked={configStore.sync.enabled}
-        onCheckedChange={handleSyncToggle}
+        checked={configStore.publish.enabled}
+        onCheckedChange={handlePublishToggle}
       />
     </div>
 
@@ -503,8 +503,8 @@
         </span>
         <Input
           type="url"
-          value={configStore.sync.url}
-          oninput={handleSyncUrlInput}
+          value={configStore.publish.url}
+          oninput={handlePublishUrlInput}
           placeholder="https://your-nextcloud/remote.php/dav/files/you/thoth-words.json"
           class="font-mono text-xs mt-1"
           aria-label="Word list file URL"
@@ -514,8 +514,8 @@
       <div class="flex flex-col gap-0.5">
         <span class="text-sm font-medium text-foreground">Username</span>
         <Input
-          value={configStore.sync.username}
-          oninput={handleSyncUsernameInput}
+          value={configStore.publish.username}
+          oninput={handlePublishUsernameInput}
           placeholder="you@example.com (empty for no auth)"
           class="mt-1"
           aria-label="WebDAV username"
@@ -525,7 +525,7 @@
       <div class="flex flex-col gap-0.5">
         <span class="text-sm font-medium text-foreground">Password</span>
         <span class="text-xs text-muted-foreground">
-          {#if syncStatus?.hasPassword}
+          {#if publishStatus?.hasPassword}
             Stored. Enter a new one to replace it.
           {:else}
             A Nextcloud app password (Settings → Security), not your login password.
@@ -533,8 +533,8 @@
         </span>
         <Input
           type="password"
-          bind:value={syncPassword}
-          placeholder={syncStatus?.hasPassword ? '••••••••' : 'App password'}
+          bind:value={publishPassword}
+          placeholder={publishStatus?.hasPassword ? '••••••••' : 'App password'}
           class="mt-1"
           aria-label="WebDAV password"
         />
@@ -543,34 +543,34 @@
       <div class="flex items-center gap-2">
         <Button
           size="sm"
-          onclick={handleSaveSync}
-          disabled={isSavingSync || isSyncingNow}
+          onclick={handleSavePublish}
+          disabled={isSavingPublish || isPublishingNow}
         >
-          {isSavingSync ? 'Saving…' : 'Save'}
+          {isSavingPublish ? 'Saving…' : 'Save'}
         </Button>
         <Button
           variant="outline"
           size="sm"
-          onclick={runSyncNow}
-          disabled={isSyncingNow || isSavingSync}
+          onclick={runPublishNow}
+          disabled={isPublishingNow || isSavingPublish}
         >
-          <RefreshCw size={13} class={isSyncingNow ? 'animate-spin' : undefined} />
-          {isSyncingNow ? 'Syncing…' : 'Sync now'}
+          <RefreshCw size={13} class={isPublishingNow ? 'animate-spin' : undefined} />
+          {isPublishingNow ? 'Publishing…' : 'Publish now'}
         </Button>
-        {#if syncStatusMessage}
+        {#if publishStatusMessage}
           <span
-            class="text-xs flex items-center gap-1.5 {syncStatusMessage.ok
+            class="text-xs flex items-center gap-1.5 {publishStatusMessage.ok
               ? 'text-status-success'
               : 'text-status-error'}"
             role="status"
           >
             <span
-              class="inline-block h-1.5 w-1.5 rounded-full flex-shrink-0 {syncStatusMessage.ok
+              class="inline-block h-1.5 w-1.5 rounded-full flex-shrink-0 {publishStatusMessage.ok
                 ? 'bg-status-success'
                 : 'bg-status-error'}"
               aria-hidden="true"
             ></span>
-            {syncStatusMessage.text}
+            {publishStatusMessage.text}
           </span>
         {/if}
       </div>
