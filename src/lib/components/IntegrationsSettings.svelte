@@ -421,7 +421,7 @@
         <Input
           bind:value={headersHelper}
           disabled={telemetry?.fromEnv ?? false}
-          placeholder="signet headers otlp"
+          placeholder="a command that prints JSON headers"
           class="font-mono text-xs mt-1"
           aria-label="Authorisation helper command"
         />

@@ -1620,7 +1620,7 @@ mod tests {
             integrations: IntegrationsConfig::default(),
             telemetry: TelemetryConfig {
                 endpoint: "https://otlp.example".to_string(),
-                headers_helper: "signet headers otlp".to_string(),
+                headers_helper: "print-headers otlp".to_string(),
             },
             sync: SyncConfig::default(),
         };
@@ -1655,7 +1655,7 @@ mod tests {
         assert_eq!(restored.recorder.position, RecorderPosition::Centre);
 
         assert_eq!(restored.telemetry.endpoint, "https://otlp.example");
-        assert_eq!(restored.telemetry.headers_helper, "signet headers otlp");
+        assert_eq!(restored.telemetry.headers_helper, "print-headers otlp");
     }
 
     #[test]
