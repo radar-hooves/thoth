@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026.10.1] - 2026-10-08
+
+### Fixed
+
+- **Ampersand terms now come out one way every time, and `<unk>` never reaches your text.** The Parakeet models cannot write `&`, so "S&P" came out as "S<unk>P", "S and P" or "S P", and "P&L" as "P and L" or "Pn L". Any two capital letters you join with "and" now read as one term (S&P, P&L, R&D, M&A, Q&A, V&V), and a stray `<unk>` is dropped. "Both A and B", "X and Y" and "you and I" stay as you said them. A term the model writes as two bare letters ("S P") carries no trace of the "and", so add a dictionary entry for it (`S P` → `S&P`).
+
 ## [2026.10.0] - 2026-10-05
 
 ### Changed
