@@ -127,7 +127,7 @@ jobs:
         env:
           IS_PR: ${{ github.event_name == 'pull_request' }}
           FROM_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
 
@@ -139,14 +139,22 @@ jobs:
           #      the step died with "No such file or directory" (hit on #162).
           #   2. This step runs with contents: write. A PR must not be able to
           #      edit the script that then pushes to its own branch.
-          # Written into scripts/ rather than /tmp on purpose. Older copies of
+          # Resolved against the CURRENT TIP of the base branch, not
+          # pull_request.base.sha. That field is a snapshot of the base from when
+          # the PR was opened, so every branch older than the script failed with
+          # "path 'scripts/update-pnpm-deps-hash.sh' does not exist" (hit on
+          # #164, opened three days before the script landed). The tip always
+          # has the newest version, which is also the one worth running.
+          #
+          # Written into scripts/ rather than /tmp on purpose: older copies of
           # the script derive the repo root from their own path, so running one
-          # from a temp directory made it look for flake.nix in the wrong place.
-          # Extracting it beside its normal home keeps that resolution correct
-          # whichever version of the script the base branch carries.
+          # from a temp directory made it look for flake.nix one level above the
+          # checkout. Extracting it beside its normal home keeps that correct
+          # whichever version the base branch carries.
           if [ "$IS_PR" = "true" ]; then
             SCRIPT="scripts/.ci-update-pnpm-deps-hash.sh"
-            git show "${BASE_SHA}:scripts/update-pnpm-deps-hash.sh" > "$SCRIPT"
+            git fetch --depth=1 origin "$BASE_REF"
+            git show "FETCH_HEAD:scripts/update-pnpm-deps-hash.sh" > "$SCRIPT"
             chmod +x "$SCRIPT"
             trap 'rm -f "scripts/.ci-update-pnpm-deps-hash.sh"' EXIT
           fi
