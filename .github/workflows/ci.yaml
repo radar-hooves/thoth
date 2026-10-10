@@ -117,26 +117,6 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: desktop-file-validate src-tauri/linux/thoth.desktop
 
-      - name: Notify failure (ntfy infra)
-        if: failure() && github.event_name != 'pull_request'
-        shell: bash
-        env:
-          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          # Inline ntfy notify: radar-hooves/master-project is a private repo, so
-          # no runner — Thoth's own vendor-hosted ones included — can resolve a
-          # composite action from it at job-setup time without a credential
-          # neither carries; the notify step is inlined here instead.
-          curl -sS --max-time 10 \
-            -H "Authorization: Bearer $NTFY_TOKEN" \
-            -H "Title: thoth: rust (${{ matrix.platform }}) failed" \
-            -H "Priority: 4" \
-            -H "Tags: rotating_light" \
-            -d "Run: $RUN_URL" \
-            "https://ntfy.godswood.au/infra" \
-            || echo "::warning::ntfy notify POST failed"
-
   frontend:
     name: Frontend
     # by-exception (2026-09-28): public repo takes fork PRs; fork code must not run on the household runner
@@ -193,32 +173,3 @@ jobs:
 
       - name: Production build
         run: pnpm build
-
-      - name: Notify failure (ntfy infra)
-        if: failure() && github.event_name != 'pull_request'
-        shell: bash
-        env:
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          # Inline ntfy notify: radar-hooves/master-project is private, so its composite
-          # action cannot be resolved at job-setup time from thoth, which is PUBLIC
-          # (the reason is master-project's visibility, not thoth's — this comment
-          # said thoth was private until 27/08/2026). Per the household CI standard
-          # a public repo inlines this curl rather than calling the private action.
-          # Atlas self-hosted reads the host token.
-          TOKEN=""
-          for f in /etc/ntfy/tokens/ci-publisher.token /run/secrets/ntfy/systemd; do
-            [ -r "$f" ] && TOKEN="$(cat "$f")" && break
-          done
-          if [ -z "$TOKEN" ]; then
-            echo "::warning::ntfy-failure: no host token file readable — notification NOT sent"
-            exit 0
-          fi
-          curl -sS --max-time 10 \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Title: thoth: frontend failed" \
-            -H "Priority: 4" \
-            -H "Tags: rotating_light" \
-            -d "Run: $RUN_URL" \
-            "https://ntfy.godswood.au/infra" \
-            || echo "::warning::ntfy notify POST failed"

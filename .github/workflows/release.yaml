@@ -133,24 +133,3 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
-
-      - name: Notify failure (ntfy infra)
-        if: failure() && github.event_name != 'pull_request'
-        shell: bash
-        env:
-          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          # Inline ntfy notify: radar-hooves/master-project is a private repo, so
-          # its composite action cannot be resolved at job-setup time from any
-          # caller, Thoth's own vendor-hosted runners included (the reason is
-          # master-project's visibility, not Thoth's — Thoth is public). Token
-          # from NTFY_TOKEN secret.
-          curl -sS --max-time 10 \
-            -H "Authorization: Bearer $NTFY_TOKEN" \
-            -H "Title: thoth: release (${{ matrix.platform }}) failed" \
-            -H "Priority: 4" \
-            -H "Tags: rotating_light" \
-            -d "Run: $RUN_URL" \
-            "https://ntfy.godswood.au/infra" \
-            || echo "::warning::ntfy notify POST failed"
