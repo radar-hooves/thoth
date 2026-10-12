@@ -1,0 +1,3 @@
+{
+  "allowedMcpServers": [{ "serverName": "browser-driver" }, { "serverName": "foreman" }, { "serverName": "github" }, { "serverName": "loki" }, { "serverName": "tempo" }, { "serverName": "thoth" }]
+}
