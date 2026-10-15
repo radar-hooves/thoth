@@ -34,14 +34,6 @@ pub mod text_insert;
 pub mod transcription;
 pub mod tray;
 
-/// Header height in pixels (must match CSS --header-height)
-#[cfg(target_os = "macos")]
-const HEADER_HEIGHT: f64 = 52.0;
-
-/// Traffic light X position (left margin)
-#[cfg(target_os = "macos")]
-const TRAFFIC_LIGHT_X: f64 = 13.0;
-
 /// Register a single shortcut, using keyboard_service for standalone modifiers
 fn register_single_shortcut(
     app: &tauri::AppHandle,
@@ -462,11 +454,11 @@ pub fn run() {
                     app.set_activation_policy(tauri::ActivationPolicy::Accessory);
                 }
 
-                // Position traffic lights and prevent main window destruction on close.
+                // Centre traffic lights and prevent main window destruction on close.
                 // The main window hosts the pipeline event listeners — if it's destroyed,
                 // global shortcuts stop working. Hide instead of close.
                 if let Some(window) = app.get_webview_window("main") {
-                    desktop_shell::traffic_lights::setup(&window, TRAFFIC_LIGHT_X, HEADER_HEIGHT);
+                    desktop_shell::traffic_lights::setup(&window);
 
                     let win = window.clone();
                     window.on_window_event(move |event| {

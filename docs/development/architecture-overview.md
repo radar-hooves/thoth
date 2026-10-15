@@ -126,7 +126,6 @@ The backend is organised into focused modules in `src-tauri/src/`:
 | ------------------------ | -------------------------------------------------------------------- |
 | `platform/`              | Platform-specific code (macOS accessibility, microphone permissions) |
 | `recording_indicator.rs` | Recording indicator window management                                |
-| `traffic_lights.rs`      | macOS window traffic light positioning                               |
 | `tray.rs`                | System tray setup                                                    |
 | `sound.rs`               | Audio feedback (recording start/stop sounds)                         |
 | `commands/`              | Miscellaneous Tauri commands                                         |

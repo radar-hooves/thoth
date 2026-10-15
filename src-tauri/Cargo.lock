@@ -1248,9 +1248,10 @@ dependencies = [
 
 [[package]]
 name = "desktop-shell"
-version = "0.1.0"
-source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.10.11#ad4d180d0659a159ea7f41776ab5768333c96537"
+version = "0.2.0"
+source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.10.39#a1305c882bc7fd4ad0ca956c49015b202d79c8bc"
 dependencies = [
+ "block2",
  "objc2",
  "objc2-foundation",
  "tauri",
@@ -5866,7 +5867,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-telemetry"
 version = "0.1.0"
-source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.10.11#ad4d180d0659a159ea7f41776ab5768333c96537"
+source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.10.39#a1305c882bc7fd4ad0ca956c49015b202d79c8bc"
 dependencies = [
  "serde",
  "serde_json",
@@ -6013,7 +6014,7 @@ dependencies = [
 [[package]]
 name = "telemetry"
 version = "0.6.0"
-source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.10.11#ad4d180d0659a159ea7f41776ab5768333c96537"
+source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.10.39#a1305c882bc7fd4ad0ca956c49015b202d79c8bc"
 dependencies = [
  "async-trait",
  "http",
