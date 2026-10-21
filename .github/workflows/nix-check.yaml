@@ -30,8 +30,20 @@ name: Nix
 # `main` is verify-only: a stale hash there fails the job rather than being
 # silently rewritten, because on main it means something bypassed a PR.
 
+# by-exception (2026-10-21): the change pipeline runs no flake evaluation and cannot push the
+# regenerated pnpmDeps hash to a PR branch (Renovate PRs arrive stale); this runs only when a
+# packaging input changes.
 on:
   pull_request:
+    paths:
+      - flake.nix
+      - flake.lock
+      - package.json
+      - pnpm-lock.yaml
+      - nix/**
+      - src-tauri/Cargo.toml
+      - src-tauri/Cargo.lock
+      - .github/workflows/nix-check.yaml
   workflow_dispatch:
 
 permissions:

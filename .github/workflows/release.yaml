@@ -14,7 +14,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # A tag ships only a commit whose `change` run on main went green.
+  gate:
+    runs-on: [self-hosted, atlas]
+    timeout-minutes: 40
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          deadline=$((SECONDS + 1800))
+          while :; do
+            s=$(gh run list -R "$GITHUB_REPOSITORY" --workflow change.yaml --branch main --commit "$GITHUB_SHA" \
+              --json status,conclusion --jq '[.[] | select(.status == "completed") | .conclusion] | if any(. == "success") then "ok" else "wait" end') || s=wait
+            [ "$s" = ok ] && exit 0
+            [ "$SECONDS" -lt "$deadline" ] || { echo "::error::no green change run on main for $GITHUB_SHA"; exit 1; }
+            sleep 30
+          done
+
   build-and-release:
+    needs: gate
     permissions:
       contents: write
     strategy:
