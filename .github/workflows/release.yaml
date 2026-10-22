@@ -63,8 +63,8 @@ jobs:
 
     # by-exception (2026-07-03): Linux release builds need the Vulkan/Wayland
     # toolchain, which a self-hosted runner cannot provide.
-    # macOS builds on the one machine holding of the signing certificate.
-    runs-on: ${{ matrix.platform == 'huginn' && fromJSON('["self-hosted", "huginn"]') || matrix.platform }}
+    # macOS builds on the one machine holding the signing certificate (the `macos` label).
+    runs-on: ${{ matrix.platform == 'huginn' && fromJSON('["self-hosted", "macos"]') || matrix.platform }}
 
     # Hard ceiling on the whole job — see the same note in ci.yaml. A release
     # bundles as well as compiles, so this is more generous than CI's 60.
