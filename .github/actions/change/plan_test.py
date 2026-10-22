@@ -204,6 +204,8 @@ def test_discovery(mono, app):
             "members": ["godswood", "frontend"],
             "build": False,
             "source": False,
+            "build_on": ["self-hosted", "household"],
+            "deploy_on": ["self-hosted", "household"],
         }
     ]
 
@@ -211,6 +213,33 @@ def test_discovery(mono, app):
 def test_image_name_from_github_repository(app, monkeypatch):
     monkeypatch.setenv("GITHUB_REPOSITORY", "radar-hooves/godswood-app")
     assert plan(app[0], app[1], app[1])["artefacts"][0]["image"] == "godswood-app"
+
+
+def test_image_name_is_lowercase(app, monkeypatch):
+    monkeypatch.setenv("GITHUB_REPOSITORY", "DiegoSeagull/Godswood")
+    assert plan(app[0], app[1], app[1])["artefacts"][0]["image"] == "godswood"
+
+
+def test_root_image_declares_its_name_and_runners(app):
+    repo, head = app
+    head = change(
+        repo,
+        {
+            "pyproject.toml": '[tool.change]\nimage = "Godswood-Backend"\n'
+            'build_on = ["self-hosted", "builder"]\n'
+        },
+    )
+    art = plan(repo, head, head)["artefacts"][0]
+    assert art["image"] == "godswood-backend"
+    assert art["build_on"] == ["self-hosted", "builder"]
+    assert art["deploy_on"] == ["self-hosted", "household"]
+
+
+def test_runner_labels_must_be_a_list(app):
+    repo, _ = app
+    head = change(repo, {"pyproject.toml": '[tool.change]\ndeploy_on = "mimir"\n'})
+    with pytest.raises(SystemExit, match="deploy_on must be a list"):
+        plan(repo, head, head)
 
 
 def test_pnpm_workspace_without_packages_keeps_the_root(tmp_path):
@@ -465,6 +494,8 @@ def test_a_source_run_image_builds_for_no_code_and_waits_on_no_test(served):
         "members": None,
         "build": False,
         "source": True,
+        "build_on": ["self-hosted", "household"],
+        "deploy_on": ["self-hosted", "household"],
     }
     assert p["reasons"]["image:godswood"] == ["runs from source; no image input moved"]
     # The same push, its image not source-run, builds.
@@ -551,8 +582,8 @@ case "${0##*/} $1 $2 $3" in
     echo "{\"summary\": {\"failed\": 0, \"updated\": $n}}" ;;
   "docker ps"*) cut -f1 "$s/boxes" ;;
   "docker inspect"*)
-    awk -F'\t' -v i="$STUB_REF:latest" 'BEGIN {OFS = FS} {print i, $2, "healthy", $1, 0, "img-" $2, $3}' "$s/boxes" ;;
-  "docker image inspect"*) case $4 in *REVISION*) echo "${last##*:}" ;; *) echo "img-${last##*:}" ;; esac ;;
+    awk -F'\t' -v i="$STUB_REF:latest" 'BEGIN {OFS = FS} {print i, $2, "healthy", $1, 0, "img-" $2, $3, "/box-" $1}' "$s/boxes" ;;
+  "docker image inspect"*) case $4 in *RepoDigests*) cat "$s/digests" 2>/dev/null || echo 1 ;; *REVISION*) echo "${last##*:}" ;; *) echo "img-${last##*:}" ;; esac ;;
   "docker login"*) cat >/dev/null ;;
   "docker buildx imagetools inspect")
     case $last in
@@ -660,6 +691,16 @@ def test_a_stale_source_run_container_never_asks_watchtower_again(host):
     assert r.returncode == 0, r.stdout + r.stderr
     assert sum(c.startswith("curl ") for c in calls) == 1
     assert after == [(new, ""), (old, "true")]
+
+
+def test_a_container_on_a_hand_tagged_image_is_refused_at_once(host, tmp_path):
+    old, new, image = host
+    (tmp_path / "stub").joinpath("digests").write_text("0\n")
+    r, latest, _, calls = image([(old, "")], old, new)
+    assert r.returncode != 0
+    assert "container box-c0" in r.stderr and "pull" in r.stderr and "recreate" in r.stderr
+    assert latest == f"d-{old}" and not asked(calls)
+    assert not any(c.startswith("docker push") for c in calls)
 
 
 def test_copied_reads_the_context_paths_a_dockerfile_takes():
