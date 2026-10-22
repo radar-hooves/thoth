@@ -30,7 +30,7 @@ permissions:
 
 jobs:
   plan:
-    runs-on: [self-hosted, atlas]
+    runs-on: [self-hosted, household]
     timeout-minutes: 10
     permissions:
       contents: read
@@ -62,7 +62,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.members != '[]'
     name: test ${{ matrix.member.name }}
-    runs-on: [self-hosted, atlas]
+    runs-on: [self-hosted, household]
     timeout-minutes: 75
     permissions:
       contents: read
@@ -110,7 +110,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.libraries != '[]'
     name: library ${{ matrix.member.name }}
-    runs-on: [self-hosted, atlas]
+    runs-on: [self-hosted, household]
     timeout-minutes: 75
     permissions:
       contents: read
@@ -156,7 +156,7 @@ jobs:
     needs: [plan, library]
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.libraries != '[]' }}
     name: sweep ${{ matrix.member.name }}
-    runs-on: [self-hosted, atlas]
+    runs-on: [self-hosted, household]
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -177,7 +177,7 @@ jobs:
   repo:
     needs: plan
     if: needs.plan.outputs.repo != ''
-    runs-on: [self-hosted, atlas]
+    runs-on: [self-hosted, household]
     timeout-minutes: 60
     env:
       UV_FROZEN: '1'
@@ -193,7 +193,7 @@ jobs:
     needs: [plan, member, library]
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.ship == 'true' && needs.plan.outputs.deploys != '[]' }}
     name: deploy ${{ matrix.deploy.name }}
-    runs-on: [self-hosted, atlas]
+    runs-on: [self-hosted, household]
     timeout-minutes: 90
     permissions:
       contents: read
@@ -238,7 +238,7 @@ jobs:
   change:
     if: always()
     needs: [plan, member, library, sweep, repo, deploy]
-    runs-on: [self-hosted, atlas]
+    runs-on: [self-hosted, household]
     timeout-minutes: 5
     steps:
       - name: Every leg succeeded or was skipped
