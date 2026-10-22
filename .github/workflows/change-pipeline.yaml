@@ -207,6 +207,11 @@ jobs:
     env:
       UV_FROZEN: '1'
     steps:
+      # Checkout first: a copy's local action is read from the checkout.
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - name: Every member it holds, and every library in them, passed its leg
         timeout-minutes: 26
         uses: ./.github/actions/change
@@ -215,10 +220,6 @@ jobs:
           args: ${{ join(matrix.deploy.markers, ' ') }}
         env:
           GH_TOKEN: ${{ github.token }}
-      - id: checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
       # supacrawl's 9 GB image takes about 35 minutes to build, smoke and push.
       - timeout-minutes: 55
         uses: ./.github/actions/change

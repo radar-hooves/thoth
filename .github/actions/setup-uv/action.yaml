@@ -3,7 +3,7 @@
 # fleet that needs uv, in place of calling astral-sh/setup-uv directly:
 #
 #   - name: Set up uv
-#     uses: ./.github/actions/setup-uv
+#     uses: radar-hooves/master-project/.github/actions/setup-uv@main
 #
 # Why this exists rather than each workflow calling setup-uv itself
 # (master-project#173). Two independent network dependencies had to go, and
@@ -12,7 +12,7 @@
 #   1. VERSION RESOLUTION. setup-uv with no `version` resolves "latest", which
 #      fetches the version manifest from raw.githubusercontent.com on EVERY run
 #      before it will even consult the tool cache. That fetch is a hard job
-#      dependency: when it flaked on the atlas runner (twice on 2026-07-13) it
+#      dependency: when it flaked on the self-hosted runner (twice on 2026-07-13) it
 #      failed the whole publish before any build step ran, fired a priority-4
 #      ntfy, and needed a manual re-trigger. An exact `version` short-circuits
 #      the resolution (setup-uv's ExactVersionResolver returns without a
@@ -25,8 +25,8 @@
 #      (measured: api-clients runs 29491195320 / 29491530585, both fetched).
 #
 #      The household's runners are deliberately ephemeral (`ephemeral = true`,
-#      yggdrasil modules/nixos/services/github-runner.nix; host facts in
-#      operators/poodle64/governance/ci/implementation-atlas.md), and the
+#      the fleet repo's runner module; host facts in
+#      the operator's host notes), and the
 #      runner puts its tool cache at /run/github-runner/<repo>/_tool — the
 #      systemd RUNTIME directory, wiped when the unit stops, i.e. after every
 #      job. So the cache is empty on arrival, every time.
@@ -47,7 +47,7 @@
 #   different uv pass `version`.
 #
 # Advancing the pin: keep HOUSEHOLD_UV_VERSION aligned with the uv the
-# workstation runs (nix-managed, yggdrasil modules/home/default.nix), so CI
+# workstation runs (nix-managed, the fleet repo's home module), so CI
 # resolves dependencies exactly as local runs do; bump both together,
 # deliberately. The first run on a new pin downloads once, then caches.
 #

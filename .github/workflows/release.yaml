@@ -16,7 +16,7 @@ concurrency:
 jobs:
   # A tag ships only a commit whose `change` run on main went green.
   gate:
-    runs-on: [self-hosted, atlas]
+    runs-on: [self-hosted, household]
     timeout-minutes: 40
     permissions:
       actions: read
@@ -62,8 +62,8 @@ jobs:
             rustflags: ''
 
     # by-exception (2026-07-03): Linux release builds need the Vulkan/Wayland
-    # toolchain, which the household self-hosted atlas runner cannot provide.
-    # macOS builds on huginn, the only holder of the signing certificate.
+    # toolchain, which a self-hosted runner cannot provide.
+    # macOS builds on the one machine holding of the signing certificate.
     runs-on: ${{ matrix.platform == 'huginn' && fromJSON('["self-hosted", "huginn"]') || matrix.platform }}
 
     # Hard ceiling on the whole job — see the same note in ci.yaml. A release
