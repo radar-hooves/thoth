@@ -8,16 +8,27 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-nix develop --command bash -c '
-    set -euo pipefail
-    xcode=$(env -u DEVELOPER_DIR -u SDKROOT /usr/bin/xcode-select -p)
-    export CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=/usr/bin/cc
-    export RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-fuse-ld=$xcode/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld"
-    pnpm install --frozen-lockfile
+# Check again after building: a failed-job rerun can skip the workflow's gate.
+bash scripts/check-release-writable.sh
+if [[ "$(uname -s)" == Darwin ]]; then
+    # shellcheck disable=SC2016 # Expanded inside the dev shell, not its caller.
+    nix develop --command bash -c '
+        set -euo pipefail
+        xcode=$(env -u DEVELOPER_DIR -u SDKROOT /usr/bin/xcode-select -p)
+        sdk=$(env -u DEVELOPER_DIR -u SDKROOT /usr/bin/xcrun --sdk macosx --show-sdk-path)
+        export CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=/usr/bin/cc
+        # Nix rustc injects its own SDKROOT when invoking the linker. Its SDK
+        # redirects iconv to the store; an explicit SDK library search wins.
+        export RUSTFLAGS="-L native=$sdk/usr/lib ${RUSTFLAGS:-} -C link-arg=-fuse-ld=$xcode/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld"
+        pnpm install --frozen-lockfile
+        pnpm tauri "$@"
+    ' bash "$@"
+else
     pnpm tauri "$@"
-' bash "$@"
+fi
+bash scripts/check-release-writable.sh
 
-[[ "${1:-}" == build ]] || exit 0
+[[ "${1:-}" == build && "$(uname -s)" == Darwin ]] || exit 0
 target=
 for ((i = 1; i <= $#; i++)); do
     [[ "${!i}" == --target ]] && { j=$((i + 1)); target=${!j}; }

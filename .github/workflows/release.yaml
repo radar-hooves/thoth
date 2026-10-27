@@ -22,6 +22,13 @@ jobs:
       actions: read
       contents: read
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Test release state guard
+        run: bash scripts/test-release-writable.sh
+      - name: Refuse published releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/check-release-writable.sh
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -131,6 +138,10 @@ jobs:
         if: matrix.platform != 'huginn'
         run: pnpm install --frozen-lockfile
 
+      - name: Test macOS linkage gate
+        if: matrix.platform == 'huginn'
+        run: bash scripts/test-macos-libraries.sh
+
       - name: Build and release
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
@@ -148,10 +159,35 @@ jobs:
         with:
           # huginn: build with its Xcode toolchain, then verify the signed bundles
           # before this action packages or uploads anything.
-          tauriScript: ${{ matrix.platform == 'huginn' && 'bash scripts/tauri-release.sh' || '' }}
+          tauriScript: 'bash scripts/tauri-release.sh'
           tagName: v__VERSION__
           releaseName: 'Thoth v__VERSION__'
           releaseBody: 'See the assets below to download this version and install.'
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+  publish:
+    needs: build-and-release
+    runs-on: [self-hosted, household]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Publish the verified draft once both platforms succeeded
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bash scripts/check-release-writable.sh
+          python3 -I -c '
+          import pathlib, re, sys
+          version = sys.argv[1].removeprefix("v")
+          text = pathlib.Path("CHANGELOG.md").read_text()
+          section = re.search(r"^## \[" + re.escape(version) + r"\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.M | re.S)
+          if not section:
+              raise SystemExit("Missing release notes")
+          print(section.group(1).strip())
+          ' "$GITHUB_REF_NAME" > "$RUNNER_TEMP/thoth-release-notes.md"
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --notes-file "$RUNNER_TEMP/thoth-release-notes.md" --draft=false --latest

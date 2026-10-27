@@ -45,7 +45,12 @@ if [[ "$command" == verify-bundles ]]; then
     for directory in "$@"; do
         find "$directory" -type d -name '*.app' -print0 > "$paths"
         [[ -s "$paths" ]] || fail 'No macOS application bundle found.'
-        while IFS= read -r -d '' bundle; do verify_code "$bundle"; done < "$paths"
+        while IFS= read -r -d '' bundle; do
+            bash "$root/scripts/verify-macos-libraries.sh" "$bundle"
+            verify_code "$bundle"
+            details=$(codesign -dv "$bundle" 2>&1)
+            [[ "$details" == *'(runtime)'* ]] || fail 'Bundle lacks hardened runtime.'
+        done < "$paths"
         find "$directory" -type f -print0 > "$paths"
         while IFS= read -r -d '' binary; do
             kind=$(file -b "$binary")

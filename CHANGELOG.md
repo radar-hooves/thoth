@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026.10.3] - 2026-10-27
+
+### Fixed
+
+- **Thoth launches on Apple silicon Macs without Nix installed.** The macOS release now links Apple's system libraries instead of a library on the build machine. If 2026.10.2 no longer opens, install this release manually; an app that cannot launch cannot update itself.
+- **Mac window controls stay centred during live resizing.**
+
+### Changed
+
+- Every macOS release is checked for external library paths, its signing certificate and hardened runtime before upload. A published version's assets can no longer be replaced by re-running the release workflow; fixes ship under a new version.
+
 ## [2026.10.2] - 2026-10-08
 
 ### Added
