@@ -1,7 +1,6 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><title>Thoth handoff</title>
-<body><h1>Thoth</h1>
-<section><h2>macOS release portability</h2>
-<p>27/10/2026: master-project requested a replacement for the broken 2026.10.2 Mac release. Nix Rust selects a Nix SDK at link time; the release now searches Xcode's system libraries first and no longer embeds Xcode Swift runtime paths.</p>
-<p>Next: wait for the release commit's green change run, tag v2026.10.3, then download and verify the published DMG. No issue: this bounded repair is being completed in the current dispatch. Do not install on the collaborator's Mac; master-project owns installation.</p>
-</section></body></html>
+<body><h1>Thoth</h1><p>No open repository work.</p>
+<p>27/10/2026: v2026.10.3 was published after successful change and release runs. The downloaded Apple silicon DMG passed recursive library-path and strict signature checks: system libraries only, Authority=poodle64, hardened runtime. The live updater manifest names 2026.10.3.</p>
+<p>Master-project owns manual installation on the collaborator's Mac; this dispatch did not touch it. Published release assets are not replaceable by a workflow rerun.</p>
+</body></html>
