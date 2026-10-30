@@ -63,7 +63,7 @@ importers:
         version: 3.6.0
       zod:
         specifier: ^4.4.3
-        version: 4.4.3
+        version: 4.6.6
     devDependencies:
       '@internationalized/date':
         specifier: ^3.12.2
@@ -595,12 +595,14 @@ packages:
   '@opentelemetry/sdk-trace-web@2.11.0':
     resolution: {integrity: sha512-8hgLI437x8VRKzgUr+WRcHFp9AeaHmveKRsPIMNele9tethgCKprakRRqZCWyt41ilALHATfspUMl1An0OTMUQ==}
     engines: {node: ^18.19.0 || >=20.6.0}
+    deprecated: Use @opentelemetry/sdk-trace package
     peerDependencies:
       '@opentelemetry/api': '>=1.0.0 <1.10.0'
 
   '@opentelemetry/sdk-trace-web@2.12.0':
     resolution: {integrity: sha512-y0hCzbnBHScmioF0drJOyaPk1sQf2wwbIuy3rWlM0Fcx8mLfPDvFsQ7tJ+zMm8yAqI06rSlFKkL7ZpcrFOqAdQ==}
     engines: {node: ^18.19.0 || >=20.6.0}
+    deprecated: Use @opentelemetry/sdk-trace package
     peerDependencies:
       '@opentelemetry/api': '>=1.0.0 <1.10.0'
 
@@ -2561,8 +2563,8 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+  zod@4.6.6:
+    resolution: {integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==}
 
 snapshots:
 
@@ -4578,8 +4580,8 @@ snapshots:
       typebox: 1.1.39
       valibot: 1.4.1(typescript@6.0.3)
       yup: 1.7.1
-      zod: 4.4.3
-      zod-v3-to-json-schema: 4.0.0(zod@4.4.3)
+      zod: 4.6.6
+      zod-v3-to-json-schema: 4.0.0(zod@4.6.6)
     transitivePeerDependencies:
       - '@types/json-schema'
       - typescript
@@ -4808,12 +4810,12 @@ snapshots:
 
   zimmerframe@1.1.4: {}
 
-  zod-v3-to-json-schema@4.0.0(zod@4.4.3):
+  zod-v3-to-json-schema@4.0.0(zod@4.6.6):
     dependencies:
-      zod: 4.4.3
+      zod: 4.6.6
     optional: true
 
   zod@3.25.76:
     optional: true
 
-  zod@4.4.3: {}
+  zod@4.6.6: {}
