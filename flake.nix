@@ -118,7 +118,7 @@
           '')
         ] ++ [
           # Frontend
-          nodejs_22
+          nodejs_24
           pnpm
 
           # Build tools
@@ -304,9 +304,9 @@
               # both hashes need a fresh discovery regardless of the previous ones.
               # v2026.9.34: traced_sync_value added, no crate version bump — the
               # commit id still moves, so the hash does too.
-              "telemetry-0.6.0" = "sha256-+GReA0NTRCYxLcqSs1bmeM+Vt0YKLqL942O8a/hBWiA=";
-              "tauri-plugin-telemetry-0.1.0" = "sha256-+GReA0NTRCYxLcqSs1bmeM+Vt0YKLqL942O8a/hBWiA=";
-              "desktop-shell-0.2.0" = "sha256-+GReA0NTRCYxLcqSs1bmeM+Vt0YKLqL942O8a/hBWiA=";
+              "telemetry-0.7.0" = "sha256-Sw4dv8BQL+JbHNHHBotuVUc4/Sc0/z9pc0QSxD3nJLw=";
+              "tauri-plugin-telemetry-0.1.0" = "sha256-Sw4dv8BQL+JbHNHHBotuVUc4/Sc0/z9pc0QSxD3nJLw=";
+              "desktop-shell-0.2.0" = "sha256-Sw4dv8BQL+JbHNHHBotuVUc4/Sc0/z9pc0QSxD3nJLw=";
             };
           };
 
@@ -319,7 +319,7 @@
           pnpmDeps = pkgs.fetchPnpmDeps {
             inherit (finalAttrs) pname version src;
             fetcherVersion = 3;
-            hash = "sha256-0YlLmM0AT5aL8KyLy5ubF3P81ELnIhVD7tQV57nz2H4=";
+            hash = "sha256-lIhOgr9DE4mPw47XW1ByRiD4eC2S3ZAm0QbO98PQ/UA=";
           };
 
           nativeBuildInputs = with pkgs; [
@@ -364,6 +364,15 @@
           # whisper-rs-sys bindgen needs the cc-wrapper libc flags + clang headers
           # (issue #64); `$(< … )` must run at build time, so it lives here.
           preConfigure = bindgenHook;
+
+          # The macOS signing runner and bundle check are for Darwin releases; on
+          # Linux the relative runner path does not resolve inside the sandbox.
+          tauriBuildFlags = [
+            "--runner"
+            "cargo"
+            "--config"
+            ''{"build":{"beforeBundleCommand":""}}''
+          ];
 
           # No updater signing key in the sandbox.
           preBuild = ''

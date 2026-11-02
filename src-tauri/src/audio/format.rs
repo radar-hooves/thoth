@@ -33,7 +33,7 @@ impl AudioConverter {
     ) -> Result<Self, rubato::ResamplerConstructionError> {
         let params = SincInterpolationParameters {
             sinc_len: 256,
-            f_cutoff: 0.95,
+            f_cutoff: Some(0.95),
             interpolation: SincInterpolationType::Linear,
             oversampling_factor: 256,
             window: WindowFunction::BlackmanHarris2,
@@ -105,7 +105,7 @@ impl AudioConverter {
     /// exactly once at end of stream, after all full chunks have gone through
     /// [`process_to_i16`].
     ///
-    /// In rubato 3.0 the drain is expressed by calling `process_into_buffer` with
+    /// In rubato the drain is expressed by calling `process_into_buffer` with
     /// `partial_len = Some(n)` where `n` is the number of leftover input frames
     /// (0 if the accumulator was empty). When `partial_len < chunk_size`, rubato
     /// zero-pads the input to fill one chunk and emits only the output frames
@@ -257,7 +257,6 @@ mod tests {
                 SOURCE_RATE as usize,
                 TARGET_RATE as usize,
                 CHUNK,
-                1,
                 1,
                 FixedSync::Input,
             )

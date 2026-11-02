@@ -20,6 +20,8 @@ export default {
         ],
       },
     ],
+    // @apply takes utility class names, not CSS
+    'at-rule-prelude-no-invalid': [true, { ignoreAtRules: ['apply'] }],
     // Allow shadcn/Tailwind class naming patterns
     'custom-property-pattern': null,
     'selector-class-pattern': null,
