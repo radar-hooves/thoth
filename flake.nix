@@ -365,6 +365,15 @@
           # (issue #64); `$(< … )` must run at build time, so it lives here.
           preConfigure = bindgenHook;
 
+          # The macOS signing runner and bundle check are for Darwin releases; on
+          # Linux the relative runner path does not resolve inside the sandbox.
+          tauriBuildFlags = [
+            "--runner"
+            "cargo"
+            "--config"
+            ''{"build":{"beforeBundleCommand":""}}''
+          ];
+
           # No updater signing key in the sandbox.
           preBuild = ''
             substituteInPlace src-tauri/tauri.conf.json \
