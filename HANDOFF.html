@@ -1,6 +1,12 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><title>Thoth handoff</title>
-<body><h1>Thoth</h1><p>No open repository work.</p>
-<p>27/10/2026: v2026.10.3 was published after successful change and release runs. The downloaded Apple silicon DMG passed recursive library-path and strict signature checks: system libraries only, Authority=poodle64, hardened runtime. The live updater manifest names 2026.10.3.</p>
-<p>Master-project owns manual installation on the collaborator's Mac; this dispatch did not touch it. Published release assets are not replaceable by a workflow rerun.</p>
+<body><h1>Thoth</h1>
+<h2>In flight (02/11/2026)</h2>
+<ul>
+<li><b>v2026.11.0</b> tagged on 872db98 (change run green): the macOS clipboard-image leak fix (huginn reached a 20 GB footprint in 11 days) and a six-hourly update re-check. Release run 41377714286 builds macOS on huginn and Linux, then publishes. Next: install it on huginn while Thoth is idle (same poodle64 certificate as the installed 2026.10.2, so microphone and accessibility grants survive), confirm the footprint stays flat across image pastes, and tell master-project-85 it is live.</li>
+<li><b>app-factory lane</b> 20261102T022704Z-966183f9 (goku/sonnet, on atlas): process telemetry reports only <code>rss_bytes</code>, which stayed at about 550 MB while the footprint hit 20 GB. Asked for the macOS footprint as a general capability, proven against <code>footprint &lt;pid&gt;</code> on huginn. When it tags a release, bump thoth's <code>telemetry</code> and <code>tauri-plugin-telemetry</code> pins.</li>
+<li><b>Dev-shell linking</b> on macOS 27 now runs on Xcode's clang and ld from flake.nix <code>darwinSwiftLinkHook</code>, which <code>scripts/tauri-release.sh</code> also relies on. The first release cut after this change is the one to watch: its macOS leg is the proof for the release path.</li>
+<li>master-project's upgrade lane (thoth-wt-b658f3ed, Renovate #191 majors) rebases onto main and releases after 2026.11.0.</li>
+</ul>
+<p>27/10/2026: v2026.10.3 was published after successful change and release runs: system libraries only, Authority=poodle64, hardened runtime. Published release assets are not replaceable by a workflow rerun.</p>
 </body></html>

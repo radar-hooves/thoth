@@ -161,14 +161,23 @@
         # Both paths MUST be computed with the leaked apple-sdk vars unset —
         # otherwise `xcrun` resolves to the Nix 14.4 SDK (no swiftCore, no MLState)
         # instead of Xcode's. Done in the shellHook (not a static mkShell attr) so
-        # `xcrun` runs at shell entry, and appended to (not clobbering) RUSTFLAGS.
+        # `xcrun` runs at shell entry, and added to (not clobbering) RUSTFLAGS.
+        #
+        # The link itself runs on Xcode's own clang and ld: nix's ld cannot read
+        # the Xcode SDK's .tbd stubs ("malformed file ... unknown architecture").
+        # Nix rustc injects its own SDKROOT when invoking the linker, and that SDK
+        # redirects iconv to the store, so the Xcode SDK's library search goes
+        # first. Dev builds, tests and the release build (scripts/tauri-release.sh)
+        # all link through this one hook.
         darwinSwiftLinkHook = pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
 
+          __thoth_xcode="$(env -u SDKROOT -u DEVELOPER_DIR /usr/bin/xcode-select -p 2>/dev/null)"
           __thoth_xcode_sdk="$(env -u SDKROOT -u DEVELOPER_DIR /usr/bin/xcrun --sdk macosx --show-sdk-path 2>/dev/null)"
           if [ -n "$__thoth_xcode_sdk" ] && [ -d "$__thoth_xcode_sdk/usr/lib/swift" ]; then
-            export RUSTFLAGS="''${RUSTFLAGS:+$RUSTFLAGS }-L $__thoth_xcode_sdk/usr/lib/swift -L framework=$__thoth_xcode_sdk/System/Library/Frameworks"
+            export CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=/usr/bin/cc
+            export RUSTFLAGS="-L native=$__thoth_xcode_sdk/usr/lib ''${RUSTFLAGS:+$RUSTFLAGS }-L $__thoth_xcode_sdk/usr/lib/swift -L framework=$__thoth_xcode_sdk/System/Library/Frameworks -C link-arg=-fuse-ld=$__thoth_xcode/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld"
           fi
-          unset __thoth_xcode_sdk
+          unset __thoth_xcode __thoth_xcode_sdk
         '';
 
         # One dev-shell definition, optionally wired for GPU Parakeet (CUDA).
