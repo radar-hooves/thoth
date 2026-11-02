@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026.11.0] - 2026-11-02
+
+### Fixed
+
+- **Thoth no longer grows by the size of a screenshot each time it pastes over one.** When a dictation pasted while an image was on the clipboard, putting the image back afterwards leaked a copy of it on macOS, so a Mac that dictates over screenshots all day reached a 20 GB footprint in eleven days. The image now goes back exactly as it was, in its original format.
+- **A running Thoth now offers new releases.** It checked for updates only at launch, and it runs for weeks at a time; it now checks again every six hours while "Check for updates" is on.
+
 ## [2026.10.3] - 2026-10-27
 
 ### Fixed
