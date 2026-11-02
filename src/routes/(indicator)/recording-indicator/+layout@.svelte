@@ -23,7 +23,6 @@
     margin: 0;
     padding: 0;
     background: transparent !important;
-    background-color: transparent !important;
     overflow: hidden;
   }
 </style>

@@ -17,7 +17,7 @@
 use rmcp::{
     ErrorData as McpError, ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
-    model::{CallToolResult, ContentBlock, ServerCapabilities, ServerInfo},
+    model::{CallToolResult, ContentBlock, ServerCapabilities, ServerConfig},
     schemars, tool, tool_handler, tool_router,
 };
 
@@ -588,8 +588,8 @@ impl ThothMcp {
 
 #[tool_handler]
 impl ServerHandler for ThothMcp {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_instructions(
                 "Use this server to read and control the locally-running Thoth voice-transcription \
                  app on this machine. Dispatchers: `dictionary` (list/add/update/delete/import/export), \

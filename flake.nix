@@ -118,7 +118,7 @@
           '')
         ] ++ [
           # Frontend
-          nodejs_22
+          nodejs_24
           pnpm
 
           # Build tools
@@ -319,7 +319,7 @@
           pnpmDeps = pkgs.fetchPnpmDeps {
             inherit (finalAttrs) pname version src;
             fetcherVersion = 3;
-            hash = "sha256-0YlLmM0AT5aL8KyLy5ubF3P81ELnIhVD7tQV57nz2H4=";
+            hash = "sha256-lIhOgr9DE4mPw47XW1ByRiD4eC2S3ZAm0QbO98PQ/UA=";
           };
 
           nativeBuildInputs = with pkgs; [
