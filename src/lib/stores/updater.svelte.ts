@@ -92,11 +92,31 @@ function describeUpdateError(err: unknown): string {
   return `Update failed: ${raw}`;
 }
 
+/** How often a running app checks again: it stays up for weeks between launches. */
+export const UPDATE_RECHECK_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Re-check for updates every {@link UPDATE_RECHECK_MS} while `enabled()` holds,
+ * so a release published after launch is still offered. A re-check is skipped
+ * once an update is on offer or a check is in flight, and its failure is quiet:
+ * an offline Mac must not raise an error toast every interval. Returns the
+ * function that stops the schedule.
+ */
+export function startPeriodicUpdateChecks(enabled: () => boolean): () => void {
+  const timer = setInterval(() => {
+    const busy = ['checking', 'available', 'downloading'].includes(updaterState.state);
+    if (enabled() && !busy) {
+      void checkForUpdate({ quiet: true });
+    }
+  }, UPDATE_RECHECK_MS);
+  return () => clearInterval(timer);
+}
+
 /**
  * Check for available updates.
- * Shows a toast when an update is found or when the check fails.
+ * Shows a toast when an update is found, and when the check fails unless `quiet`.
  */
-export async function checkForUpdate(): Promise<void> {
+export async function checkForUpdate({ quiet = false }: { quiet?: boolean } = {}): Promise<void> {
   updaterState.state = 'checking';
   updaterState.error = null;
   updaterState.update = null;
@@ -140,6 +160,7 @@ export async function checkForUpdate(): Promise<void> {
       error: updaterState.error,
     });
 
+    if (quiet) return;
     toast.error('Failed to check for updates', {
       description: updaterState.error,
       action: { label: 'Download Manually', onClick: openReleasesPage },

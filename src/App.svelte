@@ -18,7 +18,7 @@
   import { settingsStore } from './lib/stores/settings.svelte';
   import { shortcutsStore } from './lib/stores/shortcuts.svelte';
   import { soundStore } from './lib/stores/sound.svelte';
-  import { checkForUpdate } from './lib/stores/updater.svelte';
+  import { checkForUpdate, startPeriodicUpdateChecks } from './lib/stores/updater.svelte';
 
   /** Debug logging — only active in development builds */
   const debug = import.meta.env.DEV
@@ -26,6 +26,7 @@
     : () => {};
 
   let indicatorLogUnlisten: UnlistenFn | null = null;
+  const stopUpdateChecks = startPeriodicUpdateChecks(() => configStore.general.checkForUpdates);
 
   let isInitialising = $state(true);
   let initError = $state<string | null>(null);
@@ -90,6 +91,7 @@
   });
 
   onDestroy(() => {
+    stopUpdateChecks();
     pipelineStore.cleanup();
     if (indicatorLogUnlisten) {
       indicatorLogUnlisten();
