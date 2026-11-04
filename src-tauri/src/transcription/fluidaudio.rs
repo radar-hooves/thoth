@@ -23,6 +23,8 @@ use anyhow::{Result, anyhow};
 use fluidaudio_rs::FluidAudio;
 use std::path::{Path, PathBuf};
 
+use super::tail::{TAIL_MIN_TOTAL_SECS, TAIL_SECS, ends_in_speech, splice_tail};
+
 /// Maximum audio length (seconds, before padding) handed to FluidAudio as a
 /// single unit.
 ///
@@ -128,6 +130,10 @@ impl TranscriptionService {
     /// whose transcripts are joined with a space. This avoids FluidAudio 0.15's
     /// unreliable final-chunk decode, which otherwise drops the tail of long
     /// recordings or appends a hallucinated trailing filler token.
+    ///
+    /// The engine sometimes drops the last words of a take, so the last
+    /// [`TAIL_SECS`] are decoded again on their own and any words the main
+    /// transcript lacks are spliced on (see [`splice_tail`]).
     pub fn transcribe(&self, audio_path: &Path) -> Result<String> {
         let (samples, spec) = match read_wav_mono(audio_path) {
             Ok(loaded) => loaded,
@@ -141,7 +147,55 @@ impl TranscriptionService {
             }
         };
 
-        let (segments, seam_gaps) = plan_segments(&samples, spec.sample_rate);
+        let main = self.decode_segments(audio_path, &samples, &spec)?;
+        match self.decode_tail(audio_path, &samples, &spec) {
+            Ok(Some(tail)) => {
+                let spliced = splice_tail(&main, &tail);
+                if spliced != main {
+                    tracing::info!("FluidAudio: recovered a dropped ending from the tail clip");
+                }
+                Ok(spliced)
+            }
+            Ok(None) => Ok(main),
+            // The main transcript is complete bar a possible dropped ending;
+            // a failed tail decode must not lose it.
+            Err(e) => {
+                tracing::warn!("FluidAudio tail decode failed ({e}); keeping the main transcript");
+                Ok(main)
+            }
+        }
+    }
+
+    /// Decode the last [`TAIL_SECS`] of a take on their own, or `None` when
+    /// the take is too short for that to differ from the main decode or does not end in speech.
+    fn decode_tail(
+        &self,
+        audio_path: &Path,
+        samples: &[f32],
+        spec: &hound::WavSpec,
+    ) -> Result<Option<String>> {
+        let rate = spec.sample_rate as f32;
+        if samples.len() as f32 / rate <= TAIL_MIN_TOTAL_SECS
+            || !ends_in_speech(samples, spec.sample_rate)
+        {
+            return Ok(None);
+        }
+        let begin = samples.len() - (TAIL_SECS * rate) as usize;
+        let tmp = audio_path.with_extension("tail.wav");
+        write_padded_wav(&samples[begin..], spec, &tmp)?;
+        let text = self.transcribe_one(&tmp);
+        let _ = std::fs::remove_file(&tmp);
+        Ok(Some(text?.trim().to_string()))
+    }
+
+    /// Decode a take in single-shot segments and join them.
+    fn decode_segments(
+        &self,
+        audio_path: &Path,
+        samples: &[f32],
+        spec: &hound::WavSpec,
+    ) -> Result<String> {
+        let (segments, seam_gaps) = plan_segments(samples, spec.sample_rate);
         let total_secs = samples.len() as f32 / spec.sample_rate as f32;
         tracing::info!(
             "FluidAudio: {:.1}s recording → {} segment(s) (single-shot limit {:.1}s)",
@@ -155,7 +209,7 @@ impl TranscriptionService {
         let mut kept: Vec<bool> = Vec::with_capacity(segments.len());
         for (i, &(begin, end)) in segments.iter().enumerate() {
             let tmp = audio_path.with_extension(format!("seg{i}.wav"));
-            write_padded_wav(&samples[begin..end], &spec, &tmp)?;
+            write_padded_wav(&samples[begin..end], spec, &tmp)?;
             let text = self.transcribe_one(&tmp);
             let _ = std::fs::remove_file(&tmp);
 

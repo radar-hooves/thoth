@@ -14,6 +14,7 @@ pub mod ggml_header;
 pub mod manifest;
 #[cfg(feature = "parakeet")]
 pub mod parakeet;
+pub mod tail;
 pub mod whisper;
 
 pub use filter::{FilterOptions, OutputFilter};
