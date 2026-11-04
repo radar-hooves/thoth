@@ -502,7 +502,7 @@ fn is_oneness_determiner(word: &str) -> bool {
 /// Such a run is how people dictate PINs, codes and phone numbers: "one two
 /// three" means the string "123", not the sum 1+2+3. Any run containing a
 /// larger number word is a cardinal phrase ("twenty three" → 23, "two hundred"
-/// → 200) and is handled by `tokens_to_number` instead.
+/// → 200) and is handled by `parse_phrase` instead.
 ///
 /// Returns the concatenated digit string (e.g. "123"), or `None` if the run is
 /// not a pure multi-digit sequence.
@@ -518,339 +518,277 @@ fn digit_sequence(cores: &[&str]) -> Option<String> {
     Some(digits)
 }
 
-/// Parse a contiguous slice of number tokens into a single integer.
-///
-/// Algorithm mirrors how English number words compose:
-///   - Accumulator tracks the in-progress sub-total.
-///   - "hundred" multiplies the accumulator by 100.
-///   - "thousand"/"million"/"billion" flush the accumulator into a high-order
-///     bucket and reset it, so "two thousand and five" → 2005.
-///   - "and" is consumed as a no-op connective (British style).
-///   - Ones/teens/tens add to the accumulator.
-fn tokens_to_number(tokens: &[&str]) -> Option<u64> {
-    let mut total: u64 = 0;
-    let mut current: u64 = 0;
-    let mut had_value = false;
-
-    for token in tokens {
-        let lower = token.to_ascii_lowercase();
-
-        if lower == "and" {
-            // Connective — valid only between number words; skip.
-            continue;
-        }
-
-        if let Some(val) = word_to_value(&lower) {
-            current += val;
-            had_value = true;
-        } else if let Some(mult) = word_to_multiplier(&lower) {
-            if mult == 100 {
-                // "hundred" multiplies the current accumulator only.
-                // If current is 0 (bare "hundred"), treat as 1 × 100.
-                current = if current == 0 { 100 } else { current * 100 };
-                had_value = true;
-            } else {
-                // "thousand", "million", "billion": flush current into total,
-                // scaled by the multiplier.
-                let segment = if current == 0 { 1 } else { current };
-                total += segment * mult;
-                current = 0;
-                had_value = true;
-            }
-        }
-    }
-
-    if !had_value {
-        return None;
-    }
-
-    Some(total + current)
+/// Kind of the last number word accepted into a phrase.
+#[derive(Clone, Copy, PartialEq)]
+enum PhraseKind {
+    Ones,
+    Teen,
+    Tens,
+    Hundred,
+    Big,
+    And,
 }
 
-/// Convert spoken number words to digit strings within arbitrary text.
+/// Parse the longest well-formed cardinal number phrase at the start of
+/// `cores`, returning `(words consumed, value)`.
 ///
-/// Tokenises on whitespace, identifies runs of number words (including the
-/// connective "and"), parses each run to an integer, and splices the digit
-/// string back in place of the run. Non-number tokens and punctuation are
-/// preserved verbatim.
-///
-/// Trade-off: lone "one" is converted to "1" in all positions since this is
-/// a dictation tool and digit output is almost always the intent. Detecting
-/// pronoun vs numeral use is not feasible with a simple rule-based approach.
-pub fn spoken_numbers_to_digits(text: &str) -> String {
-    // Tokenise into (preceding_whitespace, word) pairs so reconstruction is
-    // simply `preceding_ws + word` for each token. This keeps the whitespace
-    // model straightforward: the space *before* a token belongs to that token,
-    // so when a number run is replaced with a digit string we emit the digit
-    // string using the first run-token's preceding whitespace, and the next
-    // token carries its own preceding whitespace unmodified.
-    let mut tokens: Vec<(&str, &str)> = Vec::new();
-    let mut pos = 0;
-    let bytes = text.as_bytes();
-
-    while pos < text.len() {
-        // Consume preceding whitespace.
-        let ws_start = pos;
-        while pos < text.len() && (bytes[pos] == b' ' || bytes[pos] == b'\t') {
-            pos += 1;
-        }
-        let preceding_ws = &text[ws_start..pos];
-
-        if pos >= text.len() {
-            // Trailing-only whitespace with no following word — emit as a
-            // token with an empty word so it is included in the output.
-            if !preceding_ws.is_empty() {
-                tokens.push((preceding_ws, ""));
+/// A phrase ends where the next word cannot extend it ("twenty one" then
+/// "twenty two" are two phrases, never 43), so adjacent phrases are never
+/// summed. "and" belongs to a phrase only between a hundred/thousand and a
+/// following value ("one hundred and five"); anywhere else it is not consumed.
+fn parse_phrase(cores: &[&str]) -> Option<(usize, u64)> {
+    use PhraseKind::*;
+    if cores.first()?.eq_ignore_ascii_case("zero") {
+        return Some((1, 0));
+    }
+    let (mut total, mut cur) = (0u64, 0u64);
+    let mut last: Option<PhraseKind> = None;
+    let mut hundred_used = false;
+    let mut prev_scale = u64::MAX;
+    let mut n = 0;
+    for (idx, core) in cores.iter().enumerate() {
+        let lower = core.to_ascii_lowercase();
+        let accepted = if lower == "and" {
+            let next_is_value = cores
+                .get(idx + 1)
+                .and_then(|w| word_to_value(w))
+                .is_some_and(|v| v > 0);
+            let ok = matches!(last, Some(Hundred | Big)) && next_is_value;
+            if ok {
+                last = Some(And);
             }
+            ok
+        } else if let Some(v) = word_to_value(&lower) {
+            let kind = match v {
+                0 => None,
+                1..=9 => Some(Ones),
+                10..=19 => Some(Teen),
+                _ => Some(Tens),
+            };
+            let ok = match kind {
+                None => false,
+                Some(Ones) => matches!(last, None | Some(Hundred | Big | And | Tens)),
+                Some(_) => matches!(last, None | Some(Hundred | Big | And)),
+            };
+            if ok {
+                cur += v;
+                last = kind;
+            }
+            ok
+        } else if let Some(m) = word_to_multiplier(&lower) {
+            if m == 100 {
+                let ok = !hundred_used && matches!(last, None | Some(Ones | Teen | Tens));
+                if ok {
+                    cur = if cur == 0 { 100 } else { cur * 100 };
+                    hundred_used = true;
+                    last = Some(Hundred);
+                }
+                ok
+            } else {
+                let ok =
+                    m < prev_scale && matches!(last, None | Some(Ones | Teen | Tens | Hundred));
+                if ok {
+                    total += cur.max(1) * m;
+                    cur = 0;
+                    hundred_used = false;
+                    prev_scale = m;
+                    last = Some(Big);
+                }
+                ok
+            }
+        } else {
+            false
+        };
+        if !accepted {
             break;
         }
+        n += 1;
+    }
+    (n > 0).then_some((n, total + cur))
+}
 
-        // Consume a non-whitespace word.
-        let word_start = pos;
-        while pos < text.len() && bytes[pos] != b' ' && bytes[pos] != b'\t' {
-            pos += 1;
+/// One whitespace-delimited word split into its punctuation envelope and
+/// alphabetic core. A hyphenated number compound ("twenty-seven-inch") is
+/// split into several of these; `suffix` carries any non-number tail.
+struct Tok {
+    ws: String,
+    prefix: String,
+    core: String,
+    suffix: String,
+}
+
+impl Tok {
+    fn is_number_like(&self) -> bool {
+        !self.core.is_empty()
+            && (is_number_token(&self.core) || word_to_single_digit(&self.core).is_some())
+    }
+}
+
+/// Split `text` into [`Tok`]s on spaces and tabs, expanding a hyphenated
+/// compound into its number words when it holds two or more of them, or is
+/// nothing but number words ("twenty-three", "twenty-seven-inch"; not
+/// "twenty-something", "well-known").
+fn tokenise_numbers(text: &str) -> Vec<Tok> {
+    let mut toks = Vec::new();
+    let mut rest = text;
+    while !rest.is_empty() {
+        let ws_len = rest.len() - rest.trim_start_matches([' ', '\t']).len();
+        let (ws, after) = rest.split_at(ws_len);
+        if after.is_empty() {
+            toks.push(Tok {
+                ws: ws.to_string(),
+                prefix: String::new(),
+                core: String::new(),
+                suffix: String::new(),
+            });
+            break;
         }
-        let word = &text[word_start..pos];
+        let word_len = after.find([' ', '\t']).unwrap_or(after.len());
+        let (word, next) = after.split_at(word_len);
+        rest = next;
 
-        tokens.push((preceding_ws, word));
-    }
-
-    if tokens.is_empty() {
-        return text.to_string();
-    }
-
-    /// Strip leading/trailing punctuation from a word to expose its alphabetic core.
-    fn alpha_core(word: &str) -> &str {
         let start = word
             .char_indices()
             .find(|(_, c)| c.is_alphabetic())
-            .map(|(i, _)| i)
-            .unwrap_or(word.len());
+            .map_or(word.len(), |(i, _)| i);
         let end = word
             .char_indices()
             .rev()
             .find(|(_, c)| c.is_alphabetic())
-            .map(|(i, c)| i + c.len_utf8())
-            .unwrap_or(0);
-        if start < end { &word[start..end] } else { "" }
-    }
-
-    // Expand hyphenated number compounds into individual sub-tokens so the
-    // run-scanner below treats them the same as space-separated words.
-    //
-    // A token is expanded only when every hyphen-separated piece (after
-    // stripping leading/trailing punctuation from the whole token) is itself a
-    // recognised number word. This is conservative by design:
-    //   "twenty-three"    → ["twenty", "three"]   ✓ (all pieces are number words)
-    //   "well-known"      → kept intact            ✗ ("well" is not a number word)
-    //   "twenty-something"→ kept intact            ✗ ("something" is not a number word)
-    //   "x-ray"           → kept intact            ✗ ("x" and "ray" are not number words)
-    // The leading punctuation of the first piece and trailing punctuation of the
-    // last piece are preserved; the hyphen itself is discarded.
-    //
-    // Two-phase approach to satisfy the borrow checker:
-    //   Phase 1 — classify each token; tokens that expand produce owned Strings
-    //             stored in `owned_pieces`; everything else records its original
-    //             slice indices for phase 2.
-    //   Phase 2 — build the final `&str` slice pairs from either the original
-    //             `text`-backed slices or the owned Strings.
-    //
-    // An enum avoids any mutation of `owned_pieces` while borrowing from it.
-    enum TokenKind<'t> {
-        // Original whitespace-delimited token — borrow directly from `text`.
-        Original((&'t str, &'t str)),
-        // Hyphenated number compound — index range into `owned_pieces`; the
-        // first sub-token carries the original preceding whitespace.
-        Expanded {
-            ws: &'t str,
-            range: std::ops::Range<usize>,
-        },
-    }
-
-    let mut owned_pieces: Vec<String> = Vec::new();
-    let mut kinds: Vec<TokenKind> = Vec::with_capacity(tokens.len());
-
-    for (ws, word) in &tokens {
-        let (ws, word) = (*ws, *word);
-
-        // Fast path: no hyphen means nothing to expand.
-        if !word.contains('-') {
-            kinds.push(TokenKind::Original((ws, word)));
+            .map_or(0, |(i, c)| i + c.len_utf8());
+        if start >= end {
+            toks.push(Tok {
+                ws: ws.to_string(),
+                prefix: word.to_string(),
+                core: String::new(),
+                suffix: String::new(),
+            });
             continue;
         }
+        let (prefix, core, suffix) = (&word[..start], &word[start..end], &word[end..]);
 
-        let core = alpha_core(word);
-        if core.is_empty() || !core.contains('-') {
-            kinds.push(TokenKind::Original((ws, word)));
-            continue;
-        }
-
-        // Split the alphabetic core on hyphens and check every piece.
         let pieces: Vec<&str> = core.split('-').collect();
-        let all_number_words = pieces.iter().all(|p| {
-            !p.is_empty() && (word_to_value(p).is_some() || word_to_multiplier(p).is_some())
-        });
+        let numeric = pieces
+            .iter()
+            .take_while(|p| word_to_value(p).is_some() || word_to_multiplier(p).is_some())
+            .count();
+        if pieces.len() > 1 && (numeric == pieces.len() || numeric >= 2) {
+            for (k, piece) in pieces[..numeric].iter().enumerate() {
+                let last = k == numeric - 1;
+                let tail = pieces[numeric..].join("-");
+                let mut sfx = String::new();
+                if last {
+                    if !tail.is_empty() {
+                        sfx.push('-');
+                        sfx.push_str(&tail);
+                    }
+                    sfx.push_str(suffix);
+                }
+                toks.push(Tok {
+                    ws: if k == 0 {
+                        ws.to_string()
+                    } else {
+                        String::new()
+                    },
+                    prefix: if k == 0 {
+                        prefix.to_string()
+                    } else {
+                        String::new()
+                    },
+                    core: piece.to_string(),
+                    suffix: sfx,
+                });
+            }
+        } else {
+            toks.push(Tok {
+                ws: ws.to_string(),
+                prefix: prefix.to_string(),
+                core: core.to_string(),
+                suffix: suffix.to_string(),
+            });
+        }
+    }
+    toks
+}
 
-        if !all_number_words {
-            kinds.push(TokenKind::Original((ws, word)));
+/// Convert spoken number words to digits within arbitrary text.
+///
+/// Finds runs of adjacent number words (a run stops at punctuation) and reads
+/// each as a digit-by-digit sequence ("one two three" → "123") when it is
+/// nothing but single digits, otherwise as separate cardinal phrases
+/// ("twenty three" → 23, "twenty one twenty two" → "21 22"). Two phrases that
+/// sit next to each other are never summed. Words that are not part of a
+/// phrase, including a stray "and", are kept verbatim.
+///
+/// Trade-off: lone "one" is converted to "1" except after a determiner
+/// ("no one"); pronoun versus numeral is not decidable by rule.
+pub fn spoken_numbers_to_digits(text: &str) -> String {
+    let toks = tokenise_numbers(text);
+    let n = toks.len();
+    let mut out = String::with_capacity(text.len());
+    let emit_verbatim = |out: &mut String, t: &Tok| {
+        out.push_str(&t.ws);
+        out.push_str(&t.prefix);
+        out.push_str(&t.core);
+        out.push_str(&t.suffix);
+    };
+
+    let mut i = 0;
+    while i < n {
+        if !toks[i].is_number_like() {
+            emit_verbatim(&mut out, &toks[i]);
+            i += 1;
+            continue;
+        }
+        // Run: stops after a token with trailing punctuation or before one
+        // with leading punctuation.
+        let mut end = i + 1;
+        while toks[end - 1].suffix.is_empty()
+            && end < n
+            && toks[end].prefix.is_empty()
+            && toks[end].is_number_like()
+        {
+            end += 1;
+        }
+        let cores: Vec<&str> = toks[i..end].iter().map(|t| t.core.as_str()).collect();
+
+        if let Some(digits) = digit_sequence(&cores) {
+            out.push_str(&toks[i].ws);
+            out.push_str(&toks[i].prefix);
+            out.push_str(&digits);
+            out.push_str(&toks[end - 1].suffix);
+            i = end;
             continue;
         }
 
-        // Locate where the core sits inside the original word so we can
-        // extract any leading/trailing punctuation envelope.
-        let core_start = word.find(core).unwrap_or(0);
-        let core_end = core_start + core.len();
-        let leading_punct = &word[..core_start];
-        let trailing_punct = &word[core_end..];
-
-        let n_pieces = pieces.len();
-        let base_idx = owned_pieces.len();
-
-        for (idx, piece) in pieces.iter().enumerate() {
-            // Build a synthetic token with punctuation only on the first/last piece.
-            let synthetic = if idx == 0 && idx == n_pieces - 1 {
-                // Single piece — cannot happen since we checked for '-' above.
-                format!("{leading_punct}{piece}{trailing_punct}")
-            } else if idx == 0 {
-                format!("{leading_punct}{piece}")
-            } else if idx == n_pieces - 1 {
-                format!("{piece}{trailing_punct}")
-            } else {
-                piece.to_string()
-            };
-            owned_pieces.push(synthetic);
-        }
-
-        kinds.push(TokenKind::Expanded {
-            ws,
-            range: base_idx..owned_pieces.len(),
-        });
-    }
-
-    // Phase 2: owned_pieces is fully built; borrow from it freely.
-    let mut expanded_tokens: Vec<(&str, &str)> = Vec::with_capacity(kinds.len());
-    for kind in &kinds {
-        match kind {
-            TokenKind::Original((ws, word)) => {
-                expanded_tokens.push((ws, word));
-            }
-            TokenKind::Expanded { ws, range } => {
-                for (idx, owned) in owned_pieces[range.clone()].iter().enumerate() {
-                    let preceding = if idx == 0 { *ws } else { "" };
-                    expanded_tokens.push((preceding, owned.as_str()));
-                }
-            }
-        }
-    }
-
-    let tokens = expanded_tokens;
-
-    let n = tokens.len();
-    let mut out = String::with_capacity(text.len());
-    let mut i = 0;
-
-    while i < n {
-        let (preceding_ws, word) = tokens[i];
-
-        let core = alpha_core(word);
-
-        // A token starts a number run if it is a number token, or a spoken digit
-        // such as "oh" (which is not a general number token but does belong in a
-        // digit sequence like "four oh four").
-        let starts_run =
-            !core.is_empty() && (is_number_token(core) || word_to_single_digit(core).is_some());
-
-        if starts_run {
-            // Identify the full run of consecutive number tokens.
-            // "and" is included only when it is followed by another number word,
-            // preventing a trailing "and" from being swallowed.
-            let run_start = i;
-            let mut run_end = i;
-
-            let mut j = i;
-            while j < n {
-                let (_, w) = tokens[j];
-                let c = alpha_core(w);
-                let in_run =
-                    !c.is_empty() && (is_number_token(c) || word_to_single_digit(c).is_some());
-                if !in_run {
-                    break;
-                }
-                if c.eq_ignore_ascii_case("and") {
-                    let next_is_number = j + 1 < n && {
-                        let (_, nw) = tokens[j + 1];
-                        let nc = alpha_core(nw);
-                        !nc.is_empty()
-                            && (is_number_token(nc) || word_to_single_digit(nc).is_some())
-                            && !nc.eq_ignore_ascii_case("and")
+        let mut p = i;
+        while p < end {
+            let phrase = parse_phrase(&cores[p - i..]);
+            let pronoun_one = phrase.is_some_and(|(len, _)| len == 1)
+                && cores[p - i].eq_ignore_ascii_case("one")
+                && p > 0
+                && is_oneness_determiner(&toks[p - 1].core);
+            match phrase {
+                Some((len, value)) if !pronoun_one => {
+                    let ws = if toks[p].ws.is_empty() && p > 0 {
+                        " "
+                    } else {
+                        &toks[p].ws
                     };
-                    if !next_is_number {
-                        break;
-                    }
+                    out.push_str(ws);
+                    out.push_str(&toks[p].prefix);
+                    out.push_str(&value.to_string());
+                    out.push_str(&toks[p + len - 1].suffix);
+                    p += len;
                 }
-                run_end = j;
-                j += 1;
-            }
-
-            let run_cores: Vec<&str> = (run_start..=run_end)
-                .map(|k| alpha_core(tokens[k].1))
-                .collect();
-
-            // Guard: a lone "one" is the pronoun, not the numeral, after a
-            // determiner like "no"/"any"/"every"/"each" ("no one", "any one").
-            // Converting it to "1" ("no 1") is wrong. Only suppress the lone
-            // single-word "one"; "one hundred", "one two three", or "one" after
-            // a non-determiner ("I need one") still convert.
-            let is_lone_pronoun_one = run_cores.len() == 1
-                && run_cores[0].eq_ignore_ascii_case("one")
-                && run_start > 0
-                && is_oneness_determiner(alpha_core(tokens[run_start - 1].1));
-
-            // A pure run of two or more single digits is read digit-by-digit
-            // ("one two three" → "123"); everything else is a cardinal number
-            // ("twenty three" → 23, "two hundred" → 200). digit_sequence returns
-            // None for the cardinal case, falling through to tokens_to_number.
-            let parsed: Option<String> = if is_lone_pronoun_one {
-                None
-            } else {
-                digit_sequence(&run_cores)
-                    .or_else(|| tokens_to_number(&run_cores).map(|n| n.to_string()))
-            };
-
-            if let Some(number) = parsed {
-                // Emit: preceding whitespace of the first run token, then any
-                // punctuation that prefixes the first word, then the digit string,
-                // then any punctuation that suffixes the last word.
-                // The next token's preceding_ws is emitted when that token is processed.
-                let first_word = tokens[run_start].1;
-                let last_word = tokens[run_end].1;
-
-                out.push_str(preceding_ws);
-
-                let first_core = alpha_core(first_word);
-                if let Some(core_start) = first_word.find(first_core) {
-                    out.push_str(&first_word[..core_start]);
+                _ => {
+                    emit_verbatim(&mut out, &toks[p]);
+                    p += 1;
                 }
-
-                out.push_str(&number);
-
-                let last_core = alpha_core(last_word);
-                if let Some(core_start) = last_word.find(last_core) {
-                    let core_end = core_start + last_core.len();
-                    out.push_str(&last_word[core_end..]);
-                }
-
-                i = run_end + 1;
-                continue;
             }
         }
-
-        // Not a number token (or parse yielded nothing) — emit verbatim.
-        out.push_str(preceding_ws);
-        out.push_str(word);
-        i += 1;
+        i = end;
     }
-
     out
 }
 
@@ -1743,6 +1681,55 @@ mod tests {
             spoken_numbers_to_digits("twenty-something"),
             "twenty-something"
         );
+    }
+
+    // ── Adjacent phrases are never summed ─────────────────────────────────
+
+    #[test]
+    fn test_itn_adjacent_phrases_not_summed() {
+        assert_eq!(spoken_numbers_to_digits("twenty-one twenty-two"), "21 22");
+        assert_eq!(spoken_numbers_to_digits("twenty one twenty two"), "21 22");
+        assert_eq!(
+            spoken_numbers_to_digits("two twenty-seven inch"),
+            "2 27 inch"
+        );
+        assert_eq!(
+            spoken_numbers_to_digits("two twenty-seven-inch screens"),
+            "2 27-inch screens"
+        );
+        assert_eq!(spoken_numbers_to_digits("twenty thirty"), "20 30");
+        assert_eq!(spoken_numbers_to_digits("twelve fifteen"), "12 15");
+        assert_eq!(spoken_numbers_to_digits("five twenty"), "5 20");
+    }
+
+    #[test]
+    fn test_itn_and_is_kept_outside_a_number() {
+        assert_eq!(
+            spoken_numbers_to_digits("14 centimetres and five"),
+            "14 centimetres and 5"
+        );
+        assert_eq!(spoken_numbers_to_digits("ten and five"), "10 and 5");
+        assert_eq!(spoken_numbers_to_digits("two and a half"), "2 and a half");
+        assert_eq!(spoken_numbers_to_digits("five and"), "5 and");
+    }
+
+    #[test]
+    fn test_itn_run_stops_at_punctuation() {
+        assert_eq!(spoken_numbers_to_digits("one, two, three"), "1, 2, 3");
+        assert_eq!(spoken_numbers_to_digits("five. Six"), "5. 6");
+    }
+
+    #[test]
+    fn test_itn_compound_scales() {
+        assert_eq!(spoken_numbers_to_digits("twenty one hundred"), "2100");
+        assert_eq!(
+            spoken_numbers_to_digits("five thousand two hundred"),
+            "5200"
+        );
+        assert_eq!(spoken_numbers_to_digits("one hundred twenty three"), "123");
+        assert_eq!(spoken_numbers_to_digits("one hundred hundred"), "100 100");
+        assert_eq!(spoken_numbers_to_digits("zero five"), "05");
+        assert_eq!(spoken_numbers_to_digits("twenty oh five"), "20 oh 5");
     }
 
     // ── Integration tests for new flags via OutputFilter ──────────────────
