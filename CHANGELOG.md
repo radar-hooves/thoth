@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026.11.1] - 2026-11-04
+
+### Fixed
+
+- **Dictations keep their last words.** The speech engine sometimes dropped the final words of a take. When a dictation ends mid-speech, Thoth now reads its last five seconds again on their own and adds back any words the main pass missed, at about a tenth of a second.
+- **Spoken numbers are never added together.** With spoken numbers to digits on, "twenty-one twenty-two" became 43. Neighbouring numbers now stay separate ("21 22"), and a stray "and" is kept.
+
 ## [2026.11.0] - 2026-11-02
 
 ### Fixed
