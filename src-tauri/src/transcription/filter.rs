@@ -752,17 +752,28 @@ pub fn spoken_numbers_to_digits(text: &str) -> String {
         }
         let cores: Vec<&str> = toks[i..end].iter().map(|t| t.core.as_str()).collect();
 
-        if let Some(digits) = digit_sequence(&cores) {
-            out.push_str(&toks[i].ws);
-            out.push_str(&toks[i].prefix);
-            out.push_str(&digits);
-            out.push_str(&toks[end - 1].suffix);
-            i = end;
-            continue;
-        }
-
         let mut p = i;
         while p < end {
+            // Two or more spoken digits in a row are read out digit by digit
+            // ("one two three" → "123"); a digit that opens a larger number
+            // ("two one hundred") is left for the phrase parser.
+            let mut q = p;
+            while q < end && word_to_single_digit(&toks[q].core).is_some() {
+                q += 1;
+            }
+            if q < end && q > p && word_to_multiplier(&toks[q].core).is_some() {
+                q -= 1;
+            }
+            if q - p >= 2 {
+                if let Some(digits) = digit_sequence(&cores[p - i..q - i]) {
+                    out.push_str(&toks[p].ws);
+                    out.push_str(&toks[p].prefix);
+                    out.push_str(&digits);
+                    out.push_str(&toks[q - 1].suffix);
+                    p = q;
+                    continue;
+                }
+            }
             let phrase = parse_phrase(&cores[p - i..]);
             let pronoun_one = phrase.is_some_and(|(len, _)| len == 1)
                 && cores[p - i].eq_ignore_ascii_case("one")
@@ -1703,6 +1714,13 @@ mod tests {
     }
 
     #[test]
+    fn test_itn_digit_sequences_beside_other_words() {
+        assert_eq!(spoken_numbers_to_digits("or two one and"), "or 21 and");
+        assert_eq!(spoken_numbers_to_digits("two one hundred"), "2 100");
+        assert_eq!(spoken_numbers_to_digits("one two twenty"), "12 20");
+    }
+
+    #[test]
     fn test_itn_and_is_kept_outside_a_number() {
         assert_eq!(
             spoken_numbers_to_digits("14 centimetres and five"),
@@ -1729,7 +1747,7 @@ mod tests {
         assert_eq!(spoken_numbers_to_digits("one hundred twenty three"), "123");
         assert_eq!(spoken_numbers_to_digits("one hundred hundred"), "100 100");
         assert_eq!(spoken_numbers_to_digits("zero five"), "05");
-        assert_eq!(spoken_numbers_to_digits("twenty oh five"), "20 oh 5");
+        assert_eq!(spoken_numbers_to_digits("twenty oh five"), "20 05");
     }
 
     // ── Integration tests for new flags via OutputFilter ──────────────────
