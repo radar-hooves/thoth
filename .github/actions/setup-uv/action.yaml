@@ -47,8 +47,9 @@
 #   different uv pass `version`.
 #
 # Advancing the pin: keep HOUSEHOLD_UV_VERSION aligned with the uv the
-# workstation runs (nix-managed, the fleet repo's home module), so CI
-# resolves dependencies exactly as local runs do; bump both together,
+# workstation runs (nix-managed, the fleet repo's home module) and with
+# Renovate's (default.json constraints.uv), so CI resolves dependencies exactly
+# as local runs and Renovate's re-locks do; bump all three together,
 # deliberately. The first run on a new pin downloads once, then caches.
 #
 # Degrades safely: where $HOME is not persistent (a github-hosted runner), the
