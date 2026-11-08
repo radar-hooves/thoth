@@ -1,6 +1,9 @@
 overrides:
   nanoid@<3.3.17: '>=3.3.17'
   postcss@<8.5.18: '>=8.5.18'
+  # CVE-2026-118772 (joi), CVE-2026-93749 (source-map-js): transitive, floors lift both.
+  joi@<17.13.9: '>=17.13.9 <18'
+  source-map-js@<1.2.2: '>=1.2.2'
   # CVE-2026-16221 (policy bypass) and CVE-2026-18446 (host confusion), both
   # HIGH. Transitive via ajv, reached twice: @poodle64/ui -> @jsonforms/core
   # and stylelint -> table. Neither dependant pins it, so the floor lifts both.

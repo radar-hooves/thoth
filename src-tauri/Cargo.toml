@@ -5,7 +5,7 @@ description = "Privacy-first, offline-capable voice transcription application"
 authors = ["poodle64"]
 license = "MIT"
 edition = "2024"
-rust-version = "1.87"
+rust-version = "1.90"
 
 [lib]
 name = "thoth_lib"
@@ -43,7 +43,7 @@ symphonia-adapter-libopus = "0.3"
 # is set (= the `parakeet` feature → CPU, unchanged). The `parakeet-cuda` feature
 # switches it to `shared` so a GPU build can link a CUDA-enabled sherpa-onnx via
 # the SHERPA_ONNX_LIB_DIR env var. (Linux CI builds without the parakeet feature.)
-sherpa-onnx = { version = "1.13", default-features = false, optional = true }
+sherpa-onnx = { version = "2", default-features = false, optional = true }
 # fluidaudio-rs: Apple Neural Engine backend via CoreML (macOS-only, Apple Silicon).
 # WHY the fork, not upstream — reassessed 2026-07-17 against upstream tip 2d10833.
 # ONE reason survives: upstream still lacks platform compile-guards (its build.rs
@@ -152,7 +152,7 @@ base64 = "0.22"
 
 # Desktop-specific (macOS, Windows, Linux)
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-tauri-plugin-updater = "2.10"
+tauri-plugin-updater = "2.14"
 
 # macOS-specific
 [target.'cfg(target_os = "macos")'.dependencies]
