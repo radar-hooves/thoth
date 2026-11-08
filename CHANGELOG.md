@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026.11.3] - 2026-11-08
+
+### Fixed
+
+- **Clicking Copy Last Transcription in the menu bar now copies.** The menu item did nothing when auto-copy was off, while the F14 key worked. The menu items for Copy Last Transcription and Start/Stop Recording now run exactly what their keyboard shortcuts run.
+
 ## [2026.11.2] - 2026-11-08
 
 ### Added
