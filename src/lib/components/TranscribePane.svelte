@@ -17,8 +17,6 @@
   let importedFileName = $state<string | null>(null);
   let copied = $state(false);
 
-  const AUDIO_EXTENSIONS = ['wav', 'mp3', 'm4a', 'ogg', 'flac'];
-  const AUDIO_REGEX = /\.(wav|mp3|m4a|ogg|flac)$/i;
 
   const isProcessing = $derived(
     importedFileName !== null &&
@@ -41,10 +39,8 @@
   async function handleFilePicker() {
     if (isProcessing) return;
 
-    const selected = await open({
-      multiple: false,
-      filters: [{ name: 'Audio', extensions: AUDIO_EXTENSIONS }],
-    });
+    // No extension filter: the backend decides by content and names what it cannot decode.
+    const selected = await open({ multiple: false });
 
     if (selected) {
       importedFileName = selected.split('/').pop() ?? selected;
@@ -93,7 +89,7 @@
           isDragOver = false;
         } else if (event.payload.type === 'drop') {
           isDragOver = false;
-          const paths = event.payload.paths.filter((p: string) => AUDIO_REGEX.test(p));
+          const paths = event.payload.paths;
           if (paths.length > 0) {
             handleTranscribeFile(paths[0]);
           }
@@ -139,7 +135,9 @@
       <Upload size={36} />
     </span>
     <p class="text-sm">Drop audio files here or click to browse</p>
-    <p class="text-muted-foreground mt-1 text-xs">Supports WAV, MP3, M4A, OGG, FLAC</p>
+    <p class="text-muted-foreground mt-1 text-xs">
+      Any audio or video file: WAV, MP3, AAC, M4A, Opus, OGG, WebM, CAF, FLAC, MP4, MOV
+    </p>
   {/if}
 </div>
 

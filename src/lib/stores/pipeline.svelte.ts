@@ -486,7 +486,7 @@ function createPipelineStore() {
   }
 
   /**
-   * Transcribe an imported audio file (WAV, MP3, M4A, OGG, FLAC)
+   * Transcribe an imported audio file (any audio, or the audio track of a video)
    */
   async function transcribeFile(filePath: string): Promise<{ success: boolean; result?: PipelineResult; error?: string }> {
     debug(' transcribeFile() called:', filePath);

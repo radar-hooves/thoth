@@ -33,7 +33,9 @@ rubato = "5.0"
 audioadapter-buffers = "5.0"
 crossbeam-channel = "0.5"
 webrtc-vad = "0.4"
-symphonia = { version = "0.6", features = ["mp3", "aac", "ogg", "vorbis", "flac", "wav", "pcm", "isomp4"] }
+symphonia = { version = "0.6", features = ["mp3", "aac", "ogg", "vorbis", "flac", "wav", "pcm", "isomp4", "mkv", "caf", "alac", "aiff", "adpcm"] }
+# Symphonia has no Opus decoder of its own; bundled libopus covers WhatsApp/Telegram/WebM voice notes.
+symphonia-adapter-libopus = "0.3"
 
 # Transcription
 # Official k2-fsa crate. default-features = false drops its built-in `static`

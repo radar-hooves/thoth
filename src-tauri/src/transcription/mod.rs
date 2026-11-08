@@ -315,7 +315,7 @@ const MIN_SPEECH_RMS: f32 = 0.002;
 
 /// Transcribe audio from a file path
 ///
-/// Accepts WAV, MP3, M4A, OGG (Vorbis), and FLAC. Non-WAV files and WAV files
+/// Accepts whatever `audio::decode` can decode, decided by content. Non-WAV files and WAV files
 /// that are not already 16 kHz mono i16 are transcoded to a temporary WAV before
 /// being passed to the ASR backend. The temp file is deleted when this function
 /// returns, whether successfully or not.

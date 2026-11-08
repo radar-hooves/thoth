@@ -1350,7 +1350,7 @@ fn get_audio_duration(audio_path: &str) -> Option<f64> {
 
 /// Transcribe an imported audio file through the full pipeline.
 ///
-/// Decodes the input file (WAV, MP3, M4A, OGG, FLAC) to 16kHz mono WAV,
+/// Decodes the input file (anything `audio::decode` accepts) to 16kHz mono WAV,
 /// then runs the standard transcription pipeline (transcribe → filter → enhance → save).
 /// Does NOT auto-copy or auto-paste (the user is already in the app).
 #[tauri::command]

@@ -1,12 +1,19 @@
 //! Audio file decoding and conversion to 16kHz mono WAV
 //!
-//! Uses symphonia for format-agnostic decoding (MP3, M4A, OGG, FLAC, WAV)
-//! and the existing AudioConverter (rubato) for high-quality resampling.
+//! Uses symphonia for format-agnostic decoding and the existing AudioConverter
+//! (rubato) for high-quality resampling. The format is decided by probing the
+//! file's content, never its name: the extension is only a hint.
+//!
+//! Containers: WAV, AIFF, CAF, MP3, ADTS (raw AAC), MP4/M4A/MOV, Ogg, MKV/WebM, FLAC.
+//! Codecs: PCM, ADPCM, MP3, AAC, ALAC, FLAC, Vorbis, and Opus (bundled libopus,
+//! which symphonia lacks). AMR is the one common voice-note codec with no decoder.
 
 use crate::audio::format::AudioConverter;
 use std::path::Path;
+use std::sync::LazyLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use symphonia::core::codecs::audio::AudioDecoderOptions;
+use symphonia::core::codecs::registry::CodecRegistry;
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, TrackType};
@@ -25,9 +32,30 @@ const RESAMPLE_CHUNK_SIZE: usize = 1024;
 /// Check cancellation every N packets
 const CANCEL_CHECK_INTERVAL: u32 = 50;
 
+/// Symphonia's enabled codecs plus Opus, which symphonia has no decoder for.
+static CODECS: LazyLock<CodecRegistry> = LazyLock::new(|| {
+    let mut registry = CodecRegistry::new();
+    symphonia::default::register_enabled_codecs(&mut registry);
+    registry.register_audio_decoder::<symphonia_adapter_libopus::OpusDecoder>();
+    registry
+});
+
+/// Name an AMR file from its magic bytes (`#!AMR`), which no extension can fake.
+fn is_amr(path: &Path) -> bool {
+    use std::io::Read;
+    let mut magic = [0u8; 5];
+    std::fs::File::open(path)
+        .and_then(|mut f| f.read_exact(&mut magic))
+        .is_ok()
+        && &magic == b"#!AMR"
+}
+
+const AMR_REFUSAL: &str = "AMR audio cannot be decoded (no AMR decoder is bundled). \
+Convert it to WAV, M4A or Ogg Opus first.";
+
 /// Decode an audio file to 16kHz mono WAV suitable for transcription.
 ///
-/// Supports WAV, MP3, M4A (AAC), OGG Vorbis, and FLAC formats.
+/// Decides by content, not name: see the module docs for what is decoded.
 /// Returns the audio duration in seconds on success.
 pub fn decode_audio_to_wav(
     input_path: &Path,
@@ -72,12 +100,18 @@ pub fn decode_audio_to_wav(
             FormatOptions::default(),
             MetadataOptions::default(),
         )
-        .map_err(|e| format!("Unsupported audio format: {}", e))?;
+        .map_err(|e| {
+            if is_amr(input_path) {
+                AMR_REFUSAL.to_string()
+            } else {
+                format!("Not a recognised audio or video file ({})", e)
+            }
+        })?;
 
     // Find the first audio track (symphonia 0.6: default_track(TrackType::Audio))
     let track = format
         .default_track(TrackType::Audio)
-        .ok_or_else(|| "No supported audio track found in file".to_string())?;
+        .ok_or_else(|| "The file has no audio track".to_string())?;
 
     let track_id = track.id;
 
@@ -106,9 +140,14 @@ pub fn decode_audio_to_wav(
     );
 
     // Create the decoder (symphonia 0.6: make_audio_decoder() replaces make())
-    let mut decoder = symphonia::default::get_codecs()
+    let mut decoder = CODECS
         .make_audio_decoder(&audio_params, &AudioDecoderOptions::default())
-        .map_err(|e| format!("Unsupported audio codec: {}", e))?;
+        .map_err(|e| {
+            format!(
+                "Cannot decode this audio codec ({:?}): {}",
+                audio_params.codec, e
+            )
+        })?;
 
     // Create the resampler (handles arbitrary sample rate ratios)
     let mut converter = AudioConverter::new(

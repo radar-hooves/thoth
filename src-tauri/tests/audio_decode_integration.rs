@@ -107,6 +107,71 @@ fn decode_flac_fixture() {
     assert_decodes_to_16khz_mono("tone_440hz.flac");
 }
 
+#[test]
+fn decode_raw_adts_aac_fixture() {
+    assert_decodes_to_16khz_mono("tone_440hz.aac");
+}
+
+#[test]
+fn decode_opus_in_ogg_fixture() {
+    assert_decodes_to_16khz_mono("tone_440hz_opus.ogg");
+}
+
+#[test]
+fn decode_opus_in_webm_fixture() {
+    assert_decodes_to_16khz_mono("tone_440hz.webm");
+}
+
+#[test]
+fn decode_caf_pcm_fixture() {
+    assert_decodes_to_16khz_mono("tone_440hz.caf");
+}
+
+#[test]
+fn decode_caf_alac_fixture() {
+    assert_decodes_to_16khz_mono("tone_440hz_alac.caf");
+}
+
+#[test]
+fn decode_audio_track_of_mp4() {
+    assert_decodes_to_16khz_mono("tone_440hz_video.mp4");
+}
+
+#[test]
+fn decode_audio_track_of_mov() {
+    assert_decodes_to_16khz_mono("tone_440hz_video.mov");
+}
+
+/// The format is decided by content: a wrong or missing extension changes nothing.
+#[test]
+fn decode_ignores_the_file_name() {
+    for (fixture, name) in [
+        ("tone_440hz.aac", "voice-note.dat"),
+        ("tone_440hz_opus.ogg", "voice-note"),
+        ("tone_440hz.mp3", "voice-note.wav.txt"),
+    ] {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let renamed = dir.path().join(name);
+        std::fs::copy(fixtures_dir().join(fixture), &renamed).expect("copy");
+        let output = dir.path().join("out.wav");
+        let duration = decode_audio_to_wav(&renamed, &output, &AtomicBool::new(false))
+            .unwrap_or_else(|e| panic!("{fixture} as {name}: {e}"));
+        assert!(duration > 0.0, "{fixture} as {name}");
+    }
+}
+
+/// AMR has no decoder: the refusal names the format rather than a generic error.
+#[test]
+fn amr_is_refused_by_name() {
+    let mut amr = NamedTempFile::with_suffix(".amr").expect("tempfile");
+    use std::io::Write;
+    amr.write_all(b"#!AMR\n\x3c\x00\x00\x00").expect("write");
+    let output = NamedTempFile::with_suffix(".wav").expect("tempfile");
+    let err = decode_audio_to_wav(amr.path(), output.path(), &AtomicBool::new(false))
+        .expect_err("AMR cannot be decoded");
+    assert!(err.starts_with("AMR audio cannot be decoded"), "{err}");
+}
+
 /// A WAV that is already 16 kHz mono i16 is detected as the target format
 /// (fast path) and is_target_format_wav returns true.
 #[test]

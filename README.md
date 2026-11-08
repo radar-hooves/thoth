@@ -50,7 +50,7 @@ Nothing leaves the machine. No subscription, no cloud, no internet required.
 
 - One toggle hotkey (right Shift on macOS, F13 elsewhere by default): press to start, press again to stop
 - Text is inserted at the cursor in any app; your clipboard is preserved
-- Import existing audio too (MP3, M4A, OGG, FLAC, WAV)
+- Import existing audio too: any audio or video file by content (AAC, Opus, M4A, MP3, OGG, WebM, CAF, FLAC, WAV, MP4, MOV); AMR is refused by name
 - Recording indicator near the cursor with subtle audio cues
 
 </td>
