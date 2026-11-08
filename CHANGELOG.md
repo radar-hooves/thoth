@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026.11.2] - 2026-11-08
+
+### Added
+
+- **Thoth transcribes any audio a phone or messaging app produces.** It now decides by what a file contains, not its name: raw AAC (Signal voice notes), Opus in Ogg or WebM (WhatsApp and Telegram), iOS CAF, AIFF, ALAC, and the audio track of an MP4 or MOV all transcribe, in the app and over its MCP. The file picker no longer filters by extension and dropping any file is accepted. AMR is the one common format Thoth cannot decode; it now says so by name instead of giving a generic error.
+
 ## [2026.11.1] - 2026-11-04
 
 ### Fixed
