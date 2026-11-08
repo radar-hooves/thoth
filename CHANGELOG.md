@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026.11.4] - 2026-11-09
+
+### Security
+
+- **Dependency updates close known vulnerabilities.** The zip library (two critical and high issues in archive reading) and three front-end build packages move to patched versions. Nothing changes in how Thoth behaves.
+
 ## [2026.11.3] - 2026-11-08
 
 ### Fixed
