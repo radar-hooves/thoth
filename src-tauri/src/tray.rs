@@ -21,6 +21,7 @@ use crate::config;
 use crate::database;
 use crate::enhancement;
 use crate::platform;
+use crate::shortcuts::manager::shortcut_ids;
 use crate::transcription;
 
 // =============================================================================
@@ -662,66 +663,59 @@ fn rebuild_tray_menu(app: &AppHandle) {
 // Event Handlers
 // =============================================================================
 
-/// Handle menu item clicks
-fn handle_menu_event(app: &AppHandle, id: &str) {
+/// What a menu item id asks for. Parsed apart from the handlers so every id the
+/// menu can emit is tested to reach one.
+#[derive(Debug, PartialEq, Eq)]
+enum MenuAction {
+    Shortcut(&'static str),
+    Transcribe,
+    History,
+    Settings,
+    Quit,
+    ToggleEnhancement,
+    SelectModel(String),
+    SelectPrompt(String),
+    SelectAudioDevice(Option<String>),
+    Unknown,
+}
+
+fn menu_action(id: &str) -> MenuAction {
     match id {
-        menu_ids::TOGGLE_RECORDING => {
-            tracing::info!("Toggle recording clicked from tray menu");
-
-            crate::recording_indicator::maybe_play_start_indicator(app);
-
-            // Emit the same event as keyboard shortcut would
-            if let Err(e) = app.emit("shortcut-triggered", "toggle_recording") {
-                tracing::error!("Failed to emit shortcut-triggered event from tray: {}", e);
-            }
-        }
-        menu_ids::COPY_LAST => {
-            tracing::info!("Copy last transcription clicked");
-            handle_copy_last(app);
-        }
-        menu_ids::TRANSCRIBE => {
-            tracing::info!("Transcribe clicked");
-            handle_open_transcribe(app);
-        }
-        menu_ids::HISTORY => {
-            tracing::info!("History clicked");
-            handle_open_history(app);
-        }
-        menu_ids::SETTINGS => {
-            tracing::info!("Settings clicked");
-            handle_open_settings(app);
-        }
-        menu_ids::QUIT => {
-            tracing::info!("Quit clicked");
-            app.exit(0);
-        }
-        menu_ids::AI_ENHANCEMENT_TOGGLE => {
-            tracing::info!("AI enhancement toggle clicked");
-            handle_toggle_enhancement(app);
-        }
+        menu_ids::TOGGLE_RECORDING => MenuAction::Shortcut(shortcut_ids::TOGGLE_RECORDING),
+        menu_ids::COPY_LAST => MenuAction::Shortcut(shortcut_ids::COPY_LAST_TRANSCRIPTION),
+        menu_ids::TRANSCRIBE => MenuAction::Transcribe,
+        menu_ids::HISTORY => MenuAction::History,
+        menu_ids::SETTINGS => MenuAction::Settings,
+        menu_ids::QUIT => MenuAction::Quit,
+        menu_ids::AI_ENHANCEMENT_TOGGLE => MenuAction::ToggleEnhancement,
         _ if id.starts_with(menu_ids::MODEL_PREFIX) => {
-            let model_id = &id[menu_ids::MODEL_PREFIX.len()..];
-            tracing::info!("Model selected from tray: {:?}", model_id);
-            handle_select_model(app, model_id.to_string());
+            MenuAction::SelectModel(id[menu_ids::MODEL_PREFIX.len()..].to_string())
         }
         _ if id.starts_with(menu_ids::PROMPT_PREFIX) => {
-            let prompt_id = &id[menu_ids::PROMPT_PREFIX.len()..];
-            tracing::info!("Prompt selected from tray: {:?}", prompt_id);
-            handle_select_prompt(app, prompt_id.to_string());
+            MenuAction::SelectPrompt(id[menu_ids::PROMPT_PREFIX.len()..].to_string())
         }
         _ if id.starts_with(menu_ids::INPUT_SOURCE_PREFIX) => {
             let suffix = &id[menu_ids::INPUT_SOURCE_PREFIX.len()..];
-            let device_id = if suffix == "__default__" {
-                None
-            } else {
-                Some(suffix.to_string())
-            };
-            tracing::info!("Input source selected from tray: {:?}", device_id);
-            handle_select_audio_device(app, device_id);
+            MenuAction::SelectAudioDevice((suffix != "__default__").then(|| suffix.to_string()))
         }
-        _ => {
-            tracing::debug!("Unknown menu item: {}", id);
-        }
+        _ => MenuAction::Unknown,
+    }
+}
+
+/// Handle menu item clicks
+fn handle_menu_event(app: &AppHandle, id: &str) {
+    tracing::info!("Tray menu item clicked: {}", id);
+    match menu_action(id) {
+        MenuAction::Shortcut(shortcut_id) => run_shortcut(app, shortcut_id),
+        MenuAction::Transcribe => handle_open_transcribe(app),
+        MenuAction::History => handle_open_history(app),
+        MenuAction::Settings => handle_open_settings(app),
+        MenuAction::Quit => app.exit(0),
+        MenuAction::ToggleEnhancement => handle_toggle_enhancement(app),
+        MenuAction::SelectModel(model_id) => handle_select_model(app, model_id),
+        MenuAction::SelectPrompt(prompt_id) => handle_select_prompt(app, prompt_id),
+        MenuAction::SelectAudioDevice(device_id) => handle_select_audio_device(app, device_id),
+        MenuAction::Unknown => tracing::debug!("Unknown menu item: {}", id),
     }
 }
 
@@ -738,33 +732,13 @@ fn handle_tray_event(event: TrayIconEvent) {
     }
 }
 
-/// Copy the last transcription to clipboard
-fn handle_copy_last(app: &AppHandle) {
-    // Get last transcription from database
-    match database::transcription::list_transcriptions(Some(1), Some(0)) {
-        Ok(transcriptions) => {
-            if let Some(t) = transcriptions.into_iter().next() {
-                // Use the clipboard module to copy
-                let app_clone = app.clone();
-                let text = t.text.clone();
-                tauri::async_runtime::spawn(async move {
-                    match crate::clipboard::copy_transcription(app_clone, text, false).await {
-                        Ok(_) => {
-                            tracing::info!("Copied last transcription to clipboard");
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to copy to clipboard: {}", e);
-                        }
-                    }
-                });
-            } else {
-                tracing::info!("No transcriptions to copy");
-            }
-        }
-        Err(e) => {
-            tracing::error!("Failed to get last transcription: {}", e);
-        }
-    }
+/// Run a menu item through the same dispatcher as its keyboard shortcut.
+fn run_shortcut(app: &AppHandle, shortcut_id: &str) {
+    crate::shortcuts::manager::dispatch_shortcut_action(
+        app,
+        shortcut_id,
+        crate::shortcuts::manager::Edge::Press,
+    );
 }
 
 /// Open the history window
@@ -1032,5 +1006,44 @@ mod tests {
         let json = serde_json::to_string(&info).unwrap();
         assert!(json.contains("\"isRecording\":true"));
         assert!(json.contains("\"hasLastTranscription\":true"));
+    }
+
+    #[test]
+    fn every_menu_id_reaches_its_action() {
+        use shortcut_ids::{COPY_LAST_TRANSCRIPTION, TOGGLE_RECORDING};
+        assert_eq!(
+            menu_action(menu_ids::TOGGLE_RECORDING),
+            MenuAction::Shortcut(TOGGLE_RECORDING)
+        );
+        assert_eq!(
+            menu_action(menu_ids::COPY_LAST),
+            MenuAction::Shortcut(COPY_LAST_TRANSCRIPTION)
+        );
+        assert_eq!(menu_action(menu_ids::TRANSCRIBE), MenuAction::Transcribe);
+        assert_eq!(menu_action(menu_ids::HISTORY), MenuAction::History);
+        assert_eq!(menu_action(menu_ids::SETTINGS), MenuAction::Settings);
+        assert_eq!(menu_action(menu_ids::QUIT), MenuAction::Quit);
+        assert_eq!(
+            menu_action(menu_ids::AI_ENHANCEMENT_TOGGLE),
+            MenuAction::ToggleEnhancement
+        );
+        assert_eq!(
+            menu_action("model::tiny"),
+            MenuAction::SelectModel("tiny".into())
+        );
+        assert_eq!(
+            menu_action("prompt::fix-grammar"),
+            MenuAction::SelectPrompt("fix-grammar".into())
+        );
+        assert_eq!(
+            menu_action(menu_ids::INPUT_SOURCE_DEFAULT),
+            MenuAction::SelectAudioDevice(None)
+        );
+        assert_eq!(
+            menu_action("audio_device::coreaudio:1"),
+            MenuAction::SelectAudioDevice(Some("coreaudio:1".into()))
+        );
+        // The status line and info rows are disabled and must stay inert.
+        assert_eq!(menu_action(menu_ids::STATUS), MenuAction::Unknown);
     }
 }

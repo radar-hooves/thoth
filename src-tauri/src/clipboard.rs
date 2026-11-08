@@ -397,6 +397,25 @@ pub async fn copy_to_clipboard(
     .await
 }
 
+/// Put the most recent history transcription on the clipboard.
+///
+/// The one implementation behind both the Copy Last shortcut and the tray menu
+/// item. An explicit request, so it ignores the auto-copy setting. Returns
+/// `Ok(false)` when there is no transcription yet.
+pub(crate) fn copy_last_transcription() -> Result<bool, String> {
+    let latest = crate::database::transcription::list_transcriptions(Some(1), Some(0))
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .next();
+    let Some(t) = latest else {
+        return Ok(false);
+    };
+    arboard::Clipboard::new()
+        .and_then(|mut cb| cb.set_text(t.text))
+        .map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
 /// Copy transcription to clipboard with auto-copy settings applied.
 ///
 /// This is the main entry point for copying transcription results. It checks
