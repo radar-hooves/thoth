@@ -123,6 +123,8 @@ export interface ExternalDictionaryConfig {
   username: string;
   /** Machine name sent with writes; empty uses the hostname */
   device: string;
+  /** Command whose output is the app password (the broker); empty uses the typed password */
+  credentialHelper: string;
 }
 
 /** What the external dictionary card shows. Never the password itself. */
@@ -317,6 +319,7 @@ interface ConfigRaw {
     url: string;
     username: string;
     device: string;
+    credential_helper: string;
   };
 }
 
@@ -398,6 +401,7 @@ function parseConfig(raw: ConfigRaw): Config {
       url: raw.external_dictionary?.url ?? '',
       username: raw.external_dictionary?.username ?? '',
       device: raw.external_dictionary?.device ?? '',
+      credentialHelper: raw.external_dictionary?.credential_helper ?? '',
     },
   };
 }
@@ -480,6 +484,7 @@ function serialiseConfig(config: Config): ConfigRaw {
       url: config.externalDictionary.url,
       username: config.externalDictionary.username,
       device: config.externalDictionary.device,
+      credential_helper: config.externalDictionary.credentialHelper,
     },
   };
 }
@@ -580,6 +585,7 @@ function getDefaultConfig(): Config {
       url: '',
       username: '',
       device: '',
+      credentialHelper: '',
     },
   };
 }

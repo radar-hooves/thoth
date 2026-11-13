@@ -73,6 +73,7 @@
       configStore.updateExternalDictionary('url', ext.url.trim());
       configStore.updateExternalDictionary('username', ext.username.trim());
       configStore.updateExternalDictionary('device', ext.device.trim());
+      configStore.updateExternalDictionary('credentialHelper', ext.credentialHelper.trim());
       if (!(await configStore.save())) {
         toast.error('Failed to save external dictionary settings');
         return;
@@ -707,6 +708,23 @@
             configStore.updateExternalDictionary('device', (e.target as HTMLInputElement).value)}
           class="mt-1"
           aria-label="External dictionary device name"
+        />
+      </div>
+      <div class="flex flex-col gap-0.5">
+        <span class="text-sm font-medium text-foreground">Credential helper</span>
+        <span class="text-xs text-muted-foreground">
+          A command that prints this device's app password, for a credential broker. When set,
+          it is the only source and the password below is not used. Leave empty to type one.
+        </span>
+        <Input
+          value={configStore.externalDictionary.credentialHelper}
+          oninput={(e) =>
+            configStore.updateExternalDictionary(
+              'credentialHelper',
+              (e.target as HTMLInputElement).value
+            )}
+          class="font-mono text-xs mt-1"
+          aria-label="External dictionary credential helper"
         />
       </div>
       <div class="flex flex-col gap-0.5">

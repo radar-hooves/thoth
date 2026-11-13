@@ -81,6 +81,12 @@ pub struct ExternalDictionaryConfig {
     pub username: String,
     /// Machine name sent as `X-Wordhoard-Device`; empty uses the hostname
     pub device: String,
+    /// A command whose stdout is the app password, the way `telemetry.headers_helper`
+    /// vends the OTLP credential: `portcullis headers --identity huginn-apps
+    /// --broker <url> --credential wordhoard-api-huginn --bare --format raw`.
+    /// Set, the broker is the only source; empty, the manually entered password
+    /// is used (a build with no broker).
+    pub credential_helper: String,
 }
 
 /// Main configuration structure

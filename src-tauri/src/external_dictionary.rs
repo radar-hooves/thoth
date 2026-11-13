@@ -26,6 +26,7 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
 
+const HELPER_TIMEOUT: Duration = Duration::from_secs(20);
 const PASSWORD_FILE: &str = "wordhoard_password";
 const LAST_GOOD_FILE: &str = "external_dictionary_last_good.json";
 const BEFORE_FILE: &str = "dictionary_before_external.json";
@@ -270,6 +271,47 @@ fn capture_local() -> SharedWordList {
     }
 }
 
+/// The app password: from the broker through the credential helper when one is
+/// set (held in memory only, never written), else the manually entered one.
+async fn resolve_password(helper: &str) -> Result<String, String> {
+    let helper = helper.trim();
+    if helper.is_empty() {
+        return read_secret(PASSWORD_FILE).ok_or_else(|| {
+            "No password is stored — enter it in Settings → Integrations".to_string()
+        });
+    }
+    run_helper(helper, HELPER_TIMEOUT).await
+}
+
+/// Run the helper under `sh -c` and take its trimmed stdout. Its output and
+/// stderr never reach an error, a log or the status: they may be the credential.
+async fn run_helper(command: &str, timeout: Duration) -> Result<String, String> {
+    let child = tokio::process::Command::new("sh")
+        .arg("-c")
+        .arg(command)
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true)
+        .output();
+    let out = tokio::time::timeout(timeout, child)
+        .await
+        .map_err(|_| {
+            format!(
+                "The credential helper took longer than {}s",
+                timeout.as_secs()
+            )
+        })?
+        .map_err(|e| format!("The credential helper could not run: {e}"))?;
+    if !out.status.success() {
+        return Err(format!("The credential helper failed ({})", out.status));
+    }
+    let secret = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if secret.is_empty() {
+        return Err("The credential helper printed nothing".to_string());
+    }
+    Ok(secret)
+}
+
 /// One sync. `require_ready` turns "mode off" into an error for the manual command.
 async fn sync_once(require_ready: bool) -> Result<(), String> {
     let _guard = SYNC
@@ -284,8 +326,7 @@ async fn sync_once(require_ready: bool) -> Result<(), String> {
         }
         return Ok(());
     }
-    let password = read_secret(PASSWORD_FILE)
-        .ok_or("No password is stored — enter it in Settings → Integrations")?;
+    let password = resolve_password(&ext.credential_helper).await?;
     let client = Client::new(
         &ext.url,
         ext.username.trim(),
@@ -357,11 +398,17 @@ pub fn spawn_sync_loop() {
 // Tauri commands
 // ---------------------------------------------------------------------------
 
+fn cfg_helper_empty() -> bool {
+    crate::config::get_config()
+        .map(|c| c.external_dictionary.credential_helper.trim().is_empty())
+        .unwrap_or(true)
+}
+
 #[tauri::command]
 pub fn get_external_dictionary_status() -> ExternalDictionaryStatus {
     let s = state().read();
     ExternalDictionaryStatus {
-        has_password: read_secret(PASSWORD_FILE).is_some(),
+        has_password: !cfg_helper_empty() || read_secret(PASSWORD_FILE).is_some(),
         last_sync_at: s.last_sync_at.clone(),
         last_error: s.last_error.clone(),
     }
@@ -542,6 +589,29 @@ mod tests {
         .unwrap_err();
         assert!(err.contains("403"), "{err}");
         get.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn the_helper_vends_the_password_and_its_failures_name_no_output() {
+        let t = Duration::from_secs(5);
+        assert_eq!(
+            run_helper("printf 'hunter2\\n'", t).await.unwrap(),
+            "hunter2"
+        );
+        let err = run_helper("echo leaked; exit 3", t).await.unwrap_err();
+        assert!(err.contains("failed") && !err.contains("leaked"), "{err}");
+        assert!(run_helper("true", t).await.unwrap_err().contains("nothing"));
+        let slow = run_helper("sleep 5", Duration::from_millis(100))
+            .await
+            .unwrap_err();
+        assert!(slow.contains("longer than"), "{slow}");
+    }
+
+    #[tokio::test]
+    async fn a_set_helper_is_the_only_source() {
+        // Whatever is in the manual file, a failing helper is an error, not a fallback.
+        assert!(resolve_password("exit 1").await.is_err());
+        assert_eq!(resolve_password("echo vended").await.unwrap(), "vended");
     }
 
     #[tokio::test]
