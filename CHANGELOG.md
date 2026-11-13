@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026.11.6] - 2026-11-14
+
 ### Added
 
 - **Use a shared dictionary service as your word list.** Settings → Integrations → External dictionary (off by default) makes a service such as wordhoard the source of truth for both lists: Thoth reads it on start and on change, writes every edit through, and keeps the last good copy when offline. Word list publishing pauses while it is on; see [docs/word-list-publish.md](docs/word-list-publish.md).
