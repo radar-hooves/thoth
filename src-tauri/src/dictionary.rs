@@ -21,7 +21,6 @@ pub struct DictionaryEntry {
     /// The replacement text
     pub to: String,
     /// Whether the match should be case-sensitive
-    #[serde(default)]
     pub case_sensitive: bool,
 }
 

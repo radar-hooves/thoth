@@ -462,7 +462,7 @@ mod tests {
     fn client(server: &mockito::ServerGuard) -> Client {
         Client::new(&server.url(), "u", "p", "huginn").unwrap()
     }
-    const DOC: &str = r#"{"version":1,"entries":[{"from":"teh","to":"the"}],"canonicalTerms":[{"term":"LiteLLM","aliases":["lite llm"]},{"term":"Null","aliases":[],"policy":"aliasOnly","maxWords":null,"threshold":null}]}"#;
+    const DOC: &str = r#"{"version":1,"entries":[{"from":"teh","to":"the","caseSensitive":false}],"canonicalTerms":[{"term":"LiteLLM","aliases":["lite llm"]},{"term":"Null","aliases":[],"policy":"aliasOnly","maxWords":null,"threshold":null}]}"#;
 
     #[test]
     fn diff_is_removes_then_adds_and_empty_when_equal() {
