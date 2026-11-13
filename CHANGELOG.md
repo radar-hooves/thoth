@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026.11.5] - 2026-11-13
+
+### Fixed
+
+- **MCP is on by default again for older configs.** A config saved before the MCP setting existed loaded with MCP switched off, so assistants got a 404 from `/mcp`. A missing setting now takes the documented default (on); an explicit off stays off, so a Mac already saved with MCP off must switch it on in Settings.
+- **Changing integrations over the settings API takes effect at once.** `PATCH /settings` with `mcpEnabled` or `apiEnabled` saved the change but left the server as it was until restart. It now restarts the server as the Settings toggle does.
+
 ## [2026.11.4] - 2026-11-09
 
 ### Security
