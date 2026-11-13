@@ -21,17 +21,17 @@ const CURRENT_VERSION: u32 = 1;
 static CONFIG: OnceLock<RwLock<Config>> = OnceLock::new();
 
 /// Integrations configuration (Local Control API, MCP server)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct IntegrationsConfig {
     /// Whether the Local Control API HTTP server is enabled
-    #[serde(default, alias = "apiEnabled")]
+    #[serde(alias = "apiEnabled")]
     pub api_enabled: bool,
     /// Port for the Local Control API (default 8765)
-    #[serde(default = "default_api_port", alias = "apiPort")]
+    #[serde(alias = "apiPort")]
     pub api_port: u16,
     /// Whether the MCP server is enabled
-    #[serde(default, alias = "mcpEnabled")]
+    #[serde(alias = "mcpEnabled")]
     pub mcp_enabled: bool,
 }
 
@@ -1972,6 +1972,28 @@ mod tests {
             result.err()
         );
         assert_eq!(result.unwrap().integrations.api_port, 9101);
+    }
+
+    #[test]
+    fn test_missing_integrations_keys_take_the_documented_default() {
+        // A config saved before `mcp_enabled` existed must load with MCP on
+        // (docs/automation.md: default ON), not bool::default().
+        let cfg: Config = serde_json::from_str(r#"{"integrations":{"api_port":8765}}"#).unwrap();
+        assert!(
+            cfg.integrations.mcp_enabled,
+            "missing mcp_enabled defaulted off"
+        );
+        assert!(
+            cfg.integrations.api_enabled,
+            "missing api_enabled defaulted off"
+        );
+
+        // An explicit false stays false.
+        let cfg: Config =
+            serde_json::from_str(r#"{"integrations":{"api_enabled":false,"mcp_enabled":false}}"#)
+                .unwrap();
+        assert!(!cfg.integrations.mcp_enabled);
+        assert!(!cfg.integrations.api_enabled);
     }
 
     #[test]

@@ -64,7 +64,7 @@ pub fn generate_token() -> String {
 
 /// Handle that can signal the running server to stop.
 struct ServerHandle {
-    abort: tokio::task::AbortHandle,
+    task: tokio::task::JoinHandle<()>,
 }
 
 /// Global server handle — Some while the server is running.
@@ -297,11 +297,23 @@ async fn handle_patch_settings(
         ));
     }
     let patch = crate::config::canonicalise_patch_keys(patch);
-    let mut current = serde_json::to_value(crate::config::get_config()?)?;
+    let prior = crate::config::get_config()?;
+    let mut current = serde_json::to_value(&prior)?;
     crate::config::merge_json(&mut current, &patch);
     let new_cfg: crate::config::Config =
         serde_json::from_value(current).map_err(|e| AppError::BadRequest(e.to_string()))?;
+    let (before, after) = (prior.integrations, new_cfg.integrations.clone());
     crate::config::set_config(new_cfg)?;
+    if before != after {
+        // Restarting aborts the serving task, and this handler runs on it: defer
+        // so the 200 reaches the caller first.
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            if let Err(e) = apply_integrations(&after, token_store::get_or_create_token()).await {
+                tracing::error!("PATCH /settings: applying integrations failed: {e}");
+            }
+        });
+    }
     Ok(StatusCode::OK)
 }
 
@@ -772,9 +784,7 @@ pub async fn start(port: u16, token: String, mcp_enabled: bool) -> Result<(), St
     });
 
     let mut guard = SERVER.lock().await;
-    *guard = Some(ServerHandle {
-        abort: join_handle.abort_handle(),
-    });
+    *guard = Some(ServerHandle { task: join_handle });
     Ok(())
 }
 
@@ -782,7 +792,9 @@ pub async fn start(port: u16, token: String, mcp_enabled: bool) -> Result<(), St
 pub async fn stop() {
     let mut guard = SERVER.lock().await;
     if let Some(handle) = guard.take() {
-        handle.abort.abort();
+        handle.task.abort();
+        // Wait for the task to drop its listener so a restart can rebind the port.
+        let _ = handle.task.await;
         tracing::info!("Control API server stopped");
     }
 }
@@ -823,6 +835,20 @@ pub async fn get_integrations_status() -> Result<IntegrationsStatus, Error> {
         })
     })
     .await
+}
+
+/// Make the running server match an integrations config: stopped when the API
+/// is off, otherwise (re)started on its port with `/mcp` mounted per the flag.
+async fn apply_integrations(
+    i: &crate::config::IntegrationsConfig,
+    token: String,
+) -> Result<(), String> {
+    if i.api_enabled {
+        start(i.api_port, token, i.mcp_enabled).await
+    } else {
+        stop().await;
+        Ok(())
+    }
 }
 
 /// Enable or disable the Local Control API.
@@ -1142,6 +1168,47 @@ mod tests {
         get_jobs().await.as_mut().unwrap().remove(&id);
     }
     use super::*;
+
+    /// Applying an integrations change mounts or unmounts `/mcp` on the live server.
+    #[tokio::test]
+    async fn apply_integrations_mounts_mcp_live() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let mut i = crate::config::IntegrationsConfig {
+            api_enabled: true,
+            api_port: port,
+            mcp_enabled: false,
+        };
+        let url = format!("http://127.0.0.1:{port}/mcp");
+        let status = || async {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let mut c = tokio::net::TcpStream::connect(("127.0.0.1", port))
+                .await
+                .unwrap();
+            c.write_all(
+                b"POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer t\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            )
+            .await
+            .unwrap();
+            let mut out = String::new();
+            c.read_to_string(&mut out).await.unwrap();
+            out.split_whitespace()
+                .nth(1)
+                .unwrap()
+                .parse::<u16>()
+                .unwrap()
+        };
+
+        apply_integrations(&i, "t".into()).await.unwrap();
+        assert_eq!(status().await, 404);
+        i.mcp_enabled = true;
+        apply_integrations(&i, "t".into()).await.unwrap();
+        assert_ne!(status().await, 404, "/mcp not mounted");
+        i.api_enabled = false;
+        apply_integrations(&i, "t".into()).await.unwrap();
+        assert!(!is_running().await);
+    }
 
     #[test]
     fn token_has_canonical_shape() {
