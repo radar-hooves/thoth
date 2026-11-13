@@ -568,4 +568,29 @@ mod tests {
         assert_eq!(back.canonical_terms[0].term, "LiteLLM");
         std::fs::remove_dir_all(&dir).unwrap();
     }
+
+    /// The proof against the real service: add a harmless term, read it back,
+    /// remove it. Run with the device's login in WORDHOARD_USER / WORDHOARD_PASSWORD
+    /// (and WORDHOARD_URL), then read `/api/dictionary/history` for owner and device.
+    #[tokio::test]
+    #[ignore = "needs the live service and a device login"]
+    async fn live_add_then_remove_a_test_term() {
+        let var = |k: &str| std::env::var(k).unwrap_or_else(|_| panic!("{k} not set"));
+        let c = Client::new(
+            &var("WORDHOARD_URL"),
+            &var("WORDHOARD_USER"),
+            &var("WORDHOARD_PASSWORD"),
+            "thoth-live-proof",
+        )
+        .unwrap();
+        let probe = term("ThothLiveProbeTerm");
+        c.post(vec![term_add(&probe)]).await.unwrap();
+        let (d, _) = c.fetch(None).await.unwrap().unwrap();
+        assert!(d.canonical_terms.iter().any(|t| t.term == probe.term));
+        c.post(vec![json!({"kind":"term","op":"remove","term":probe.term})])
+            .await
+            .unwrap();
+        let (d, _) = c.fetch(None).await.unwrap().unwrap();
+        assert!(!d.canonical_terms.iter().any(|t| t.term == probe.term));
+    }
 }
