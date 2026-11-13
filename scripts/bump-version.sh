@@ -40,8 +40,32 @@ die() {
     exit 1
 }
 
+LOCK=src-tauri/Cargo.lock
+
+# The version the lock records for thoth's own package (empty if no lock).
+lock_version() {
+    [ -f "$LOCK" ] || return 0
+    awk '$0 == "name = \"thoth\"" { getline; gsub(/^version = "|"$/, ""); print; exit }' "$LOCK"
+}
+
+# Fail if the lock and Cargo.toml disagree: CI builds with --locked and refuses
+# a stale lock.
+check_lock() {
+    [ -f "$LOCK" ] || return 0
+    local toml lock
+    toml=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)
+    lock=$(lock_version)
+    [ "$toml" = "$lock" ] || die "$LOCK records thoth $lock but src-tauri/Cargo.toml says $toml"
+}
+
+if [ "${1:-}" = "--check" ]; then
+    check_lock
+    echo "✓ $LOCK agrees with src-tauri/Cargo.toml"
+    exit 0
+fi
+
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 <version>"
+    echo "Usage: $0 <version> | --check"
     echo "Example: $0 2026.3.0"
     exit 1
 fi
@@ -159,6 +183,15 @@ rm src-tauri/tauri.conf.json.bak
 echo "Updating package.json..."
 sed -i.bak "s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" package.json
 rm package.json.bak
+
+if [ -f "$LOCK" ]; then
+    echo "Updating $LOCK (thoth's own entry only)..."
+    awk -v v="$NEW_VERSION" '
+        found { sub(/^version = ".*"/, "version = \"" v "\""); found = 0 }
+        $0 == "name = \"thoth\"" { found = 1 }
+        { print }' "$LOCK" >"$LOCK.tmp" && mv "$LOCK.tmp" "$LOCK"
+    check_lock
+fi
 
 echo "✓ Version bumped to $NEW_VERSION in ${#VERSION_FILES[@]} files"
 echo ""

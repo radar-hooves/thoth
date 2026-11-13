@@ -105,6 +105,21 @@ run_case "allows an unrelated dependency version" \
 echo "Rewrite still works"
 run_case "accepts a valid bump with a clean tree" ok 2026.6.8 v2026.6.7
 
+echo "Cargo.lock follows the bump"
+lockdir=$(mktemp -d)
+make_fixture "$lockdir" "2026.6.7" v2026.6.7
+printf '[[package]]\nname = "other"\nversion = "2026.6.7"\n\n[[package]]\nname = "thoth"\nversion = "2026.6.7"\n' >"$lockdir/src-tauri/Cargo.lock"
+git -C "$lockdir" add -A && git -C "$lockdir" commit -qm lock
+check() { if "$@"; then printf '  ok   %s\n' "$name"; pass=$((pass + 1)); else printf '  FAIL %s\n' "$name"; fail=$((fail + 1)); fi; }
+name="bump rewrites thoth's lock entry"
+check bash -c "cd '$lockdir' && bash '$SCRIPT' 2026.6.8 >/dev/null && bash '$SCRIPT' --check >/dev/null && grep -A1 'name = \"thoth\"' src-tauri/Cargo.lock | grep -q 2026.6.8"
+name="bump leaves other packages' versions alone"
+check bash -c "cd '$lockdir' && grep -A1 'name = \"other\"' src-tauri/Cargo.lock | grep -q 2026.6.7"
+name="--check fails when the lock is stale"
+sed -i.bak 's/^version = "2026.6.8"/version = "2026.6.9"/' "$lockdir/src-tauri/Cargo.toml"
+check bash -c "! (cd '$lockdir' && bash '$SCRIPT' --check >/dev/null 2>&1)"
+rm -rf "$lockdir"
+
 echo
 echo "passed: $pass, failed: $fail"
 [ "$fail" -eq 0 ]
