@@ -462,7 +462,7 @@ mod tests {
     fn client(server: &mockito::ServerGuard) -> Client {
         Client::new(&server.url(), "u", "p", "huginn").unwrap()
     }
-    const DOC: &str = r#"{"version":1,"entries":[{"from":"teh","to":"the"}],"canonicalTerms":[{"term":"LiteLLM","aliases":["lite llm"]}]}"#;
+    const DOC: &str = r#"{"version":1,"entries":[{"from":"teh","to":"the"}],"canonicalTerms":[{"term":"LiteLLM","aliases":["lite llm"]},{"term":"Null","aliases":[],"policy":"aliasOnly","maxWords":null,"threshold":null}]}"#;
 
     #[test]
     fn diff_is_removes_then_adds_and_empty_when_equal() {
@@ -501,6 +501,8 @@ mod tests {
         assert_eq!(d.entries[0].to, "the");
         assert!(!d.entries[0].case_sensitive);
         assert_eq!(d.canonical_terms[0].aliases, ["lite llm"]);
+        // The live service sends `maxWords: null` for a term with no override.
+        assert_eq!(d.canonical_terms[1].max_words, 3);
     }
 
     #[tokio::test]
@@ -650,7 +652,7 @@ mod tests {
             &var("WORDHOARD_URL"),
             &var("WORDHOARD_USER"),
             &var("WORDHOARD_PASSWORD"),
-            "thoth-live-proof",
+            &device_name(""),
         )
         .unwrap();
         let probe = term("ThothLiveProbeTerm");

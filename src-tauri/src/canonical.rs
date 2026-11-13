@@ -60,7 +60,10 @@ pub struct CanonicalTerm {
     pub policy: SnapPolicy,
     /// Maximum number of consecutive tokens to consider as one candidate
     /// (window size for the n-gram sweep).  Default: 3.
-    #[serde(default = "default_max_words")]
+    #[serde(
+        default = "default_max_words",
+        deserialize_with = "max_words_or_default"
+    )]
     pub max_words: u8,
     /// Per-term override for the edit-distance threshold.  When absent, the
     /// policy defaults apply (0.55 for Phonetic, 0.85 for Conservative).
@@ -70,6 +73,11 @@ pub struct CanonicalTerm {
 
 fn default_max_words() -> u8 {
     3
+}
+
+/// A shared document may carry `"maxWords": null` for "the default".
+fn max_words_or_default<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u8, D::Error> {
+    Ok(Option::<u8>::deserialize(d)?.unwrap_or_else(default_max_words))
 }
 
 /// The on-disk registry.
