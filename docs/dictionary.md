@@ -110,7 +110,7 @@ The flat dictionary has its own `dictionary` MCP tool (list, add, update, delete
 ## See also
 
 - [Getting started](getting-started.md): install Thoth and record your first dictation.
-- [Word list publishing](word-list-publish.md): share these lists with other tools through a WebDAV file.
+- [Word list publishing](word-list-publish.md): share these lists through a WebDAV file, or use a shared dictionary service.
 - [Custom prompts](custom-prompts-guide.md): shape how AI enhancement rewrites your text.
 - [Automation](automation.md): control Thoth from an AI assistant via the MCP server.
 - [Troubleshooting](troubleshooting.md): when corrections are not being applied.

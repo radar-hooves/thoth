@@ -69,6 +69,20 @@ pub struct PublishConfig {
     pub username: String,
 }
 
+/// External dictionary (wordhoard): the service's lists replace the local ones.
+/// Off by default. The app password lives in its own owner-only file.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ExternalDictionaryConfig {
+    pub enabled: bool,
+    /// The service's base URL, e.g. `https://wordhoard.godswood.au`
+    pub url: String,
+    /// The device's login (basic auth)
+    pub username: String,
+    /// Machine name sent as `X-Wordhoard-Device`; empty uses the hostname
+    pub device: String,
+}
+
 /// Main configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -93,6 +107,8 @@ pub struct Config {
     pub telemetry: TelemetryConfig,
     /// Word-list publishing settings (WebDAV)
     pub publish: PublishConfig,
+    /// External dictionary service settings
+    pub external_dictionary: ExternalDictionaryConfig,
 }
 
 impl Default for Config {
@@ -108,6 +124,7 @@ impl Default for Config {
             integrations: IntegrationsConfig::default(),
             telemetry: TelemetryConfig::default(),
             publish: PublishConfig::default(),
+            external_dictionary: ExternalDictionaryConfig::default(),
         }
     }
 }
@@ -1624,6 +1641,7 @@ mod tests {
                 headers_helper: "print-headers otlp".to_string(),
             },
             publish: PublishConfig::default(),
+            external_dictionary: ExternalDictionaryConfig::default(),
         };
 
         let json = serde_json::to_string_pretty(&config).unwrap();

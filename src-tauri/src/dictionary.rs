@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 /// A dictionary entry for word replacement
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DictionaryEntry {
     /// The text to search for and replace
@@ -21,6 +21,7 @@ pub struct DictionaryEntry {
     /// The replacement text
     pub to: String,
     /// Whether the match should be case-sensitive
+    #[serde(default)]
     pub case_sensitive: bool,
 }
 
@@ -92,6 +93,13 @@ fn save_dictionary(dictionary: &Dictionary) -> Result<(), String> {
 
     tracing::debug!("Dictionary saved to {:?}", path);
     Ok(())
+}
+
+/// Replace every entry (the external dictionary's list becoming the local one).
+pub(crate) fn replace_entries(entries: Vec<DictionaryEntry>) -> Result<(), Error> {
+    let mut dict = get_dictionary().write();
+    dict.entries = entries;
+    save_dictionary(&dict).map_err(Error::from)
 }
 
 /// Get all dictionary entries

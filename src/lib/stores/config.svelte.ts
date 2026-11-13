@@ -114,6 +114,24 @@ export interface PublishConfig {
   username: string;
 }
 
+/** External dictionary (wordhoard) configuration. Off by default. */
+export interface ExternalDictionaryConfig {
+  enabled: boolean;
+  /** The service's base URL; empty means unset */
+  url: string;
+  /** The device's login (basic auth) */
+  username: string;
+  /** Machine name sent with writes; empty uses the hostname */
+  device: string;
+}
+
+/** What the external dictionary card shows. Never the password itself. */
+export interface ExternalDictionaryStatus {
+  hasPassword: boolean;
+  lastSyncAt: string | null;
+  lastError: string | null;
+}
+
 /** What the word-list publishing card shows. Never the password itself. */
 export interface PublishStatus {
   hasPassword: boolean;
@@ -218,6 +236,8 @@ export interface Config {
   telemetry: TelemetryConfig;
   /** Word-list publishing settings */
   publish: PublishConfig;
+  /** External dictionary service settings */
+  externalDictionary: ExternalDictionaryConfig;
 }
 
 /** Raw config from backend (snake_case fields) */
@@ -291,6 +311,12 @@ interface ConfigRaw {
     enabled: boolean;
     url: string;
     username: string;
+  };
+  external_dictionary?: {
+    enabled: boolean;
+    url: string;
+    username: string;
+    device: string;
   };
 }
 
@@ -367,6 +393,12 @@ function parseConfig(raw: ConfigRaw): Config {
       url: raw.publish?.url ?? '',
       username: raw.publish?.username ?? '',
     },
+    externalDictionary: {
+      enabled: raw.external_dictionary?.enabled ?? false,
+      url: raw.external_dictionary?.url ?? '',
+      username: raw.external_dictionary?.username ?? '',
+      device: raw.external_dictionary?.device ?? '',
+    },
   };
 }
 
@@ -442,6 +474,12 @@ function serialiseConfig(config: Config): ConfigRaw {
       enabled: config.publish.enabled,
       url: config.publish.url,
       username: config.publish.username,
+    },
+    external_dictionary: {
+      enabled: config.externalDictionary.enabled,
+      url: config.externalDictionary.url,
+      username: config.externalDictionary.username,
+      device: config.externalDictionary.device,
     },
   };
 }
@@ -536,6 +574,12 @@ function getDefaultConfig(): Config {
       enabled: false,
       url: '',
       username: '',
+    },
+    externalDictionary: {
+      enabled: false,
+      url: '',
+      username: '',
+      device: '',
     },
   };
 }
@@ -694,6 +738,10 @@ function createConfigStore() {
     config.integrations[key] = value;
   }
 
+  function updateExternalDictionary<K extends keyof ExternalDictionaryConfig>(key: K, value: ExternalDictionaryConfig[K]): void {
+    config.externalDictionary[key] = value;
+  }
+
   /**
    * Update a specific word-list publishing config field
    */
@@ -795,6 +843,9 @@ function createConfigStore() {
     get publish() {
       return config.publish;
     },
+    get externalDictionary() {
+      return config.externalDictionary;
+    },
 
     // Actions
     load,
@@ -810,6 +861,7 @@ function createConfigStore() {
     updateRecorder,
     updateIntegrations,
     updatePublish,
+    updateExternalDictionary,
     setEnhancementApiKey,
     setTelemetry,
     clearError,

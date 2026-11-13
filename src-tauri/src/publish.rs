@@ -16,7 +16,7 @@
 use crate::error::Error;
 use base64::Engine as _;
 use parking_lot::RwLock;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -44,7 +44,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 /// Rows are byte-identical to Thoth's own dictionary and canonical-term rows
 /// (same field names via `rename_all = "camelCase"`), so `GET` the file and
 /// read the arrays is all a second consumer ever needs to do.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SharedWordList {
     /// Format version, so a consumer can refuse a newer document rather than
@@ -77,7 +77,7 @@ struct WebDavClient {
     auth_header: Option<String>,
 }
 
-fn basic_auth_header(username: &str, password: &str) -> String {
+pub(crate) fn basic_auth_header(username: &str, password: &str) -> String {
     let raw = format!("{username}:{password}");
     format!(
         "Basic {}",
@@ -162,33 +162,44 @@ fn password_path() -> PathBuf {
     crate::config::get_config_dir().join("webdav_password")
 }
 
-/// Read the stored password, or `None` if absent or empty.
-fn read_password() -> Option<String> {
-    fs::read_to_string(password_path())
+pub(crate) fn read_secret(name: &str) -> Option<String> {
+    fs::read_to_string(crate::config::get_config_dir().join(name))
         .ok()
         .map(|raw| raw.trim().to_string())
         .filter(|pw| !pw.is_empty())
 }
 
+pub(crate) fn write_secret(name: &str, secret: Option<&str>) -> Result<(), String> {
+    write_file_secret(&crate::config::get_config_dir().join(name), secret)
+}
+
+/// Read the stored password, or `None` if absent or empty.
+fn read_password() -> Option<String> {
+    read_secret("webdav_password")
+}
+
 /// Store or clear the password. Owner-only (`0o600`) because it is a secret.
 fn write_password(password: Option<&str>) -> Result<(), String> {
+    write_file_secret(&password_path(), password)
+}
+
+fn write_file_secret(path: &std::path::Path, password: Option<&str>) -> Result<(), String> {
     match password {
         Some(pw) => {
             let dir = crate::config::get_config_dir();
             fs::create_dir_all(&dir)
                 .map_err(|e| format!("Failed to create the config directory: {e}"))?;
-            let path = password_path();
-            fs::write(&path, pw).map_err(|e| format!("Failed to write the password store: {e}"))?;
+            fs::write(path, pw).map_err(|e| format!("Failed to write the password store: {e}"))?;
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                if let Err(e) = fs::set_permissions(&path, fs::Permissions::from_mode(0o600)) {
+                if let Err(e) = fs::set_permissions(path, fs::Permissions::from_mode(0o600)) {
                     tracing::warn!("Failed to set password-store permissions to 0o600: {e}");
                 }
             }
             Ok(())
         }
-        None => match fs::remove_file(password_path()) {
+        None => match fs::remove_file(path) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(format!("Failed to clear the password store: {e}")),
@@ -261,6 +272,13 @@ async fn publish_once(require_ready: bool) -> Result<(), String> {
     let cfg = crate::config::get_config().map_err(|e| format!("Cannot read the config: {e}"))?;
     let publish_cfg = &cfg.publish;
     let url = publish_cfg.url.trim().to_string();
+    if crate::external_dictionary::is_enabled() {
+        // The service is the source of truth; Thoth does not also publish a file.
+        if require_ready {
+            return Err("The external dictionary is on; word list publishing is off".to_string());
+        }
+        return Ok(());
+    }
     if !publish_cfg.enabled || url.is_empty() {
         if require_ready {
             return Err("Word list publishing is off, or has no URL set".to_string());
@@ -298,6 +316,7 @@ fn wake() -> &'static tokio::sync::Notify {
 /// running.
 pub fn notify_local_change() {
     wake().notify_one();
+    crate::external_dictionary::notify_local_change();
 }
 
 /// The publish loop: wake on a save, let the debounce window collect the

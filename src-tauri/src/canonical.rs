@@ -47,7 +47,7 @@ pub enum SnapPolicy {
 }
 
 /// A canonical term with its variants and matching policy.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CanonicalTerm {
     /// The canonical spelling to snap to.
@@ -806,6 +806,13 @@ pub fn suggest_aliases_from_history(
 // ---------------------------------------------------------------------------
 // Tauri commands
 // ---------------------------------------------------------------------------
+
+/// Replace every term (the external dictionary's list becoming the local one).
+pub(crate) fn replace_terms(terms: Vec<CanonicalTerm>) -> Result<(), Error> {
+    let mut registry = get_registry().write();
+    registry.terms = terms;
+    save_registry(&registry).map_err(Error::from)
+}
 
 /// Return all registered canonical terms.
 #[tauri::command]

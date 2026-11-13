@@ -1,10 +1,30 @@
-# Word list publishing
+# Word list: the shared document and the external dictionary
 
-Optional, off by default: write the dictionary and the canonical terms to one shared file on a WebDAV server (Nextcloud, ownCloud, any plain WebDAV), so other tools — a phone keyboard, a gateway — can read the same corrections. Until you turn it on in **Settings → Integrations → Word list publishing**, the built-in local lists are the whole experience and nothing leaves the machine.
+Thoth's word list is one JSON document (the format below) carrying the dictionary and the canonical terms. It has two homes, both off by default, so a public build with neither set is purely local:
 
-This page is also the format contract for a second consumer: anything that can GET the file with basic auth can read the list.
+- **External dictionary** (**Settings → Integrations → External dictionary**): the household's dictionary service, wordhoard, is the source of truth. This is the read contract.
+- **Word list publishing** (WebDAV file): Thoth writes its own file. It remains as the seed for a fresh service (`POST /api/dictionary/import` takes this file) and for setups with no service. It pauses while the external dictionary is on.
 
-## What it does
+## External dictionary
+
+Set the service URL, the device's login and the device's app password (its own identity-provider app password, held in `~/.thoth/wordhoard_password`, owner-only, never in `config.json`). The device name is sent with every write; empty uses the hostname. Turning it on **replaces the local lists** with the service's; the previous ones are saved to `~/.thoth/dictionary_before_external.json`.
+
+| Call | What |
+| --- | --- |
+| `GET /api/dictionary/word-list` | The version-1 document with an `ETag`. Thoth sends `If-None-Match`; `304` means unchanged. A document with a higher `version` is refused. |
+| `POST /api/dictionary/changes` | A batch `{"changes":[…]}` of `entry`, `term`, `ban`, `refusal` changes, each `op: add \| remove`, with `X-Wordhoard-Device`. Thoth sends `entry` and `term` only: it has no bans or refusals. |
+| `GET /api/dictionary/rows` | Shared rows plus this device's own bans and refusals: the read-back after a reinstall (the keyboard's; Thoth has nothing device-local to restore). |
+| `GET /api/dictionary/history` | Who wrote each row, from which device. |
+
+Auth is HTTP Basic.
+
+- **Read** on start, every 60 seconds, and after each local edit.
+- **Write through**: every edit, whatever made it (editor, import, MCP), is sent within about a second as the difference between the last good document and the local lists: removes first, then adds, so a changed row is remove-old, add-new. A failed write stops the sync before the read, so the edit is neither lost nor overwritten; it is retried on the next tick.
+- **Offline**: the last good document (`~/.thoth/external_dictionary_last_good.json`) and the local lists are the working copy. A failed request records the error in the settings pane and changes nothing.
+
+The rest of this page is the document format, shared by both homes.
+
+## WebDAV publishing
 
 - **Edits in Thoth reach the file within a few seconds**, whatever made them — the dictionary editor, an import, the MCP `dictionary`/`canonical` tools. A burst of edits becomes one write.
 - **Publish now** writes the file immediately.

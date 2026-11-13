@@ -19,6 +19,7 @@ pub mod dictionary;
 pub mod enhancement;
 pub mod error;
 pub mod export;
+pub mod external_dictionary;
 pub mod keyboard_service;
 pub mod mcp_server;
 pub mod mouse_tracker;
@@ -513,6 +514,10 @@ pub fn run() {
             // disabled costs one config read and no network.
             publish::spawn_publish_loop();
 
+            // With the external dictionary on, wordhoard is the source of truth
+            // for both lists; off, the loop only checks the config each wake.
+            external_dictionary::spawn_sync_loop();
+
             // Re-warm the model after wake-from-sleep (CoreML cache eviction)
             #[cfg(target_os = "macos")]
             platform::macos::register_wake_observer();
@@ -701,6 +706,9 @@ pub fn run() {
             publish::get_publish_status,
             publish::set_publish_password,
             publish::publish_now,
+            external_dictionary::get_external_dictionary_status,
+            external_dictionary::set_external_dictionary_password,
+            external_dictionary::sync_external_dictionary_now,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-  import { configStore, type PublishStatus, type TelemetryStatus } from '../stores/config.svelte';
+  import { configStore, type ExternalDictionaryStatus, type PublishStatus, type TelemetryStatus } from '../stores/config.svelte';
   import { toast } from 'svelte-sonner';
   import { Switch } from '@poodle64/ui/switch';
   import { Button } from '@poodle64/ui/button';
@@ -50,6 +50,62 @@
   let publishPassword = $state('');
   let isSavingPublish = $state(false);
   let isPublishingNow = $state(false);
+
+  // External dictionary (wordhoard). Same write-only password field.
+  let extStatus = $state<ExternalDictionaryStatus | null>(null);
+  let extPassword = $state('');
+  let isSavingExt = $state(false);
+
+  async function refreshExtStatus(): Promise<void> {
+    try {
+      extStatus = await invoke<ExternalDictionaryStatus>('get_external_dictionary_status');
+    } catch (e) {
+      console.error('Failed to load external dictionary status:', e);
+    }
+  }
+
+  /** Persist the settings (+ password when typed), then sync once. */
+  async function handleSaveExt(enabled?: boolean): Promise<void> {
+    isSavingExt = true;
+    try {
+      if (enabled !== undefined) configStore.updateExternalDictionary('enabled', enabled);
+      const ext = configStore.externalDictionary;
+      configStore.updateExternalDictionary('url', ext.url.trim());
+      configStore.updateExternalDictionary('username', ext.username.trim());
+      configStore.updateExternalDictionary('device', ext.device.trim());
+      if (!(await configStore.save())) {
+        toast.error('Failed to save external dictionary settings');
+        return;
+      }
+      if (extPassword !== '') {
+        try {
+          await invoke('set_external_dictionary_password', { password: extPassword });
+        } catch (e) {
+          toast.error('Failed to store the password', {
+            description: e instanceof Error ? e.message : String(e),
+          });
+          return;
+        }
+        extPassword = '';
+      }
+      if (configStore.externalDictionary.enabled) {
+        extStatus = await invoke<ExternalDictionaryStatus>('sync_external_dictionary_now');
+      } else {
+        await refreshExtStatus();
+      }
+    } finally {
+      isSavingExt = false;
+    }
+  }
+
+  const extStatusMessage = $derived.by(() => {
+    if (!extStatus) return null;
+    if (extStatus.lastError) return { ok: false as const, text: extStatus.lastError };
+    if (extStatus.lastSyncAt) {
+      return { ok: true as const, text: `Last synced ${new Date(extStatus.lastSyncAt).toLocaleString()}` };
+    }
+    return null;
+  });
 
   async function refreshStatus(): Promise<void> {
     try {
@@ -255,6 +311,7 @@
     await loadToken();
     await loadTelemetry();
     await refreshPublishStatus();
+    await refreshExtStatus();
   });
 </script>
 
@@ -585,6 +642,102 @@
               aria-hidden="true"
             ></span>
             {publishStatusMessage.text}
+          </span>
+        {/if}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 5: External dictionary -->
+<section class="flex flex-col">
+  <div class="mb-3">
+    <h2 class="text-base font-semibold text-foreground m-0">External dictionary</h2>
+    <p class="text-xs text-muted-foreground m-0">
+      Use a shared dictionary service (wordhoard) as the word list instead of publishing a
+      file. Both lists come from the service, every edit is written to it, and the last good
+      copy is kept offline. While on, word list publishing is paused. Turning it on replaces
+      the local lists; the previous ones are saved to
+      <code class="rounded bg-muted px-1 py-0.5 font-mono text-xs">~/.thoth/dictionary_before_external.json</code>.
+    </p>
+  </div>
+  <div class="flex flex-col gap-2">
+    <div
+      class="flex items-center justify-between gap-4 rounded-md border border-border bg-card p-3"
+    >
+      <div class="flex flex-1 flex-col gap-1">
+        <span class="text-sm font-medium text-foreground">Use an external dictionary</span>
+        <span class="text-xs text-muted-foreground">Off by default; nothing leaves this Mac until you turn it on.</span>
+      </div>
+      <Switch
+        checked={configStore.externalDictionary.enabled}
+        onCheckedChange={(v) => handleSaveExt(v)}
+      />
+    </div>
+
+    <div class="flex flex-col gap-3 rounded-md border border-border bg-card p-3">
+      <div class="flex flex-col gap-0.5">
+        <span class="text-sm font-medium text-foreground">Service URL</span>
+        <Input
+          type="url"
+          value={configStore.externalDictionary.url}
+          oninput={(e) =>
+            configStore.updateExternalDictionary('url', (e.target as HTMLInputElement).value)}
+          placeholder="https://wordhoard.example"
+          class="font-mono text-xs mt-1"
+          aria-label="External dictionary URL"
+        />
+      </div>
+      <div class="flex flex-col gap-0.5">
+        <span class="text-sm font-medium text-foreground">Username</span>
+        <Input
+          value={configStore.externalDictionary.username}
+          oninput={(e) =>
+            configStore.updateExternalDictionary('username', (e.target as HTMLInputElement).value)}
+          class="mt-1"
+          aria-label="External dictionary username"
+        />
+      </div>
+      <div class="flex flex-col gap-0.5">
+        <span class="text-sm font-medium text-foreground">Device name</span>
+        <span class="text-xs text-muted-foreground">Recorded against every edit. Empty uses this Mac's hostname.</span>
+        <Input
+          value={configStore.externalDictionary.device}
+          oninput={(e) =>
+            configStore.updateExternalDictionary('device', (e.target as HTMLInputElement).value)}
+          class="mt-1"
+          aria-label="External dictionary device name"
+        />
+      </div>
+      <div class="flex flex-col gap-0.5">
+        <span class="text-sm font-medium text-foreground">Password</span>
+        <span class="text-xs text-muted-foreground">
+          {#if extStatus?.hasPassword}
+            Stored. Enter a new one to replace it.
+          {:else}
+            This device's app password.
+          {/if}
+        </span>
+        <Input
+          type="password"
+          bind:value={extPassword}
+          placeholder={extStatus?.hasPassword ? '••••••••' : 'App password'}
+          class="mt-1"
+          aria-label="External dictionary password"
+        />
+      </div>
+      <div class="flex items-center gap-2">
+        <Button size="sm" onclick={() => handleSaveExt()} disabled={isSavingExt}>
+          {isSavingExt ? 'Saving…' : 'Save'}
+        </Button>
+        {#if extStatusMessage}
+          <span
+            class="text-xs flex items-center gap-1.5 {extStatusMessage.ok
+              ? 'text-status-success'
+              : 'text-status-error'}"
+            role="status"
+          >
+            {extStatusMessage.text}
           </span>
         {/if}
       </div>
