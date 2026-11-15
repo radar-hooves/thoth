@@ -1,13 +1,175 @@
 <!doctype html>
-<html lang="en"><meta charset="utf-8"><title>Thoth handoff</title>
-<body><h1>Thoth</h1>
-<h2>In flight (02/11/2026)</h2>
-<ul>
-<li><b>v2026.11.0</b> published 02/11/2026 (release run 41377714286 green on both platforms): the macOS clipboard-image leak fix and a six-hourly update re-check. Installed on huginn at 12:43 from the release asset, signed with the same poodle64 certificate leaf, and tccd allowed it at launch with no prompt. Footprint at start was 64 MB, against the 20 GB of the previous 2026.10.2 process, which was SIGKILLed at 10:16 by a sender the log does not name. Still open: read <code>footprint $(pgrep -f Thoth.app/Contents/MacOS/thoth)</code> after a day of dictating over screenshots; it should stay in the hundreds of MB.</li>
-<li><b>AppleEvents</b>: at launch tccd logs "service: kTCCServiceAppleEvents requires entitlement com.apple.security.automation.apple-events but it is missing" for a process Thoth spawns. This predates 2026.11.0 (2026.10.2 was hardened too). Not yet traced to the feature that needs it.</li>
-<li><b>Footprint telemetry</b>: app-factory v2026.11.4 (telemetry 0.7.0) adds <code>footprint_bytes</code> to process_metrics. <code>rss_bytes</code> stayed at about 550 MB while the footprint hit 20 GB. Thoth's three app-factory pins move to it in master-project's upgrade lane, with flake.nix's outputHashes key renamed to <code>telemetry-0.7.0</code>.</li>
-<li><b>Dev-shell linking</b> on macOS 27 now runs on Xcode's clang and ld from flake.nix <code>darwinSwiftLinkHook</code>, which <code>scripts/tauri-release.sh</code> also relies on. The first release cut after this change is the one to watch: its macOS leg is the proof for the release path.</li>
-<li>master-project's upgrade lane (thoth-wt-b658f3ed, Renovate #191 majors) rebases onto main and releases after 2026.11.0.</li>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thoth: open work</title>
+<meta name="description" content="Tray fix to release; carried release and footprint checks.">
+<style>
+/* A shift-handover sheet: what waits on him, by when, in columns that fill the width; then each thread folded to its state line. */
+:root {
+  color-scheme: light;
+  --paper: #f2f4f7;
+  --sheet: #ffffff;
+  --ink: #18202b;
+  --ink-2: #546072;
+  --rule: #d6dce4;
+  --accent: #2747c7;
+  --accent-wash: #e5eafb;
+  --flag: #8f5400;
+  --flag-wash: #fbefd9;
+  --f-display: ui-serif, "Iowan Old Style", Charter, "Bitstream Charter", Georgia, serif;
+  --f-text: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --f-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #0f1318; --sheet: #171c24; --ink: #e2e7ee; --ink-2: #98a4b4; --rule: #29323e;
+    --accent: #95a9ff; --accent-wash: #1d2541; --flag: #e8ad4b; --flag-wash: #2d2313;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0f1318; --sheet: #171c24; --ink: #e2e7ee; --ink-2: #98a4b4; --rule: #29323e;
+  --accent: #95a9ff; --accent-wash: #1d2541; --flag: #e8ad4b; --flag-wash: #2d2313;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.55 var(--f-text);
+  padding: 2rem max(16px, env(safe-area-inset-right, 0px)) 4rem max(16px, env(safe-area-inset-left, 0px)); }
+main { max-width: 90rem; margin: 0 auto; display: grid; gap: 2.5rem; }
+h1, h2, h3, h4, p { margin: 0; }
+h1, h2 { font-family: var(--f-display); font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; }
+h1 { font-size: 2.1rem; line-height: 1.1; }
+h2 { font-size: 1.35rem; padding-bottom: .5rem; border-bottom: 2px solid var(--ink); }
+h3 { font-size: 1rem; font-weight: 650; text-wrap: balance; }
+h4 { font-size: .98rem; font-weight: 650; }
+code { font: .86em var(--f-mono); background: var(--accent-wash); padding: 0 .25em; border-radius: 3px; overflow-wrap: anywhere; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.masthead { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem 1.5rem; }
+.masthead .eyebrow { flex-basis: 100%; font: 600 .75rem var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+.masthead .updated { margin-left: auto; font: .85rem var(--f-mono); color: var(--ink-2); }
+
+.operator, .threads { display: grid; gap: 0; }
+.when { display: grid; gap: .75rem; padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
+.when > h3 { font: 600 .78rem/1.4 var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.when > h3 span { margin-left: .6rem; font: .82rem/1.4 var(--f-text); letter-spacing: 0; text-transform: none; }
+.when.today > h3 { color: var(--flag); }
+.asks { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 24rem), 1fr)); gap: .75rem; min-width: 0; }
+.asks > .table, .asks > .detail { grid-column: 1 / -1; }
+
+.ask { display: grid; gap: .3rem; padding: .85rem 1rem .8rem; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; }
+.ask p { max-width: 68ch; }
+.ask::before, .table::before { justify-self: start; font: 600 .68rem/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; padding: .3em .5em; border-radius: 3px; }
+[data-kind="decide"]::before { content: "Decide"; color: var(--flag); background: var(--flag-wash); }
+[data-kind="read"]::before { content: "Read"; color: var(--accent); background: var(--accent-wash); }
+
+.ask::after { font: .78rem var(--f-mono); color: var(--ink-2); }
+.ask[data-track]::after { content: attr(data-track); }
+.ask[data-untracked]::after { content: attr(data-untracked); font-style: italic; }
+
+.table { display: grid; gap: 0; margin-top: .25rem; }
+.table::before { margin-bottom: .5rem; }
+.table-label { display: none; }
+.row { display: grid; grid-template-columns: minmax(8rem, 12rem) minmax(0, 1fr) minmax(6rem, 11rem); gap: .2rem 1.1rem; padding-block: .6rem; border-top: 1px solid var(--rule); }
+.row.head { font: 600 .7rem var(--f-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--ink-2); border-top: 0; padding-block: .2rem .4rem; }
+.row b { font-weight: 600; }
+.row::after { font: .76rem/1.45 var(--f-mono); color: var(--ink-2); overflow-wrap: anywhere; }
+.row[data-track]::after { content: attr(data-track); color: var(--accent); }
+.row[data-untracked]::after { content: attr(data-untracked); font-style: italic; }
+
+.thread { border-bottom: 1px solid var(--rule); }
+.thread > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 1.25rem minmax(0, 1fr); gap: .15rem .5rem; padding-block: 1rem; }
+.thread > summary::-webkit-details-marker { display: none; }
+.thread > summary::before { content: "›"; grid-row: span 2; font: 600 1.15rem/1.2 var(--f-mono); color: var(--ink-2); transition: transform .15s; }
+.thread[open] > summary::before { transform: rotate(90deg); }
+.thread > summary:hover h3 { color: var(--accent); }
+.state { grid-column: 2; color: var(--ink-2); max-width: 72ch; }
+.next, .items { margin-left: 1.75rem; }
+.next { max-width: 72ch; padding: .7rem .9rem; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; }
+.next::before { content: "Next"; margin-right: .6em; font: 600 .68rem var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.items { list-style: none; padding: .5rem 0 1.25rem; display: grid; gap: 0; max-width: 90ch; }
+.items li { padding: .5rem 0 .5rem 1rem; border-top: 1px dashed var(--rule); position: relative; }
+.items li:first-child { border-top: 0; }
+.items li::before { content: ""; position: absolute; left: 0; top: 1.05rem; width: .35rem; height: 1px; background: var(--ink-2); }
+.next::after, .items li::after { margin-left: .5em; font: .76rem var(--f-mono); white-space: nowrap; }
+.next[data-track]::after, .items li[data-track]::after { content: attr(data-track); color: var(--accent); background: var(--accent-wash); padding: .05em .4em; border-radius: 3px; }
+.next[data-untracked]::after, .items li[data-untracked]::after { content: attr(data-untracked); color: var(--ink-2); font-style: italic; white-space: normal; }
+
+.detail { max-width: 72ch; color: var(--ink-2); }
+table.detail { border-collapse: collapse; font-size: .9rem; margin-top: .5rem; max-width: 100%; display: block; overflow-x: auto; }
+table.detail th { font: 600 .7rem var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); text-align: left; }
+table.detail th, table.detail td { padding: .35rem .9rem .35rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--ink); }
+.thread > .detail { margin: 0 0 1rem 1.75rem; }
+
+@media (max-width: 700px) {
+  body { padding-top: 1.25rem; }
+  .row { grid-template-columns: minmax(0, 1fr); }
+  .row.head { display: none; }
+  .next, .items { margin-left: 0; }
+}
+[data-done] { opacity: .5; text-decoration: line-through; }
+@media (prefers-reduced-motion: reduce) { .thread > summary::before { transition: none; } }
+</style>
+</head>
+<body>
+<!--
+HANDOFF.html: this repo's open work, rewritten in place; git is its history (skills-library/handoff/SKILL.md).
+Every open item carries a stable data-id (kebab-case, never changed or reused) and either
+data-track="#123 owner/repo#45" or data-untracked="<why it has no issue>". Reword an item freely; its id stays.
+An item leaves only closed (a decide ask once his answer is in the topic's issue or the sitting register; a read ask when he ticks it;
+a thread item done or moved to an issue), and the commit names it: Handoff-closed: <id>, <id>
+An item he ticked in the Cockpit carries data-done="YYYY-MM-DD": the next session verifies the work and removes it, or clears the tick and says why in the item.
+For the operator: <article class="ask" data-kind="decide|read"> (an h4, then one p: the answer in a few plain sentences, linking the write-up in docs/research/),
+or a .row in a .table for like items, inside a section.when grouped by date.
+Threads: <details class="thread">, its summary an h3 and a .state line; then p.next and ul.items > li.
+No scripts, no external loads, no secret values, no names of anyone outside the household.
+-->
+<main>
+<header class="masthead">
+<p class="eyebrow">Thoth</p>
+<h1>Open work</h1>
+<p class="updated">Updated <time datetime="2026-11-15">15/11/2026</time></p>
+</header>
+
+<section class="operator" aria-labelledby="for-the-operator">
+<h2 id="for-the-operator">For the operator</h2>
+
+<section class="when today">
+<h3>Next time you close Thoth's window</h3>
+<div class="asks">
+<article class="ask" data-id="reopen-shows-window" data-kind="read" data-track="#206">
+<h4>Opening Thoth from Spotlight should bring its window back</h4>
+<p>The menu bar icon is back on huginn (local build installed 15/11 16:00, same certificate, no permission prompts). The other half of the fix is that opening Thoth while it runs now shows the window; no session can hide the window to test it. Close the window, open Thoth from Spotlight: the window should appear.</p>
+</article>
+</div>
+</section>
+</section>
+
+<section class="threads" aria-labelledby="threads">
+<h2 id="threads">Threads</h2>
+
+<details class="thread" id="tray-missing" open>
+<summary><h3>Menu bar icon missing, window unreachable</h3><span class="state">Fixed on main and installed on huginn; not yet released to the other Macs.</span></summary>
+<p class="next" data-id="tray-fix-release" data-track="#206">Cut a release (<code>scripts/bump-version.sh</code>, then the release workflow) so the updater delivers the tray fix to every Mac using right Shift.</p>
+<ul class="items">
+<li data-id="tray-guard-invisible" data-track="#206">The tray failure was invisible: the app-factory desktop-shell <code>guard_tray</code> logs only locally, so nothing reached Loki. Raise this with app-factory.</li>
+<li data-id="clippy-collapsible-if" data-untracked="found 15/11, not yet triaged">Local clippy 0.1.96 flags collapsible <code>if</code> across about ten files that predate this change; check whether CI's clippy agrees.</li>
 </ul>
-<p>27/10/2026: v2026.10.3 was published after successful change and release runs: system libraries only, Authority=poodle64, hardened runtime. Published release assets are not replaceable by a workflow rerun.</p>
-</body></html>
+</details>
+
+<details class="thread" id="release-footprint">
+<summary><h3>Release path and memory footprint (carried from 02/11)</h3><span class="state">Items from the 02/11 handoff, carried over unchanged and not re-checked on 15/11.</span></summary>
+<p class="next" data-id="footprint-day-check" data-untracked="carried from 02/11 handoff, unverified">After a day of dictating over screenshots, read <code>footprint $(pgrep -x thoth)</code>; it should stay in the hundreds of MB, not the 20 GB 2026.10.2 reached.</p>
+<ul class="items">
+<li data-id="appleevents-entitlement" data-untracked="carried from 02/11 handoff, unverified">At launch, tccd says a process Thoth spawns lacks the apple-events entitlement. This predates 2026.11.0 and hasn't been traced to a feature yet.</li>
+<li data-id="footprint-telemetry-pin" data-untracked="carried from 02/11 handoff, unverified">Move the app-factory pins to v2026.11.4 or later (telemetry 0.7.0 adds <code>footprint_bytes</code>); rename the flake outputHashes key to <code>telemetry-0.7.0</code>.</li>
+<li data-id="xcode-link-release-proof" data-untracked="carried from 02/11 handoff, unverified">The macOS leg of the first release cut since the switch to Xcode clang/ld linking (<code>darwinSwiftLinkHook</code>) proves the release path.</li>
+</ul>
+</details>
+</section>
+</main>
+</body>
+</html>
