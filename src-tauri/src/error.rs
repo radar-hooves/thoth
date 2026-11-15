@@ -35,6 +35,10 @@ pub enum Error {
     /// `Result<_, String>` payload). Carries the user-facing text verbatim.
     #[error("{0}")]
     Other(String),
+
+    /// A settings patch that does not merge into a valid config.
+    #[error("merged config invalid: {0}")]
+    InvalidPatch(String),
 }
 
 impl serde::Serialize for Error {

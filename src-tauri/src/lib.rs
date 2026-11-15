@@ -211,10 +211,10 @@ impl tauri_plugin_telemetry::TelemetryStore for ConfigTelemetryStore {
             Some(e) => (e.endpoint, e.headers_helper.unwrap_or_default()),
             None => (String::new(), String::new()),
         };
-        config::set_telemetry_config(config::TelemetryConfig {
-            endpoint,
-            headers_helper,
-        })
+        config::patch_config(serde_json::json!({
+            "telemetry": { "endpoint": endpoint, "headers_helper": headers_helper }
+        }))
+        .map(|_| ())
         .map_err(|e| e.to_string())
     }
 }
@@ -401,11 +401,7 @@ pub fn run() {
                     tracing::warn!("Failed to record initial what's-new version: {}", e);
                 }
 
-                // Record the running version by mutating only this field on the
-                // live config and writing it — NOT via a get_config()/set_config()
-                // round-trip, which re-saves every setting through that path's
-                // preservation guards on a launch that changes nothing else.
-                // record_last_run_version writes only when the version changed.
+                // Writes only when the version changed.
                 if let Err(e) = config::record_last_run_version(&current) {
                     tracing::error!("Failed to record last-run version: {}", e);
                 }
@@ -550,8 +546,7 @@ pub fn run() {
             changelog::mark_whats_new_seen,
             config::get_config,
             config::get_default_config,
-            config::set_config,
-            config::set_shortcut_config,
+            config::patch_config,
             config::set_enhancement_api_key,
             config::reset_config,
             config::get_config_path_cmd,

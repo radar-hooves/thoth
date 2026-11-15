@@ -493,12 +493,11 @@ export const thothMockCommands: CommandMap = {
   reset_config: () => MOCK_CONFIG,
 
   // -- No-ops: write commands (set_*, delete_*, play_*, etc.) --
-  set_config: () => undefined,
+  patch_config: () => MOCK_CONFIG,
   set_audio_device: () => undefined,
   set_sounds_enabled: () => undefined,
   set_selected_model_id: () => undefined,
   set_show_in_dock: () => undefined,
-  set_shortcut_config: () => undefined,
   reregister_shortcuts: () => [],
   add_dictionary_entry: () => undefined,
   update_dictionary_entry: () => undefined,

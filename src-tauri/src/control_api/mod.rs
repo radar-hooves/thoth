@@ -134,7 +134,10 @@ impl From<serde_json::Error> for AppError {
 // (identical to the previous `String` payload).
 impl From<Error> for AppError {
     fn from(e: Error) -> Self {
-        AppError::Internal(e.to_string())
+        match e {
+            Error::InvalidPatch(_) => AppError::BadRequest(e.to_string()),
+            other => AppError::Internal(other.to_string()),
+        }
     }
 }
 
@@ -296,14 +299,8 @@ async fn handle_patch_settings(
             "PATCH /settings body must be a JSON object".to_string(),
         ));
     }
-    let patch = crate::config::canonicalise_patch_keys(patch);
-    let prior = crate::config::get_config()?;
-    let mut current = serde_json::to_value(&prior)?;
-    crate::config::merge_json(&mut current, &patch);
-    let new_cfg: crate::config::Config =
-        serde_json::from_value(current).map_err(|e| AppError::BadRequest(e.to_string()))?;
-    let (before, after) = (prior.integrations, new_cfg.integrations.clone());
-    crate::config::set_config(new_cfg)?;
+    let before = crate::config::get_config()?.integrations;
+    let after = crate::config::patch_config(patch)?.integrations;
     if before != after {
         // Restarting aborts the serving task, and this handler runs on it: defer
         // so the 200 reaches the caller first.
@@ -859,11 +856,11 @@ async fn apply_integrations(
 pub async fn set_api_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), Error> {
     tauri_plugin_telemetry::traced("set_api_enabled", async move {
         let _ = app; // AppHandle reserved for future event emission
-        let mut cfg = crate::config::get_config()?;
-        cfg.integrations.api_enabled = enabled;
+        let cfg = crate::config::patch_config(
+            serde_json::json!({ "integrations": { "api_enabled": enabled } }),
+        )?;
         let port = cfg.integrations.api_port;
         let mcp = cfg.integrations.mcp_enabled;
-        crate::config::set_config(cfg)?;
 
         if enabled {
             start(port, token_store::get_or_create_token(), mcp).await?;
@@ -884,17 +881,15 @@ pub async fn set_api_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(),
 #[tauri::command]
 pub async fn set_mcp_enabled(enabled: bool) -> Result<(), Error> {
     tauri_plugin_telemetry::traced("set_mcp_enabled", async move {
-        let mut cfg = crate::config::get_config()?;
-        cfg.integrations.mcp_enabled = enabled;
-
         // Enabling MCP implies the Control API must be on to host the /mcp route.
+        let mut integrations = serde_json::json!({ "mcp_enabled": enabled });
         if enabled {
-            cfg.integrations.api_enabled = true;
+            integrations["api_enabled"] = true.into();
         }
+        let cfg = crate::config::patch_config(serde_json::json!({ "integrations": integrations }))?;
 
         let port = cfg.integrations.api_port;
         let api_enabled = cfg.integrations.api_enabled;
-        crate::config::set_config(cfg)?;
 
         // Restart (or start) the server so the /mcp route appears/disappears live.
         // Awaiting start() means the bind has completed before we return, so the

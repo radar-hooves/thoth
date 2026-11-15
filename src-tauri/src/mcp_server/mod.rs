@@ -442,9 +442,6 @@ impl ThothMcp {
                 let patch = p
                     .patch
                     .ok_or_else(|| core_err("`patch` required for update".into()))?;
-                // Canonicalise camelCase keys to snake_case before merging so that
-                // `{"apiPort": 8765}` and `{"api_port": 8765}` both work. Without this step, a camelCase key is added alongside the
-                // existing snake_case key and serde errors on "duplicate field".
                 let patch_val: serde_json::Value = serde_json::from_str(&patch)
                     .map_err(|e| core_err(format!("invalid patch JSON: {}", e)))?;
                 if !patch_val.is_object() {
@@ -452,16 +449,8 @@ impl ThothMcp {
                         "`patch` must be a JSON object, not a scalar or array".into(),
                     ));
                 }
-                let patch_val = crate::config::canonicalise_patch_keys(patch_val);
-                let mut current = serde_json::to_value(
-                    crate::config::get_config().map_err(|e| core_err(e.to_string()))?,
-                )
-                .map_err(|e| core_err(e.to_string()))?;
-                crate::config::merge_json(&mut current, &patch_val);
-                let new_cfg: crate::config::Config = serde_json::from_value(current)
-                    .map_err(|e| core_err(format!("merged config invalid: {}", e)))?;
-                crate::config::set_config(new_cfg).map_err(|e| core_err(e.to_string()))?;
-                let cfg = crate::config::get_config().map_err(|e| core_err(e.to_string()))?;
+                let cfg =
+                    crate::config::patch_config(patch_val).map_err(|e| core_err(e.to_string()))?;
                 json_result(&cfg)
             }
             other => Err(core_err(format!(

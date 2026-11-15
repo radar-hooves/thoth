@@ -425,9 +425,7 @@ pub async fn are_sounds_enabled() -> Result<bool, Error> {
 #[tauri::command]
 pub async fn set_sounds_enabled(enabled: bool) -> Result<(), Error> {
     tauri_plugin_telemetry::traced("set_sounds_enabled", async move {
-        let mut cfg = config::get_config()?;
-        cfg.audio.play_sounds = enabled;
-        config::set_config(cfg)?;
+        config::patch_config(serde_json::json!({ "audio": { "play_sounds": enabled } }))?;
         tracing::info!("Sounds enabled: {}", enabled);
         Ok(())
     })
@@ -452,9 +450,7 @@ pub async fn get_sound_volume() -> Result<f32, Error> {
 pub async fn set_sound_volume(volume: f32) -> Result<(), Error> {
     tauri_plugin_telemetry::traced("set_sound_volume", async move {
         let volume = clamp_volume(volume);
-        let mut cfg = config::get_config()?;
-        cfg.audio.sound_volume = volume;
-        config::set_config(cfg)?;
+        config::patch_config(serde_json::json!({ "audio": { "sound_volume": volume } }))?;
         tracing::info!("Sound volume: {:.2}", volume);
         Ok(())
     })

@@ -614,9 +614,8 @@ pub struct TelemetryConfig {
 
 /// Recursively merge `patch` into `target` (objects merged key-wise; other values replaced).
 ///
-/// Used by the MCP `setting update` handler and the HTTP PATCH `/settings` handler so
-/// both partial-update paths share one implementation.
-pub(crate) fn merge_json(target: &mut serde_json::Value, patch: &serde_json::Value) {
+/// Used by [`patch_config`].
+fn merge_json(target: &mut serde_json::Value, patch: &serde_json::Value) {
     match (target, patch) {
         (serde_json::Value::Object(t), serde_json::Value::Object(p)) => {
             for (k, v) in p {
@@ -642,7 +641,7 @@ pub(crate) fn merge_json(target: &mut serde_json::Value, patch: &serde_json::Val
 ///
 /// Arrays are also recursed so any array-of-objects config field has its nested
 /// object keys canonicalised too.
-pub(crate) fn canonicalise_patch_keys(value: serde_json::Value) -> serde_json::Value {
+fn canonicalise_patch_keys(value: serde_json::Value) -> serde_json::Value {
     match value {
         serde_json::Value::Object(map) => {
             let new_map = map
@@ -838,8 +837,7 @@ fn apply_migration(config: Config) -> Result<Config, String> {
 
 /// Apply the enhancement config to the global backend singleton.
 ///
-/// Called on startup and after every `set_config` that touches enhancement
-/// settings, so the in-process backend always reflects persisted config.
+/// Called on startup and after every [`patch_config`], so the in-process backend always reflects persisted config.
 pub fn apply_enhancement_backend(enh: &EnhancementConfig) {
     enhancement::configure_backend(
         &enh.backend,
@@ -892,172 +890,37 @@ pub fn get_default_config() -> Config {
     tauri_plugin_telemetry::traced_sync_value("get_default_config", Config::default)
 }
 
-/// Update the configuration
+/// Apply a partial update to the live config: the one write path.
 ///
-/// Replaces the current configuration with the provided config and persists
-/// it to disk. The version field is automatically updated to the current schema.
+/// `patch` is a JSON object of only the fields to change. Keys are canonicalised
+/// to snake_case, merged onto the current document and deserialised, so a caller
+/// whose copy lags a change made elsewhere (tray, shortcut, HTTP, MCP) cannot
+/// overwrite what it never named. Disk is written before memory; the lock is
+/// held throughout so two patches cannot lose each other's update.
 #[tauri::command]
-pub fn set_config(mut config: Config) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced_sync("set_config", || {
-        // Ensure version is current
-        config.version = CURRENT_VERSION;
+pub fn patch_config(patch: serde_json::Value) -> Result<Config, Error> {
+    tauri_plugin_telemetry::traced_sync("patch_config", || {
+        let mut cached = get_config_instance().write();
+        let mut doc = serde_json::to_value(&*cached)
+            .map_err(|e| Error::Other(format!("Failed to serialise config: {e}")))?;
+        merge_json(&mut doc, &canonicalise_patch_keys(patch));
+        let mut next: Config =
+            serde_json::from_value(doc).map_err(|e| Error::InvalidPatch(e.to_string()))?;
+        next.version = CURRENT_VERSION;
 
-        // Preserve device_id if the incoming config has None but the current config
-        // has a device selected. This prevents other config saves (shortcuts, AI
-        // settings, etc.) from accidentally clearing the user's device preference.
-        // The dedicated set_audio_device command handles intentional device changes.
-        //
-        // Similarly, preserve prompt_id if the incoming value is the default but the
-        // cached value differs. This prevents the frontend's generic config save from
-        // overwriting a tray-initiated prompt change. The dedicated set_prompt_config
-        // function handles intentional prompt changes.
-        {
-            let current = get_config_instance().read();
-            if config.audio.device_id.is_none() && current.audio.device_id.is_some() {
-                tracing::debug!(
-                    "Preserving device_id={:?} (incoming config had None)",
-                    current.audio.device_id
-                );
-                config.audio.device_id = current.audio.device_id.clone();
-            }
+        save_to_disk(&next)?;
+        *cached = next.clone();
+        drop(cached);
 
-            if config.transcription.model_id.is_none() && current.transcription.model_id.is_some() {
-                tracing::debug!(
-                    "Preserving model_id={:?} (incoming config had None)",
-                    current.transcription.model_id
-                );
-                config.transcription.model_id = current.transcription.model_id.clone();
-            }
-
-            let default_prompt_id = EnhancementConfig::default().prompt_id;
-            if config.enhancement.prompt_id == default_prompt_id
-                && current.enhancement.prompt_id != default_prompt_id
-            {
-                tracing::debug!(
-                    "Preserving prompt_id={:?} (incoming config had default)",
-                    current.enhancement.prompt_id
-                );
-                config.enhancement.prompt_id = current.enhancement.prompt_id.clone();
-            }
-
-            // Preserve toggle_recording_alt if the incoming config has the default but
-            // the cached config has a user-chosen value (e.g. "ShiftRight"). This prevents
-            // unrelated config saves from overwriting the user's shortcut preference.
-            let default_shortcuts = ShortcutConfig::default();
-            if config.shortcuts.toggle_recording_alt == default_shortcuts.toggle_recording_alt
-                && current.shortcuts.toggle_recording_alt != default_shortcuts.toggle_recording_alt
-            {
-                tracing::debug!(
-                    "Preserving toggle_recording_alt={:?} (incoming config had default)",
-                    current.shortcuts.toggle_recording_alt
-                );
-                config.shortcuts.toggle_recording_alt =
-                    current.shortcuts.toggle_recording_alt.clone();
-            }
-
-            // Preserve toggle_enhancement if incoming is None but cached has a user-set value.
-            if config.shortcuts.toggle_enhancement.is_none()
-                && current.shortcuts.toggle_enhancement.is_some()
-            {
-                tracing::debug!(
-                    "Preserving toggle_enhancement={:?} (incoming config had None)",
-                    current.shortcuts.toggle_enhancement
-                );
-                config.shortcuts.toggle_enhancement = current.shortcuts.toggle_enhancement.clone();
-            }
-
-            // Preserve copy_last if incoming is None but cached has a user-set value.
-            if config.shortcuts.copy_last.is_none() && current.shortcuts.copy_last.is_some() {
-                tracing::debug!(
-                    "Preserving copy_last={:?} (incoming config had None)",
-                    current.shortcuts.copy_last
-                );
-                config.shortcuts.copy_last = current.shortcuts.copy_last.clone();
-            }
-
-            // Preserve enhancement.api_key if the incoming config has None but the cached
-            // config has a key. The Settings panel sends api_key: null when the field is
-            // empty, so a generic full-config save must not wipe a stored key. Use the
-            // dedicated set_enhancement_api_key command for intentional key changes.
-            if config.enhancement.api_key.is_none() && current.enhancement.api_key.is_some() {
-                tracing::debug!("Preserving enhancement.api_key (incoming config had None)");
-                config.enhancement.api_key = current.enhancement.api_key.clone();
-            }
-        }
-
-        // Save to disk first
-        save_to_disk(&config)?;
-
-        // Update cached config
-        {
-            let mut cached = get_config_instance().write();
-            *cached = config.clone();
-            tracing::info!(
-                "Configuration updated (device_id: {:?}, toggle_recording_alt: {:?})",
-                cached.audio.device_id,
-                cached.shortcuts.toggle_recording_alt
-            );
-        }
-
-        // Reconfigure the enhancement backend to reflect any provider changes.
-        apply_enhancement_backend(&config.enhancement);
-
-        Ok(())
+        apply_enhancement_backend(&next.enhancement);
+        Ok(next)
     })
 }
 
-/// Set the audio device_id directly, bypassing set_config's preservation logic.
+/// Set or clear the enhancement API key.
 ///
-/// This is the only correct way to change device_id (including clearing it to
-/// None for "System Default"). The preservation logic in `set_config` is designed
-/// to protect against accidental clears from frontend config saves, but would
-/// also block intentional clears if used for device changes.
-pub fn set_audio_device_config(device_id: Option<String>) -> Result<(), String> {
-    let mut cached = get_config_instance().write();
-    cached.audio.device_id = device_id;
-    save_to_disk(&cached)?;
-    tracing::info!(
-        "Audio device config updated (device_id: {:?})",
-        cached.audio.device_id
-    );
-    Ok(())
-}
-
-/// Set the prompt_id directly, bypassing set_config's preservation logic.
-///
-/// This is the correct way to change prompt_id from the tray menu. The
-/// preservation logic in `set_config` prevents the frontend's generic config
-/// save from overwriting a tray-initiated prompt change.
-pub fn set_prompt_config(prompt_id: String) -> Result<(), String> {
-    let mut cached = get_config_instance().write();
-    cached.enhancement.prompt_id = prompt_id;
-    save_to_disk(&cached)?;
-    tracing::info!(
-        "Prompt config updated (prompt_id: {:?})",
-        cached.enhancement.prompt_id
-    );
-    Ok(())
-}
-
-/// Set enhancement enabled directly, bypassing set_config's preservation logic.
-///
-/// This is the correct way to toggle enhancement from the shortcut handler. The
-/// preservation logic in `set_config` has a prompt_id guard that would interfere
-/// with a full-config round-trip; this bypass touches only the `enabled` flag.
-pub fn set_enhancement_enabled(enabled: bool) -> Result<(), String> {
-    let mut cached = get_config_instance().write();
-    cached.enhancement.enabled = enabled;
-    save_to_disk(&cached)?;
-    tracing::info!("Enhancement enabled updated to: {}", enabled);
-    Ok(())
-}
-
-/// Set or clear the enhancement API key unconditionally.
-///
-/// This is the only correct path for changing the key value (including clearing
-/// it to None). The preservation guard in `set_config` prevents the generic save
-/// from wiping the key with an empty field; this command bypasses that guard so
-/// an explicit user action can still clear it.
+/// The frontend's generic save never sends the key; an explicit user action
+/// goes through here.
 ///
 /// Pass `Some(key)` to store a new key, `None` to clear it.
 #[tauri::command]
@@ -1081,9 +944,6 @@ pub fn set_enhancement_api_key(key: Option<String>) -> Result<(), Error> {
 /// Record the running binary's version as `last_run_version`, persisting only
 /// when it changed. A fresh install is told apart by this field being absent.
 ///
-/// Mutates the live config singleton in place and writes that — it does NOT go
-/// through the `get_config()` / `set_config()` round-trip, so it cannot be
-/// caught by that path's preservation guards.
 pub fn record_last_run_version(version: &str) -> Result<(), Error> {
     let mut cached = get_config_instance().write();
     if cached.general.last_run_version.as_deref() == Some(version) {
@@ -1095,9 +955,7 @@ pub fn record_last_run_version(version: &str) -> Result<(), Error> {
 
 /// Record that a version's release notes have been shown (#113).
 ///
-/// Writes the live config singleton directly for the same reason
-/// [`record_last_run_version`] does: a full `set_config` round-trip re-saves
-/// every setting, and dismissing a modal is no reason to do that.
+/// Writes nothing when the version is already recorded.
 pub fn record_whats_new_seen(version: &str) -> Result<(), Error> {
     let mut cached = get_config_instance().write();
     if cached.general.whats_new_seen_version.as_deref() == Some(version) {
@@ -1105,44 +963,6 @@ pub fn record_whats_new_seen(version: &str) -> Result<(), Error> {
     }
     cached.general.whats_new_seen_version = Some(version.to_string());
     save_to_disk(&cached).map_err(Into::into)
-}
-
-/// Set shortcut config directly, bypassing set_config's preservation logic.
-///
-/// Used by the Settings UI when intentionally changing shortcuts. The
-/// preservation logic in `set_config` prevents unrelated config saves from
-/// overwriting shortcuts, but would also block intentional changes (e.g.
-/// resetting a shortcut back to its default value).
-#[tauri::command]
-pub async fn set_shortcut_config(shortcuts: ShortcutConfig) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced("set_shortcut_config", async move {
-        let mut cached = get_config_instance().write();
-        cached.shortcuts = shortcuts;
-        save_to_disk(&cached)?;
-        tracing::info!(
-            "Shortcut config updated directly (toggle_recording_alt: {:?})",
-            cached.shortcuts.toggle_recording_alt
-        );
-        Ok(())
-    })
-    .await
-}
-
-/// Set the telemetry section directly, without re-saving every other setting.
-///
-/// Writes the live config singleton for the same reason
-/// [`record_whats_new_seen`] does: pointing the exporter somewhere is no reason
-/// to rewrite the whole file. Applying it to the live pipeline is
-/// `telemetry_settings::install`, which the command calls next.
-pub fn set_telemetry_config(telemetry: TelemetryConfig) -> Result<(), Error> {
-    let mut cached = get_config_instance().write();
-    cached.telemetry = telemetry;
-    save_to_disk(&cached)?;
-    tracing::info!(
-        "Telemetry config updated (endpoint set: {})",
-        !cached.telemetry.endpoint.is_empty()
-    );
-    Ok(())
 }
 
 /// Reset configuration to defaults
@@ -1610,6 +1430,7 @@ mod tests {
         );
     }
 
+    #[serial_test::serial]
     #[test]
     fn test_config_path_format() {
         let path = get_config_path();
@@ -1849,89 +1670,6 @@ mod tests {
         assert_eq!(config.enhancement.ollama_url, "http://localhost:11434");
     }
 
-    #[test]
-    fn test_set_config_null_api_key_preserves_cached() {
-        // A generic set_config with api_key: null must NOT wipe a stored key.
-        // The dedicated set_enhancement_api_key command is required for intentional clears.
-        let _guard = CONFIG_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let instance = get_config_instance();
-        {
-            let mut cached = instance.write();
-            cached.enhancement.api_key = Some("stored-key".to_string());
-        }
-
-        let mut incoming = Config::default();
-        // api_key is None in the default config — simulating an empty-field save
-        assert!(incoming.enhancement.api_key.is_none());
-
-        {
-            let current = instance.read();
-            if incoming.enhancement.api_key.is_none() && current.enhancement.api_key.is_some() {
-                incoming.enhancement.api_key = current.enhancement.api_key.clone();
-            }
-        }
-
-        assert_eq!(incoming.enhancement.api_key, Some("stored-key".to_string()));
-
-        // Restore to clean state
-        instance.write().enhancement.api_key = None;
-    }
-
-    #[test]
-    fn test_set_enhancement_api_key_sets_and_clears() {
-        // set_enhancement_api_key(Some) sets the key; set_enhancement_api_key(None) clears it.
-        // Exercise the guard logic directly (no disk I/O in unit tests).
-        let _guard = CONFIG_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let instance = get_config_instance();
-
-        // Set a key
-        {
-            let mut cached = instance.write();
-            cached.enhancement.api_key = Some("my-api-key".to_string());
-        }
-        assert_eq!(
-            instance.read().enhancement.api_key,
-            Some("my-api-key".to_string())
-        );
-
-        // Clear the key unconditionally (bypassing the preservation guard)
-        {
-            let mut cached = instance.write();
-            cached.enhancement.api_key = None;
-        }
-        assert_eq!(instance.read().enhancement.api_key, None);
-    }
-
-    #[test]
-    fn test_set_config_with_unrelated_change_preserves_api_key() {
-        // A full set_config that changes only an unrelated field (e.g. model) but
-        // sends api_key: None must keep the previously-stored key.
-        let _guard = CONFIG_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let instance = get_config_instance();
-        {
-            let mut cached = instance.write();
-            cached.enhancement.api_key = Some("keep-me".to_string());
-        }
-
-        let mut incoming = Config::default();
-        incoming.enhancement.model = "different-model".to_string();
-        // api_key remains None (as the frontend sends for an empty field)
-
-        // Apply the same preservation guard that set_config uses
-        {
-            let current = instance.read();
-            if incoming.enhancement.api_key.is_none() && current.enhancement.api_key.is_some() {
-                incoming.enhancement.api_key = current.enhancement.api_key.clone();
-            }
-        }
-
-        assert_eq!(incoming.enhancement.api_key, Some("keep-me".to_string()));
-        assert_eq!(incoming.enhancement.model, "different-model".to_string());
-
-        // Restore clean state
-        instance.write().enhancement.api_key = None;
-    }
-
     // =========================================================================
     // canonicalise_patch_keys / merge_json tests (Bug 1 + Bug 2)
     // =========================================================================
@@ -2115,6 +1853,106 @@ mod tests {
         }"#;
         let config: Config = serde_json::from_str(json).expect("retired keys must be ignored");
         assert_eq!(config.integrations.api_port, 9103);
+    }
+
+    /// Isolated data dir so `patch_config` writes to a temp file, not `~/.thoth`.
+    struct TempDataDir(#[allow(dead_code)] tempfile::TempDir);
+
+    impl Drop for TempDataDir {
+        fn drop(&mut self) {
+            // SAFETY: only `#[serial]` tests touch THOTH_DATA_DIR.
+            unsafe { std::env::remove_var("THOTH_DATA_DIR") };
+        }
+    }
+
+    fn with_temp_data_dir() -> TempDataDir {
+        let dir = tempfile::tempdir().unwrap();
+        // SAFETY: only `#[serial]` tests touch THOTH_DATA_DIR.
+        unsafe { std::env::set_var("THOTH_DATA_DIR", dir.path()) };
+        TempDataDir(dir)
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn patch_config_changes_only_what_it_names() {
+        let _guard = CONFIG_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _dir = with_temp_data_dir();
+        *get_config_instance().write() = Config::default();
+
+        let out = patch_config(serde_json::json!({ "general": { "showInDock": true } })).unwrap();
+        assert!(out.general.show_in_dock);
+        let expected = Config {
+            general: GeneralConfig {
+                show_in_dock: true,
+                ..Config::default().general
+            },
+            ..Config::default()
+        };
+        assert_eq!(
+            serde_json::to_value(&out).unwrap(),
+            serde_json::to_value(&expected).unwrap()
+        );
+        assert!(get_config().unwrap().general.show_in_dock);
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn a_patch_omitting_a_field_the_tray_changed_leaves_the_tray_value() {
+        let _guard = CONFIG_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _dir = with_temp_data_dir();
+        *get_config_instance().write() = Config::default();
+
+        patch_config(serde_json::json!({
+            "audio": { "device_id": "tray-mic" },
+            "enhancement": { "prompt_id": "tray-prompt" }
+        }))
+        .unwrap();
+        // The webview's stale save names neither field.
+        let out = patch_config(serde_json::json!({ "audio": { "play_sounds": false } })).unwrap();
+        assert_eq!(out.audio.device_id.as_deref(), Some("tray-mic"));
+        assert_eq!(out.enhancement.prompt_id, "tray-prompt");
+        assert!(!out.audio.play_sounds);
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn a_patch_can_reset_a_field_to_its_default_or_null() {
+        let _guard = CONFIG_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _dir = with_temp_data_dir();
+        *get_config_instance().write() = Config::default();
+
+        patch_config(serde_json::json!({
+            "audio": { "device_id": "mic" },
+            "shortcuts": { "toggle_recording_alt": "ShiftRight" }
+        }))
+        .unwrap();
+        let default_alt = Config::default().shortcuts.toggle_recording_alt;
+        let out = patch_config(serde_json::json!({
+            "audio": { "device_id": null },
+            "shortcuts": { "toggle_recording_alt": default_alt }
+        }))
+        .unwrap();
+        assert_eq!(out.audio.device_id, None);
+        assert_eq!(out.shortcuts.toggle_recording_alt, default_alt);
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn a_patch_reports_an_integrations_change_and_rejects_a_bad_value() {
+        let _guard = CONFIG_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _dir = with_temp_data_dir();
+        *get_config_instance().write() = Config::default();
+
+        let before = get_config().unwrap().integrations;
+        let after = patch_config(serde_json::json!({ "integrations": { "apiPort": 9200 } }))
+            .unwrap()
+            .integrations;
+        assert_ne!(before, after);
+        assert_eq!(after.api_port, 9200);
+
+        let err = patch_config(serde_json::json!({ "integrations": { "api_port": "x" } }));
+        assert!(matches!(err, Err(Error::InvalidPatch(_))));
+        assert_eq!(get_config().unwrap().integrations.api_port, 9200);
     }
 
     #[test]

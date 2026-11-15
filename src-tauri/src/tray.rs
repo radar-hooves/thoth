@@ -446,7 +446,8 @@ fn build_ai_submenu(
         active_prompt_id.to_string()
     } else {
         let fallback = "fix-grammar".to_string();
-        let _ = config::set_prompt_config(fallback.clone());
+        let _ =
+            config::patch_config(serde_json::json!({ "enhancement": { "prompt_id": fallback } }));
         fallback
     };
 
@@ -775,7 +776,8 @@ fn open_main_at(app: &AppHandle, view: &str) {
 
 /// Handle audio device selection from the tray submenu
 fn handle_select_audio_device(app: &AppHandle, device_id: Option<String>) {
-    if let Err(e) = config::set_audio_device_config(device_id.clone()) {
+    if let Err(e) = config::patch_config(serde_json::json!({ "audio": { "device_id": device_id } }))
+    {
         tracing::error!("Failed to save audio device: {}", e);
         return;
     }
@@ -843,10 +845,11 @@ struct EnhancementToggledShortcutPayload {
 /// Handle AI enhancement toggle from the tray submenu
 fn handle_toggle_enhancement(app: &AppHandle) {
     match config::get_config() {
-        Ok(mut cfg) => {
-            cfg.enhancement.enabled = !cfg.enhancement.enabled;
-            let enabled = cfg.enhancement.enabled;
-            if let Err(e) = config::set_config(cfg) {
+        Ok(cfg) => {
+            let enabled = !cfg.enhancement.enabled;
+            if let Err(e) =
+                config::patch_config(serde_json::json!({ "enhancement": { "enabled": enabled } }))
+            {
                 tracing::error!("Failed to save enhancement toggle: {}", e);
                 return;
             }
@@ -866,9 +869,8 @@ fn handle_toggle_enhancement(app: &AppHandle) {
 
 /// Handle AI enhancement toggle from the global shortcut.
 ///
-/// Uses the bypass writer so the prompt_id preservation guard in set_config
-/// does not interfere. Emits a distinct event with prompt name so the frontend
-/// can show a descriptive toast without a separate IPC call.
+/// Emits a distinct event with prompt name so the frontend can show a
+/// descriptive toast without a separate IPC call.
 ///
 /// Tray rebuild happens via `rebuild_tray_menu_from_app` which is called by
 /// the `refresh_tray_menu` Tauri command on the concrete Wry handle. Here we
@@ -885,7 +887,9 @@ pub fn handle_toggle_enhancement_shortcut<R: tauri::Runtime>(app: &tauri::AppHan
 
     let new_enabled = !cfg.enhancement.enabled;
 
-    if let Err(e) = config::set_enhancement_enabled(new_enabled) {
+    if let Err(e) =
+        config::patch_config(serde_json::json!({ "enhancement": { "enabled": new_enabled } }))
+    {
         tracing::error!("Failed to save enhancement toggle via shortcut: {}", e);
         return;
     }
@@ -925,7 +929,9 @@ pub fn handle_toggle_enhancement_shortcut<R: tauri::Runtime>(app: &tauri::AppHan
 
 /// Handle prompt selection from the tray submenu
 fn handle_select_prompt(app: &AppHandle, prompt_id: String) {
-    if let Err(e) = config::set_prompt_config(prompt_id.clone()) {
+    if let Err(e) =
+        config::patch_config(serde_json::json!({ "enhancement": { "prompt_id": prompt_id } }))
+    {
         tracing::error!("Failed to save prompt config: {}", e);
         return;
     }

@@ -132,13 +132,10 @@
   }
 
   async function handleShortcutChange(shortcut: ShortcutInfo, newAccelerator: string) {
-    // Update in-memory config, then save directly via set_shortcut_config
-    // which bypasses the preservation logic in set_config. This ensures
-    // the shortcut value is saved even when it matches the default.
-    // exit_capture_mode (called by ShortcutInput.stopCapture) will then
+    // Update in-memory config and save the changed leaf. exit_capture_mode (called by ShortcutInput.stopCapture) will then
     // re-register all shortcuts from the saved config.
     updateShortcutConfig(shortcut.id, newAccelerator);
-    await saveShortcutConfig();
+    await configStore.save();
 
     // Reload registered shortcuts after the capture cycle completes.
     // onchange fires before stopCapture/exit_capture_mode, so we defer
@@ -147,19 +144,17 @@
   }
 
   async function handleShortcutClear(shortcut: ShortcutInfo) {
-    // Clear from config using bypass, then re-register all shortcuts
+    // Clear from config, then re-register all shortcuts
     updateShortcutConfig(shortcut.id, null);
-    await saveShortcutConfig();
+    await configStore.save();
     await reRegisterShortcuts();
   }
 
   async function handleShortcutReset(shortcut: ShortcutInfo) {
-    // Reset to default value using bypass (important: preservation logic in
-    // set_config would block this since the incoming value matches the default)
     const defaultAcc = getDefaultAccelerator(shortcut.id);
     if (defaultAcc) {
       updateShortcutConfig(shortcut.id, defaultAcc);
-      await saveShortcutConfig();
+      await configStore.save();
       await reRegisterShortcuts();
     }
   }
@@ -179,28 +174,6 @@
       case 'toggle_enhancement':
         configStore.updateShortcuts('toggleEnhancement', accelerator);
         break;
-    }
-  }
-
-  /**
-   * Save shortcut config directly via the bypass IPC command.
-   * This avoids the preservation logic in set_config that would prevent
-   * resetting shortcuts back to their default values.
-   */
-  async function saveShortcutConfig(): Promise<void> {
-    try {
-      await invoke('set_shortcut_config', {
-        shortcuts: {
-          toggle_recording: configStore.shortcuts.toggleRecording,
-          toggle_recording_alt: configStore.shortcuts.toggleRecordingAlt,
-          copy_last: configStore.shortcuts.copyLast,
-          toggle_enhancement: configStore.shortcuts.toggleEnhancement,
-          recording_mode: configStore.shortcuts.recordingMode,
-          hands_free_silence_secs: configStore.shortcuts.handsFreeSilenceSecs,
-        },
-      });
-    } catch (e) {
-      console.error('Failed to save shortcut config:', e);
     }
   }
 

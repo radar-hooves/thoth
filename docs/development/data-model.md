@@ -291,7 +291,7 @@ Example: `thoth_recording_20250214_143022.wav`
 | Command               | Description                    |
 | --------------------- | ------------------------------ |
 | `get_config`          | Get current configuration      |
-| `set_config`          | Update configuration           |
+| `patch_config`        | Apply a partial update         |
 | `reset_config`        | Reset to default configuration |
 | `get_config_path_cmd` | Get config file path           |
 

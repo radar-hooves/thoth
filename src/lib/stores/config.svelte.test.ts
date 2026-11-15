@@ -114,3 +114,42 @@ describe('configStore.load', () => {
     expect(invoke).toHaveBeenNthCalledWith(2, 'get_default_config');
   });
 });
+
+describe('configStore.save', () => {
+  beforeEach(() => {
+    invoke.mockReset();
+    vi.resetModules();
+  });
+
+  it('sends only the changed leaf, then nothing until the next edit', async () => {
+    invoke.mockResolvedValueOnce(RAW_CONFIG);
+    const { configStore } = await import('./config.svelte');
+    await configStore.load();
+
+    configStore.updateGeneral('showInDock', !configStore.general.showInDock);
+    // The backend's copy carries a change made over MCP that this window never saw.
+    invoke.mockResolvedValueOnce({
+      ...RAW_CONFIG,
+      general: { ...RAW_CONFIG.general, show_in_dock: !RAW_CONFIG.general.show_in_dock },
+      audio: { ...RAW_CONFIG.audio, play_sounds: !RAW_CONFIG.audio.play_sounds },
+    });
+    expect(await configStore.save()).toBe(true);
+    expect(invoke).toHaveBeenLastCalledWith('patch_config', {
+      patch: { general: { show_in_dock: !RAW_CONFIG.general.show_in_dock } },
+    });
+
+    // Nothing edited since: nothing is sent, so the MCP change is not written back.
+    expect(await configStore.save()).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
+
+  it('never sends the API key', async () => {
+    invoke.mockResolvedValueOnce(RAW_CONFIG);
+    const { configStore } = await import('./config.svelte');
+    await configStore.load();
+
+    configStore.updateEnhancement('apiKey', 'typed-but-unsaved');
+    await configStore.save();
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+});

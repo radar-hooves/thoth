@@ -94,7 +94,7 @@ fn a_reported_error_a_curated_span_and_all_three_command_span_shapes_reach_the_c
         .expect("the traced future's own Ok is untouched");
 
     // The sync counterpart for a fallible command — Tauri's own setup hook, a
-    // tray-menu builder, and many of Thoth's own commands (config::set_config
+    // tray-menu builder, and many of Thoth's own commands (config::patch_config
     // and the rest) call this, never `traced`, because they are also plain
     // Rust functions called directly elsewhere and cannot become `async fn`.
     tauri_plugin_telemetry::traced_sync("integration_test_sync_command", || {

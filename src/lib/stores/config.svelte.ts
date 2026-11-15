@@ -6,6 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { buildPatch } from './config-patch';
 
 /** Audio recording configuration */
 export interface AudioConfig {
@@ -597,6 +598,10 @@ function createConfigStore() {
   let isSaving = $state<boolean>(false);
   let error = $state<string | null>(null);
   let isInitialised = $state<boolean>(false);
+  // The last config loaded or sent, normalised through parse and serialise so
+  // fields an older backend omits compare equal. In the wire shape: save() sends only what
+  // differs from it, so a field this window never touched is never overwritten.
+  let snapshot: ConfigRaw | null = null;
 
   /**
    * Load configuration from the backend
@@ -609,6 +614,7 @@ function createConfigStore() {
     try {
       const rawConfig = await invoke<ConfigRaw>('get_config');
       config = parseConfig(rawConfig);
+      snapshot = serialiseConfig(config);
       isInitialised = true;
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to load configuration';
@@ -643,11 +649,12 @@ function createConfigStore() {
   /**
    * Save configuration to the backend
    *
-   * Refuses to save if the config hasn't been loaded from the backend yet,
-   * preventing accidental overwrite of persisted settings with in-memory defaults.
+   * Sends only the leaves that changed since the last load or save; nothing
+   * changed sends nothing. The API key is never part of it (`setEnhancementApiKey`).
+   * Refuses to save if the config hasn't been loaded from the backend yet.
    */
   async function save(): Promise<boolean> {
-    if (!isInitialised) {
+    if (!isInitialised || !snapshot) {
       console.warn('[ConfigStore] save() called before config was loaded — ignoring to prevent overwriting persisted settings with defaults');
       return false;
     }
@@ -656,8 +663,15 @@ function createConfigStore() {
     error = null;
 
     try {
-      const rawConfig = serialiseConfig(config);
-      await invoke('set_config', { config: rawConfig });
+      // The snapshot advances to what this window sent, never to the backend's
+      // copy: a change made elsewhere that this window never saw (MCP, HTTP)
+      // must not read as this window's edit on the next save.
+      const next = serialiseConfig(config);
+      const patch = buildPatch(snapshot, next, ['enhancement.api_key']);
+      if (patch) {
+        await invoke('patch_config', { patch });
+      }
+      snapshot = next;
       return true;
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to save configuration';
@@ -678,6 +692,7 @@ function createConfigStore() {
     try {
       const rawConfig = await invoke<ConfigRaw>('reset_config');
       config = parseConfig(rawConfig);
+      snapshot = serialiseConfig(config);
       return true;
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to reset configuration';
@@ -758,9 +773,7 @@ function createConfigStore() {
   /**
    * Set or clear the enhancement API key via the dedicated backend command.
    *
-   * This is the only correct way to change the API key. The generic save()
-   * path cannot clear the key (the backend preservation guard blocks it);
-   * this command bypasses that guard so an explicit user action takes effect.
+   * The only way the key is written: save() never sends it.
    */
   async function setEnhancementApiKey(key: string | null): Promise<boolean> {
     try {
@@ -778,8 +791,8 @@ function createConfigStore() {
    * Save the telemetry endpoint and headers helper via the dedicated backend
    * command, which writes only that section and points the live exporter at it.
    *
-   * Updating the local copy afterwards is what stops the next generic save()
-   * from writing the stale section back over it.
+   * The snapshot is updated with the local copy so the next save() sees no
+   * change in the section.
    */
   async function setTelemetry(endpoint: string, headersHelper: string): Promise<TelemetryStatus | null> {
     try {
@@ -791,6 +804,12 @@ function createConfigStore() {
         endpoint: status.savedEndpoint,
         headersHelper: status.savedHeadersHelper,
       };
+      if (snapshot) {
+        snapshot.telemetry = {
+          endpoint: status.savedEndpoint,
+          headers_helper: status.savedHeadersHelper,
+        };
+      }
       return status;
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to save telemetry settings';

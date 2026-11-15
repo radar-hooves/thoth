@@ -779,9 +779,9 @@ pub fn filter_transcription(text: String, options: Option<FilterOptions>) -> Str
 #[tauri::command]
 pub fn set_selected_model_id(model_id: Option<String>) -> Result<(), Error> {
     tauri_plugin_telemetry::traced_sync("set_selected_model_id", || {
-        let mut config = crate::config::get_config().map_err(|e| e.to_string())?;
-        config.transcription.model_id = model_id.clone();
-        crate::config::set_config(config).map_err(|e| e.to_string())?;
+        crate::config::patch_config(
+            serde_json::json!({ "transcription": { "model_id": model_id } }),
+        )?;
 
         tracing::info!("Selected model ID set to: {:?}", model_id);
         Ok(())

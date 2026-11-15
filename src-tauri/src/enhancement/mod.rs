@@ -140,7 +140,7 @@ fn get_backend() -> &'static Mutex<EnhancementBackend> {
 
 /// Configure the active enhancement backend.
 ///
-/// Called on startup (after config load) and after `set_config` changes the
+/// Called on startup (after config load) and after `patch_config` changes the
 /// enhancement section. Must be called before the first pipeline run.
 ///
 /// Returns the `BackendType` that was actually activated (callers may request
