@@ -301,9 +301,9 @@
               "fluidaudio-rs-0.10.0" = "sha256-z7c8tibtfevefrYAwh3hJM/sr/OWnbSrxjDS4Tda8+k=";
               # The three app-factory crates share one hash, the pinned tag's source tree:
               # nix flake prefetch "git+https://github.com/radar-hooves/app-factory?ref=refs/tags/<tag>"
-              "telemetry-0.7.0" = "sha256-tP9IXJsf9L7T7dpF20qSnabRJ4C39YWSRWeVSZvdmT0=";
-              "tauri-plugin-telemetry-0.3.0" = "sha256-tP9IXJsf9L7T7dpF20qSnabRJ4C39YWSRWeVSZvdmT0=";
-              "desktop-shell-0.3.0" = "sha256-tP9IXJsf9L7T7dpF20qSnabRJ4C39YWSRWeVSZvdmT0=";
+              "telemetry-0.7.0" = "sha256-JLbjtyEKlMMVm5Zj8yXjgOqHYbcRlIpmpyfSx9cmds0=";
+              "tauri-plugin-telemetry-0.3.0" = "sha256-JLbjtyEKlMMVm5Zj8yXjgOqHYbcRlIpmpyfSx9cmds0=";
+              "desktop-shell-0.4.0" = "sha256-JLbjtyEKlMMVm5Zj8yXjgOqHYbcRlIpmpyfSx9cmds0=";
             };
           };
 

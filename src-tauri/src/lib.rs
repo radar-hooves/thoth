@@ -228,29 +228,36 @@ pub(crate) fn http_client() -> reqwest_middleware::ClientWithMiddleware {
     CLIENT.get_or_init(telemetry::http_client).clone()
 }
 
+/// The one window the kit saves and restores; the indicator, History and the
+/// prompt guide manage their own.
+fn is_managed_window(label: &str) -> bool {
+    label == "main"
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     ensure_crypto_provider();
 
-    let mut builder = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            tray::show_main_window(app);
-        }))
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            Some(vec!["--autostarted"]),
-        ))
-        .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_telemetry::init(
-            "thoth",
-            env!("CARGO_PKG_VERSION"),
-            &[TELEMETRY_TARGET],
-            ConfigTelemetryStore,
-        ));
+    let mut builder = desktop_shell::window::plugins_with(
+        tauri::Builder::default(),
+        |app| desktop_shell::window::show(app, "main"),
+        is_managed_window,
+    )
+    .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+    .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_fs::init())
+    .plugin(tauri_plugin_autostart::init(
+        tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+        Some(vec!["--autostarted"]),
+    ))
+    .plugin(tauri_plugin_clipboard_manager::init())
+    .plugin(tauri_plugin_process::init())
+    .plugin(tauri_plugin_telemetry::init(
+        "thoth",
+        env!("CARGO_PKG_VERSION"),
+        &[TELEMETRY_TARGET],
+        ConfigTelemetryStore,
+    ));
 
     // Updater plugin only on desktop platforms (not mobile)
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -424,18 +431,8 @@ pub fn run() {
                 platform::macos::watch_permissions(app.handle().clone());
             }
 
-            // Closing the main window hides it, on every platform: the tray and a
-            // second launch bring back the same window, which a destroyed one could
-            // not be. Linux's own close button (WindowControls) lands here too.
-            if let Some(window) = app.get_webview_window("main") {
-                let win = window.clone();
-                window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = win.hide();
-                    }
-                });
-            }
+            // Hide on close, a gone display fitted back: the kit's, for `main` alone.
+            desktop_shell::window::setup(app.handle(), "main", false, (980, 700));
 
             platform::log_permissions();
 
@@ -617,14 +614,18 @@ pub fn run() {
         ))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app, _event| {
-            // `tauri_plugin_telemetry`'s own `on_event` hook takes and drops the
-            // `Guard` on `RunEvent::Exit`. Opening Thoth while it runs (Finder,
-            // Spotlight, the Dock) reaches the running process as a reopen, not a
-            // second launch, so the single-instance hook never sees it.
-            #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen { .. } = _event {
-                tray::show_main_window(_app);
-            }
-        });
+        .run(|app, event| desktop_shell::window::on_run_event(app, "main", &event));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_managed_window;
+
+    #[test]
+    fn window_state_tracks_main_alone() {
+        assert!(is_managed_window("main"));
+        for label in ["recording-indicator", "history", "prompt-guide"] {
+            assert!(!is_managed_window(label));
+        }
+    }
 }

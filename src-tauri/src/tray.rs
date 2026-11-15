@@ -139,15 +139,6 @@ fn menu_accelerator(key: &str) -> Option<&str> {
     (!key.is_empty() && !crate::keyboard_service::is_modifier_shortcut(key)).then_some(key)
 }
 
-/// Show and focus the main window: the tray's items, a second launch, and a
-/// reopen (Finder, Spotlight, or the Dock while Thoth runs) all land here.
-pub fn show_main_window(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
-}
-
 /// Build the tray menu with current state
 // All args represent distinct, independent menu state; grouping would add
 // indirection without simplifying callers.
@@ -768,7 +759,7 @@ fn handle_open_settings(app: &AppHandle) {
 
 /// Show the main window on one of its views.
 fn open_main_at(app: &AppHandle, view: &str) {
-    show_main_window(app);
+    desktop_shell::window::show(app, "main");
     if let Err(e) = app.emit("navigate", view) {
         tracing::warn!("Failed to emit navigate event: {}", e);
     }

@@ -936,8 +936,8 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation",
  "web-sys",
- "windows 0.62.2",
- "windows-core 0.62.2",
+ "windows 0.61.3",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -1206,8 +1206,8 @@ dependencies = [
 
 [[package]]
 name = "desktop-shell"
-version = "0.3.0"
-source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.11.54#747dd75461c15a46d7773702d7e8f6d29a7266c5"
+version = "0.4.0"
+source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.11.56#1f3f0dd8e461521dd2e1c87bef62f3a779171e9f"
 dependencies = [
  "block2",
  "keyring",
@@ -2393,7 +2393,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.57.0",
 ]
 
 [[package]]
@@ -5909,7 +5909,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-telemetry"
 version = "0.3.0"
-source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.11.54#747dd75461c15a46d7773702d7e8f6d29a7266c5"
+source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.11.56#1f3f0dd8e461521dd2e1c87bef62f3a779171e9f"
 dependencies = [
  "serde",
  "serde_json",
@@ -6071,7 +6071,7 @@ dependencies = [
 [[package]]
 name = "telemetry"
 version = "0.7.0"
-source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.11.54#747dd75461c15a46d7773702d7e8f6d29a7266c5"
+source = "git+https://github.com/radar-hooves/app-factory?tag=v2026.11.56#1f3f0dd8e461521dd2e1c87bef62f3a779171e9f"
 dependencies = [
  "async-trait",
  "http",
@@ -6223,9 +6223,9 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-global-shortcut",
  "tauri-plugin-process",
- "tauri-plugin-single-instance",
  "tauri-plugin-telemetry",
  "tauri-plugin-updater",
+ "tauri-plugin-window-state",
  "telemetry",
  "tempfile",
  "thiserror 2.0.18",
