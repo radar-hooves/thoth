@@ -1,34 +1,14 @@
 {
   "allowedMcpServers": [
-    {
-      "serverName": "alloy"
-    },
-    {
-      "serverName": "browser-driver"
-    },
-    {
-      "serverName": "context7"
-    },
-    {
-      "serverName": "core-memory-agent"
-    },
-    {
-      "serverName": "foreman"
-    },
-    {
-      "serverName": "github"
-    },
-    {
-      "serverName": "loki"
-    },
-    {
-      "serverName": "penpot"
-    },
-    {
-      "serverName": "tempo"
-    },
-    {
-      "serverName": "thoth"
-    }
+    { "serverName": "alloy" },
+    { "serverName": "browser-driver" },
+    { "serverName": "context7" },
+    { "serverName": "core-memory-agent" },
+    { "serverName": "foreman" },
+    { "serverName": "github" },
+    { "serverName": "loki" },
+    { "serverName": "penpot" },
+    { "serverName": "tempo" },
+    { "serverName": "thoth" }
   ]
 }
