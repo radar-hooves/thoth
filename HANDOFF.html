@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Thoth: open work</title>
-<meta name="description" content="Tray fix to release; carried release and footprint checks.">
+<meta name="description" content="2026.11.7 (two macOS permissions, tray fix) to tag and release; macintosh-mandy to check; carried footprint checks.">
 <style>
 /* A shift-handover sheet: what waits on him, by when, in columns that fill the width; then each thread folded to its state line. */
 :root {
@@ -151,9 +151,18 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <section class="threads" aria-labelledby="threads">
 <h2 id="threads">Threads</h2>
 
-<details class="thread" id="tray-missing" open>
-<summary><h3>Menu bar icon missing, window unreachable</h3><span class="state">Fixed on main and installed on huginn; not yet released to the other Macs.</span></summary>
-<p class="next" data-id="tray-fix-release" data-track="#206">Cut a release (<code>scripts/bump-version.sh</code>, then the release workflow) so the updater delivers the tray fix to every Mac using right Shift.</p>
+<details class="thread" id="macos-permissions" open>
+<summary><h3>macOS permissions: two, asked once, kept across updates</h3><span class="state">On main (39ba494) and drive-tested on huginn 15/11; bumped to 2026.11.7 (032f77b), not yet tagged.</span></summary>
+<p class="next" data-id="release-2026-11-7" data-untracked="release step, no issue">Once main's <code>change</code> run on 032f77b is green, <code>git tag -a v2026.11.7 -m "Release 2026.11.7"</code> and push the tag; the release workflow builds macOS on huginn's runner and publishes. This ships the tray fix too.</p>
+<ul class="items">
+<li data-id="mandy-permissions-check" data-untracked="waits on the release and on her Mac being awake">macintosh-mandy: update to 2026.11.7, then read <code>get_system</code>'s <code>permissions</code> over SSH (her Thoth's MCP) or the <code>permissions</code> event in Loki, and dictate once. On 15/11 her sshd reset every connection from huginn, direct and through atlas; huginn holds no ARP entry for 10.0.1.20, so she was most likely asleep or off the network.</li>
+<li data-id="tcc-probe-cleanup" data-untracked="local scratch, no issue">Delete the throwaway <code>TCCProbe.app</code> from <code>~/Applications</code> on huginn (its privacy rows are already cleared).</li>
+<li data-id="pre-27-capture" data-untracked="no pre-27 Mac in the fleet to test on">On macOS before 27, recording a shortcut with an ordinary letter asks for Input Monitoring just in time (<code>ensure_listen_access</code>). Unexercised: every household Mac read so far runs 27.</li>
+</ul>
+</details>
+
+<details class="thread" id="tray-missing">
+<summary><h3>Menu bar icon missing, window unreachable</h3><span class="state">Fixed on main and installed on huginn; ships in 2026.11.7 (see the permissions thread).</span></summary>
 <ul class="items">
 <li data-id="tray-guard-invisible" data-track="#206">The tray failure was invisible: the app-factory desktop-shell <code>guard_tray</code> logs only locally, so nothing reached Loki. Raise this with app-factory.</li>
 <li data-id="clippy-collapsible-if" data-untracked="found 15/11, not yet triaged">Local clippy 0.1.96 flags collapsible <code>if</code> across about ten files that predate this change; check whether CI's clippy agrees.</li>
@@ -164,7 +173,6 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <summary><h3>Release path and memory footprint (carried from 02/11)</h3><span class="state">Items from the 02/11 handoff, carried over unchanged and not re-checked on 15/11.</span></summary>
 <p class="next" data-id="footprint-day-check" data-untracked="carried from 02/11 handoff, unverified">After a day of dictating over screenshots, read <code>footprint $(pgrep -x thoth)</code>; it should stay in the hundreds of MB, not the 20 GB 2026.10.2 reached.</p>
 <ul class="items">
-<li data-id="appleevents-entitlement" data-untracked="carried from 02/11 handoff, unverified">At launch, tccd says a process Thoth spawns lacks the apple-events entitlement. This predates 2026.11.0 and hasn't been traced to a feature yet.</li>
 <li data-id="footprint-telemetry-pin" data-untracked="carried from 02/11 handoff, unverified">Move the app-factory pins to v2026.11.4 or later (telemetry 0.7.0 adds <code>footprint_bytes</code>); rename the flake outputHashes key to <code>telemetry-0.7.0</code>.</li>
 <li data-id="xcode-link-release-proof" data-untracked="carried from 02/11 handoff, unverified">The macOS leg of the first release cut since the switch to Xcode clang/ld linking (<code>darwinSwiftLinkHook</code>) proves the release path.</li>
 </ul>
