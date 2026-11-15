@@ -8,11 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [2026.11.7] - 2026-11-15
 
+### Added
+
+- **A "tap or hold" recording mode.** A quick tap (under 300 ms) latches the recording until your next press; holding the key records for as long as you hold it and stops on release, as push-to-talk. It is one more option in the recording-mode list and works with a bare-modifier key such as right Shift.
+
 ### Changed
 
 - **Two macOS permissions, asked for once.** Thoth needs only the microphone and Accessibility (macOS 27: Device Control and Data Access). A first launch asks for both, one dialogue after the other; afterwards the Overview shows anything missing beside one **Grant** button. Input Monitoring is no longer requested: macOS 27 folds it into Accessibility, and right Shift never needed it.
 - **Updates keep your permissions.** An update no longer clears Thoth's permissions or asks for an administrator password. The permission troubleshooting section is gone with it.
 - The record key starts working the moment Accessibility is switched on, without a restart.
+- **A shortcut the system refuses now says so.** Settings and the shortcut recorder name the shortcut that could not be registered, where before it failed silently.
+- **Settings changes no longer overwrite each other.** Each change saves only what it touched, so a setting changed over MCP or the settings API while the window is open is not written back by the window, and an API key is never swept up in an ordinary save. A settings change that is not valid is refused and leaves your configuration untouched.
+- **An older Thoth never wipes a newer one's settings.** A build that finds a config file written by a newer version leaves it alone instead of saving defaults over what it does not know.
+- **Word-list edits over MCP defer to the external dictionary when it is on.** With an external dictionary configured, the MCP `dictionary` tool and `canonical` add, update and remove refuse and point to the word-list service's own tool; reading still works.
 
 ### Fixed
 
@@ -22,6 +30,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Failures you could not see now say so.** A failed microphone test, API-key save or model load after download shows a message; Storage's delete actions confirm what they did; Integrations' telemetry fields stay locked until they have loaded.
 - The AI Enhancement backend text no longer says "no cloud required" beside an OpenAI-compatible server that can point anywhere.
 - **The menu bar icon is back for right-Shift users.** A bare-modifier record key stopped the tray menu from building, and with the Dock icon off nothing could show the window. Opening Thoth while it runs now shows its window.
+- **A microphone that drops out is reopened on your next press.** Losing the input used to leave every later press recording nothing; Thoth now reopens the device, falling back to the system default with the usual notice, and a recording that loses its microphone keeps what was heard and says so.
+- **Auto-copy copies.** The "copy transcription to clipboard" setting did nothing; the transcription is now copied when it is on. Paste and clipboard restore are unchanged.
+- **Changing a shortcut no longer resets the hands-free silence timeout.**
+- **The recording indicator appears on the same screen however you start recording.** The record key used the primary monitor and the Start button the main window's; both now use the main window's.
+- **WAV files with extra metadata are read correctly** when you re-transcribe or trim audio.
+- **The telemetry Test button reports a failure** when the collector refuses or cannot be reached, instead of always saying OK.
+- **A custom prompt with a long name no longer crashes the menu bar menu.**
+- **Closing the window on Linux hides it** instead of destroying it, so the menu bar can bring it back.
+- **Waiting for a model to load no longer stalls other work** for up to a minute.
+- **History reads no longer fail while Thoth is writing.** One database connection with write-ahead logging and a busy timeout makes a read during a write wait instead of failing.
+- **Your config, API token and passwords are private from the moment they exist.** They were briefly readable by other local users on first write; they are now created owner-only and renamed into place.
 
 ## [2026.11.6] - 2026-11-14
 
