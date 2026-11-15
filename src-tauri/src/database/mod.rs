@@ -9,15 +9,15 @@ pub mod schema;
 pub mod transcription;
 pub mod trash;
 
+use parking_lot::{Mutex, MutexGuard};
 use rusqlite::Connection;
-use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use crate::database::migrations::run_migrations;
 use crate::error::Error;
 
-/// Global database path, initialised once.
-static DATABASE_PATH: OnceLock<PathBuf> = OnceLock::new();
+/// The one connection, opened by [`initialise_database`].
+static CONNECTION: OnceLock<Mutex<Connection>> = OnceLock::new();
 
 /// Database error types.
 #[derive(Debug, thiserror::Error)]
@@ -33,6 +33,9 @@ pub enum DatabaseError {
 
     #[error("Migration failed: {0}")]
     Migration(String),
+
+    #[error("Database not initialised")]
+    NotInitialised,
 }
 
 impl From<std::io::Error> for DatabaseError {
@@ -41,63 +44,45 @@ impl From<std::io::Error> for DatabaseError {
     }
 }
 
-/// Ensures the database directory exists and returns the database path.
-fn ensure_database_directory() -> Result<PathBuf, DatabaseError> {
-    let thoth_dir = crate::config::data_dir();
-
-    if !thoth_dir.exists() {
-        std::fs::create_dir_all(&thoth_dir)?;
-        tracing::info!("Created Thoth directory at {:?}", thoth_dir);
-    }
-
-    Ok(thoth_dir.join("thoth.db"))
+/// The shared connection. Hold the guard only for the queries: file work
+/// (decoding audio, walking directories) happens after it is dropped, and a
+/// holder never calls another function that takes it.
+pub fn connection() -> Result<MutexGuard<'static, Connection>, DatabaseError> {
+    CONNECTION
+        .get()
+        .map(Mutex::lock)
+        .ok_or(DatabaseError::NotInitialised)
 }
 
-/// Opens a connection to the database.
+/// Opens `thoth.db` in the data directory, migrates it and keeps the connection.
 ///
-/// Each call creates a new connection. For thread safety in Tauri commands,
-/// create a new connection per command invocation.
-pub fn open_connection() -> Result<Connection, DatabaseError> {
-    // DATABASE_PATH is normally set by initialise_database() at startup.
-    // The expect here is a safeguard for direct open_connection() calls.
-    let db_path = DATABASE_PATH.get_or_init(|| {
-        ensure_database_directory()
-            .expect("database directory must be writable; called before initialise_database()?")
-    });
-
-    let conn = Connection::open(db_path)?;
-
-    // Enable foreign keys
-    conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-
-    Ok(conn)
-}
-
-/// Initialises the database, creating the directory and running migrations.
-///
-/// This should be called once on application startup.
+/// Idempotent: the frontend's `init_database` and startup both call it.
 pub fn initialise_database() -> Result<(), DatabaseError> {
-    tracing::info!("Initialising database");
+    if CONNECTION.get().is_some() {
+        return Ok(());
+    }
+    let dir = crate::config::data_dir();
+    std::fs::create_dir_all(&dir)?;
+    let db_path = dir.join("thoth.db");
+    tracing::info!("Initialising database at {:?}", db_path);
 
-    // Ensure directory exists and get path
-    let db_path = ensure_database_directory()?;
-    DATABASE_PATH.get_or_init(|| db_path.clone());
-
-    tracing::info!("Database path: {:?}", db_path);
-
-    // Open connection and run migrations
-    let mut conn = open_connection()?;
+    let mut conn = Connection::open(&db_path)?;
+    conn.execute_batch(
+        "PRAGMA journal_mode = WAL;
+         PRAGMA busy_timeout = 5000;
+         PRAGMA foreign_keys = ON;",
+    )?;
     run_migrations(&mut conn)?;
 
-    // Remove trash entries that have exceeded the retention window.
-    // Failures are logged but not fatal — a missed purge is recoverable next startup.
+    // A missed purge is recoverable next startup.
     match trash::auto_purge_expired(&mut conn) {
         Ok(0) => {}
         Ok(n) => tracing::info!("Auto-purged {} expired trash entries", n),
         Err(e) => tracing::warn!("auto_purge_expired failed (non-fatal): {}", e),
     }
 
-    tracing::info!("Database initialised successfully");
+    // A racing initialiser's connection is dropped; both migrated the same file.
+    let _ = CONNECTION.set(Mutex::new(conn));
     Ok(())
 }
 

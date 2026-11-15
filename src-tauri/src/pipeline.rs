@@ -1233,12 +1233,6 @@ fn save_to_history(
     enhancement_model_name: Option<&str>,
     enhancement_duration_seconds: Option<f64>,
 ) -> Option<String> {
-    // Ensure database is initialised
-    if database::transcription::get_transcription("test").is_err() {
-        tracing::warn!("Pipeline: Database not initialised, skipping history save");
-        return None;
-    }
-
     let transcription = database::transcription::Transcription::with_details(
         text.to_string(),
         stored_raw_text(text, raw_text),

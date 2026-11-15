@@ -8,7 +8,7 @@ use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-use crate::database::{DatabaseError, open_connection};
+use crate::database::{DatabaseError, connection};
 use crate::error::Error;
 
 // =============================================================================
@@ -114,7 +114,7 @@ pub struct HistogramBucket {
 }
 
 /// Disk usage breakdown for the storage card.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StorageBreakdown {
     pub recordings_bytes: u64,
@@ -183,6 +183,7 @@ fn range_lower_bound(range: &InsightsRange) -> Option<DateTime<Utc>> {
 fn get_insights_with_conn(
     conn: &Connection,
     range: &InsightsRange,
+    storage: StorageBreakdown,
 ) -> Result<InsightsData, DatabaseError> {
     let lower: Option<String> = range_lower_bound(range).map(|dt| dt.to_rfc3339());
 
@@ -243,9 +244,6 @@ fn get_insights_with_conn(
 
     // --- Time of day ---
     let time_of_day = query_time_of_day(conn, lower.as_deref())?;
-
-    // --- Storage ---
-    let storage = compute_storage()?;
 
     Ok(InsightsData {
         totals,
@@ -519,7 +517,7 @@ fn query_time_of_day(conn: &Connection, lower: Option<&str>) -> Result<Vec<u32>,
     Ok(counts)
 }
 
-fn compute_storage() -> Result<StorageBreakdown, DatabaseError> {
+fn compute_storage() -> StorageBreakdown {
     let base = crate::config::data_dir();
 
     let recordings_dir = base.join("Recordings");
@@ -535,13 +533,13 @@ fn compute_storage() -> Result<StorageBreakdown, DatabaseError> {
     // Oldest recording by mtime.
     let oldest_recording_at = oldest_file_mtime(&recordings_dir);
 
-    Ok(StorageBreakdown {
+    StorageBreakdown {
         recordings_bytes,
         models_bytes,
         db_bytes,
         total_bytes,
         oldest_recording_at,
-    })
+    }
 }
 
 // =============================================================================
@@ -589,31 +587,34 @@ fn get_cruft_candidates_with_conn(
         })?
         .collect::<Result<Vec<_>, _>>()?;
 
-    let mut candidates = Vec::with_capacity(rows.len());
-    for (id, created_at, text_preview, duration_seconds, density, audio_path) in rows {
-        let (file_bytes, rms) = match &audio_path {
-            Some(path) => {
-                let pb = std::path::PathBuf::from(path);
-                let file_bytes = std::fs::metadata(&pb).map(|m| m.len()).unwrap_or(0);
-                let rms = compute_wav_rms(&pb);
-                (file_bytes, rms)
-            }
-            None => (0, None),
-        };
+    Ok(rows
+        .into_iter()
+        .map(
+            |(id, created_at, text_preview, duration_seconds, density, audio_path)| {
+                CruftCandidate {
+                    id,
+                    created_at,
+                    text_preview,
+                    duration_seconds,
+                    density,
+                    audio_path,
+                    file_bytes: 0,
+                    rms: None,
+                }
+            },
+        )
+        .collect())
+}
 
-        candidates.push(CruftCandidate {
-            id,
-            created_at,
-            text_preview,
-            duration_seconds,
-            density,
-            audio_path,
-            file_bytes,
-            rms,
-        });
+/// Fill each candidate's file size and RMS from its WAV.
+fn measure_audio(candidates: &mut [CruftCandidate]) {
+    for c in candidates {
+        if let Some(path) = &c.audio_path {
+            let pb = std::path::Path::new(path);
+            c.file_bytes = std::fs::metadata(pb).map(|m| m.len()).unwrap_or(0);
+            c.rms = compute_wav_rms(pb);
+        }
     }
-
-    Ok(candidates)
 }
 
 // =============================================================================
@@ -685,11 +686,9 @@ fn oldest_file_mtime(dir: &std::path::Path) -> Option<String> {
 #[tauri::command]
 pub async fn get_insights(range: InsightsRange) -> Result<InsightsData, Error> {
     tauri_plugin_telemetry::traced("get_insights", async move {
-        let conn = open_connection().map_err(|e| {
-            tracing::error!("Failed to open DB for insights: {}", e);
-            e
-        })?;
-        get_insights_with_conn(&conn, &range).map_err(|e| {
+        // The directory walk runs before the connection is taken.
+        let storage = compute_storage();
+        get_insights_with_conn(&*connection()?, &range, storage).map_err(|e| {
             tracing::error!("Failed to compute insights: {}", e);
             format!("Failed to compute insights: {}", e).into()
         })
@@ -706,14 +705,14 @@ pub async fn get_cruft_candidates(
 ) -> Result<Vec<CruftCandidate>, Error> {
     tauri_plugin_telemetry::traced("get_cruft_candidates", async move {
         let threshold = density_threshold.unwrap_or(DEFAULT_DENSITY_THRESHOLD);
-        let conn = open_connection().map_err(|e| {
-            tracing::error!("Failed to open DB for cruft scan: {}", e);
-            e
-        })?;
-        get_cruft_candidates_with_conn(&conn, threshold).map_err(|e| {
-            tracing::error!("Failed to get cruft candidates: {}", e);
-            format!("Failed to get cruft candidates: {}", e).into()
-        })
+        let mut candidates =
+            get_cruft_candidates_with_conn(&*connection()?, threshold).map_err(|e| {
+                tracing::error!("Failed to get cruft candidates: {}", e);
+                Error::from(format!("Failed to get cruft candidates: {}", e))
+            })?;
+        // The connection is released: decoding audio never holds it.
+        measure_audio(&mut candidates);
+        Ok(candidates)
     })
     .await
 }
@@ -799,7 +798,9 @@ mod tests {
             None,
         );
 
-        let data = get_insights_with_conn(&conn, &InsightsRange::AllTime).expect("insights");
+        let data =
+            get_insights_with_conn(&conn, &InsightsRange::AllTime, StorageBreakdown::default())
+                .expect("insights");
         assert_eq!(data.totals.total_count, 2);
         assert_eq!(data.totals.enhanced_count, 1);
         assert!(data.totals.total_audio_seconds > 0.0);
@@ -810,7 +811,9 @@ mod tests {
     #[test]
     fn totals_empty_db_returns_zeros() {
         let conn = make_test_db();
-        let data = get_insights_with_conn(&conn, &InsightsRange::AllTime).expect("insights");
+        let data =
+            get_insights_with_conn(&conn, &InsightsRange::AllTime, StorageBreakdown::default())
+                .expect("insights");
         assert_eq!(data.totals.total_count, 0);
         assert_eq!(data.totals.total_words, 0);
         assert_eq!(data.totals.enhanced_count, 0);
@@ -861,7 +864,9 @@ mod tests {
             None,
         );
 
-        let data = get_insights_with_conn(&conn, &InsightsRange::AllTime).expect("insights");
+        let data =
+            get_insights_with_conn(&conn, &InsightsRange::AllTime, StorageBreakdown::default())
+                .expect("insights");
         assert_eq!(data.activity.len(), 2, "two distinct days");
         let day1 = data
             .activity
@@ -966,7 +971,9 @@ mod tests {
             None,
         );
 
-        let data = get_insights_with_conn(&conn, &InsightsRange::AllTime).expect("insights");
+        let data =
+            get_insights_with_conn(&conn, &InsightsRange::AllTime, StorageBreakdown::default())
+                .expect("insights");
         let hist: std::collections::HashMap<_, _> = data
             .length_histogram
             .iter()
@@ -1011,7 +1018,9 @@ mod tests {
             None,
         );
 
-        let data = get_insights_with_conn(&conn, &InsightsRange::AllTime).expect("insights");
+        let data =
+            get_insights_with_conn(&conn, &InsightsRange::AllTime, StorageBreakdown::default())
+                .expect("insights");
         assert_eq!(data.time_of_day.len(), 24);
         // Buckets are local-time, so assert the totals are preserved rather than
         // specific hours; this keeps the test timezone-independent.
@@ -1049,7 +1058,9 @@ mod tests {
             Some(4.0),
         );
 
-        let data = get_insights_with_conn(&conn, &InsightsRange::AllTime).expect("insights");
+        let data =
+            get_insights_with_conn(&conn, &InsightsRange::AllTime, StorageBreakdown::default())
+                .expect("insights");
         assert_eq!(data.throughput.len(), 1);
         let t = &data.throughput[0];
         assert_eq!(t.name, "ggml-large-v3-turbo");
@@ -1183,23 +1194,29 @@ mod tests {
         );
 
         // AllTime should include it.
-        let all = get_insights_with_conn(&conn, &InsightsRange::AllTime).expect("all");
+        let all =
+            get_insights_with_conn(&conn, &InsightsRange::AllTime, StorageBreakdown::default())
+                .expect("all");
         assert_eq!(all.totals.total_count, 1);
 
         // Week/Month/Year windows should exclude a 2020 row entirely.
-        let week = get_insights_with_conn(&conn, &InsightsRange::Week).expect("week");
+        let week = get_insights_with_conn(&conn, &InsightsRange::Week, StorageBreakdown::default())
+            .expect("week");
         assert_eq!(
             week.totals.total_count, 0,
             "2020 row must be outside Week window"
         );
 
-        let month = get_insights_with_conn(&conn, &InsightsRange::Month).expect("month");
+        let month =
+            get_insights_with_conn(&conn, &InsightsRange::Month, StorageBreakdown::default())
+                .expect("month");
         assert_eq!(
             month.totals.total_count, 0,
             "2020 row must be outside Month window"
         );
 
-        let year = get_insights_with_conn(&conn, &InsightsRange::Year).expect("year");
+        let year = get_insights_with_conn(&conn, &InsightsRange::Year, StorageBreakdown::default())
+            .expect("year");
         assert_eq!(
             year.totals.total_count, 0,
             "2020 row must be outside Year window"
@@ -1258,7 +1275,9 @@ mod tests {
             None,
         );
 
-        let data = get_insights_with_conn(&conn, &InsightsRange::AllTime).expect("insights");
+        let data =
+            get_insights_with_conn(&conn, &InsightsRange::AllTime, StorageBreakdown::default())
+                .expect("insights");
         // 2/4 enhanced → 50%
         assert!(
             (data.model_usage.enhanced_pct - 50.0).abs() < 0.1,

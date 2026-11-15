@@ -8,7 +8,7 @@ use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::database::{DatabaseError, open_connection};
+use crate::database::{DatabaseError, connection};
 use crate::error::Error;
 
 /// A transcription record stored in the database.
@@ -97,7 +97,7 @@ impl Transcription {
 
 /// Creates a new transcription in the database.
 pub fn create_transcription(transcription: &Transcription) -> Result<(), DatabaseError> {
-    let conn = open_connection()?;
+    let conn = connection()?;
 
     conn.execute(
         r#"
@@ -157,7 +157,7 @@ pub(crate) fn row_to_transcription(row: &rusqlite::Row) -> rusqlite::Result<Tran
 
 /// Retrieves a transcription by its ID.
 pub fn get_transcription(id: &str) -> Result<Option<Transcription>, DatabaseError> {
-    let conn = open_connection()?;
+    let conn = connection()?;
 
     let result = conn.query_row(
         &format!(
@@ -177,7 +177,7 @@ pub fn get_transcription(id: &str) -> Result<Option<Transcription>, DatabaseErro
 
 /// Updates an existing transcription.
 pub fn update_transcription(transcription: &Transcription) -> Result<(), DatabaseError> {
-    let conn = open_connection()?;
+    let conn = connection()?;
 
     let rows_affected = conn.execute(
         r#"
@@ -215,7 +215,7 @@ pub fn update_transcription(transcription: &Transcription) -> Result<(), Databas
 /// Deletes a transcription by its ID, removing its audio file when it is the
 /// sole DB reference to that path.
 pub fn delete_transcription(id: &str) -> Result<bool, DatabaseError> {
-    let mut conn = open_connection()?;
+    let mut conn = connection()?;
     delete_transcription_with_conn(&mut conn, id)
 }
 
@@ -288,7 +288,7 @@ fn delete_transcription_with_conn(
 
 /// Deletes all transcriptions from the database and removes their audio files.
 pub fn delete_all_transcriptions() -> Result<usize, DatabaseError> {
-    let mut conn = open_connection()?;
+    let mut conn = connection()?;
     delete_all_transcriptions_with_conn(&mut conn)
 }
 
@@ -341,7 +341,7 @@ fn recordings_dir() -> std::path::PathBuf {
 /// Scans ~/.thoth/Recordings/ for WAV files that are not referenced by any
 /// DB row and removes them, returning a count and bytes freed.
 pub fn reconcile_orphaned_recordings() -> Result<ReconcileResult, DatabaseError> {
-    let conn = open_connection()?;
+    let conn = connection()?;
     reconcile_orphaned_recordings_with_conn(&conn, &recordings_dir())
 }
 
@@ -441,7 +441,7 @@ pub fn list_transcriptions(
     limit: Option<i64>,
     offset: Option<i64>,
 ) -> Result<Vec<Transcription>, DatabaseError> {
-    let conn = open_connection()?;
+    let conn = connection()?;
     list_transcriptions_with_conn(&conn, limit, offset)
 }
 
@@ -472,7 +472,7 @@ pub fn search_transcriptions(
     query: &str,
     limit: Option<i64>,
 ) -> Result<Vec<Transcription>, DatabaseError> {
-    let conn = open_connection()?;
+    let conn = connection()?;
 
     let limit = limit.unwrap_or(50);
     let search_pattern = format!("%{}%", query);
@@ -491,7 +491,7 @@ pub fn search_transcriptions(
 
 /// Counts the total number of transcriptions, optionally filtered by a search query.
 pub fn count_transcriptions(query: Option<&str>) -> Result<usize, DatabaseError> {
-    let conn = open_connection()?;
+    let conn = connection()?;
     count_transcriptions_with_conn(&conn, query)
 }
 
@@ -556,7 +556,7 @@ pub struct ModelStats {
 
 /// Computes aggregated transcription statistics.
 pub fn get_transcription_stats() -> Result<TranscriptionStats, DatabaseError> {
-    let conn = open_connection()?;
+    let conn = connection()?;
 
     // Summary counts
     let total_count: i64 =

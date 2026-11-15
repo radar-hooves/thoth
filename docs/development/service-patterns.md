@@ -74,32 +74,7 @@ fn get_client() -> &'static Mutex<OllamaClient> {
 
 ### Database Connection Pattern
 
-For SQLite with `rusqlite`, create connections per-command for thread safety:
-
-```rust
-use rusqlite::Connection;
-use std::sync::OnceLock;
-
-/// Global database path, initialised once
-static DATABASE_PATH: OnceLock<PathBuf> = OnceLock::new();
-
-/// Opens a new connection for each command invocation
-pub fn open_connection() -> Result<Connection, DatabaseError> {
-    let db_path = DATABASE_PATH.get_or_init(|| {
-        ensure_database_directory().expect("Failed to initialise database directory")
-    });
-
-    let conn = Connection::open(db_path)?;
-    conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-    Ok(conn)
-}
-```
-
-**Why per-command connections:**
-
-- `rusqlite::Connection` is `!Send`; cannot share across threads
-- Tauri commands run on different threads
-- Each command gets a fresh connection, avoiding lock contention
+One connection, opened by `initialise_database` with `journal_mode = WAL`, `busy_timeout = 5000` and `foreign_keys = ON`, behind a mutex (`database::connection()`), as Bragi's `db/mod.rs` does. Hold the guard only for the queries: decode audio or walk directories after dropping it (`insights.rs` `get_cruft_candidates`), and never call a function that takes it while holding it.
 
 ## Tauri Commands as Service Interface
 

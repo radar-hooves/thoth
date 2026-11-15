@@ -49,7 +49,7 @@ pub struct SearchResult {
 
 /// Searches transcriptions in the database with full-text search and date filtering.
 fn search_transcriptions_db(params: &SearchParams) -> Result<SearchResult, String> {
-    let conn = database::open_connection().map_err(|e| {
+    let conn = database::connection().map_err(|e| {
         tracing::error!("Failed to open database connection: {}", e);
         format!("Failed to open database: {}", e)
     })?;
@@ -156,7 +156,7 @@ fn get_transcriptions_by_ids(ids: &[String]) -> Result<Vec<Transcription>, Strin
         return Ok(Vec::new());
     }
 
-    let conn = database::open_connection().map_err(|e| {
+    let conn = database::connection().map_err(|e| {
         tracing::error!("Failed to open database connection: {}", e);
         format!("Failed to open database: {}", e)
     })?;

@@ -22,7 +22,7 @@ use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 
-use crate::database::{DatabaseError, open_connection};
+use crate::database::{DatabaseError, connection};
 use crate::error::Error;
 
 // =============================================================================
@@ -611,7 +611,7 @@ pub fn auto_purge_expired(conn: &mut Connection) -> Result<u32, DatabaseError> {
 #[tauri::command]
 pub async fn quarantine_recordings(ids: Vec<String>) -> Result<u32, Error> {
     tauri_plugin_telemetry::traced("quarantine_recordings", async move {
-        let mut conn = open_connection()?;
+        let mut conn = connection()?;
         quarantine_recordings_with_conn(&mut conn, &ids).map_err(|e| {
             tracing::error!("quarantine_recordings failed: {}", e);
             Error::Database(e)
@@ -626,7 +626,7 @@ pub async fn quarantine_recordings(ids: Vec<String>) -> Result<u32, Error> {
 #[tauri::command]
 pub async fn restore_recordings(ids: Vec<String>) -> Result<u32, Error> {
     tauri_plugin_telemetry::traced("restore_recordings", async move {
-        let mut conn = open_connection()?;
+        let mut conn = connection()?;
         restore_recordings_with_conn(&mut conn, &ids).map_err(|e| {
             tracing::error!("restore_recordings failed: {}", e);
             Error::Database(e)
@@ -641,7 +641,7 @@ pub async fn restore_recordings(ids: Vec<String>) -> Result<u32, Error> {
 #[tauri::command]
 pub async fn purge_trash(ids: Option<Vec<String>>) -> Result<u32, Error> {
     tauri_plugin_telemetry::traced("purge_trash", async move {
-        let mut conn = open_connection()?;
+        let mut conn = connection()?;
         let id_slice = ids.as_deref();
         purge_trash_with_conn(&mut conn, id_slice).map_err(|e| {
             tracing::error!("purge_trash failed: {}", e);
@@ -655,7 +655,7 @@ pub async fn purge_trash(ids: Option<Vec<String>>) -> Result<u32, Error> {
 #[tauri::command]
 pub async fn list_trash() -> Result<Vec<TrashEntry>, Error> {
     tauri_plugin_telemetry::traced("list_trash", async move {
-        let conn = open_connection()?;
+        let conn = connection()?;
         list_trash_with_conn(&conn).map_err(|e| {
             tracing::error!("list_trash failed: {}", e);
             Error::Database(e)
