@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Thoth: open work</title>
-<meta name="description" content="Holistic review of Thoth and Bragi with the factory (#208): three decisions for him; packages landing; release after.">
+<meta name="description" content="Holistic review of Thoth and Bragi with the factory (#208): three decisions for him; four lanes and the Thoth clean-up landing; release after.">
 <style>
 /* A shift-handover sheet: what waits on him, by when, in columns that fill the width; then each thread folded to its state line. */
 :root {
@@ -164,21 +164,26 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <h2 id="threads">Threads</h2>
 
 <details class="thread" id="holistic-review" open>
-<summary><h3>Holistic review: Thoth and Bragi as one cloth, with the factory</h3><span class="state">Verdict posted on #208 (15/11): Thoth refactor, Bragi carry on, factory converge. Thirteen Thoth fixes landed; packages in flight in all three repos.</span></summary>
-<p class="next" data-id="review-packages" data-track="#208">Land, one at a time, each read as our own diff:<br>
-• Thoth's structural clean-up, from the implementer in this checkout;<br>
-• Bragi's dead-code branch (<code>foreman/wt-502706d7</code>) once its <code>change</code> run is green, then bragi#257's branch on top of it;<br>
-• the factory lane for #135, #136, #137 and #139.<br>
-Then tag factory v2026.11.53 on a green self-test, then the next Thoth packages: one settings contract (<code>patch_config</code>), then pooled SQLite with WAL.</p>
+<summary><h3>Holistic review: Thoth and Bragi as one cloth, with the factory</h3><span class="state">Verdict on #208 (15/11): Thoth refactor, Bragi carry on, factory converge. Thirteen Thoth fixes and Bragi's dead-code removal are on main; four lanes and one implementer are in flight.</span></summary>
+<p class="next" data-id="review-packages" data-track="#208">The structural clean-up for Thoth is uncommitted in this checkout: indicator, insights, WAV, data dir, failed shortcuts, small duplicates. A code-implementer sub-agent is writing it. When it reports, read each item's diff as our own, run its scoped gates and commit it per item.<br>
+Then land, each read first, from the foreman lanes (<code>agent(action='list')</code>):<br>
+• bragi#257 on branch <code>foreman/wt-d735540a</code>, dispatch <code>20261115T124237Z-2c8a6823</code>;<br>
+• the factory needs #135, #136, #137 and #139, dispatch <code>20261115T124302Z-67aade56</code>. Merge them, then tag.<br>
+Tag factory <code>v2026.11.53</code> on <code>56c84082</code> once its Factory self-test is green; it was still running at 23:50.</p>
 <ul class="items">
-<li data-id="review-writeup" data-track="#208">The write-up is <code>docs/research/2026-11-15-holistic-review.md</code> (gitignored, local to huginn's checkout), with the three reads beside it. Keep its findings tables current as packages land.</li>
-<li data-id="bragi-updater-adopt" data-track="radar-hooves/app-factory#133">Bragi adopts the factory updater once its public download path is chosen: mint its own keypair into repo secrets, take the by-hand edits in the factory's <code>docs/development/desktop-updater.md</code>, release, and install that first updater build by hand once on each Mac.</li>
-<li data-id="thoth-updater-converge" data-track="radar-hooves/app-factory#133">Thoth converges on the factory updater: keep its public key and secrets, delete <code>src/lib/stores/updater.svelte.ts</code> and its own <code>report_update_check</code>, and call the kit.</li>
-<li data-id="apps-become-stamps" data-track="radar-hooves/app-factory#138">Both apps become stamps of the desktop skeleton, so factory changes reach them. Thoth's <code>.canonical-exceptions:73</code> reason ("no desktop archetype") is false today.</li>
-<li data-id="public-pipeline" data-track="radar-hooves/master-project#460">Thoth carries a 4,600-line copy of master's change pipeline because it is public; master's answer decides whether the copy can go.</li>
-<li data-id="release-2026-11-7" data-track="#208">His ruling of 15/11 (recorded on #208): publish only once the review is worked through. Then, on a green <code>change</code> run at the head of main, bump with <code>scripts/bump-version.sh</code> if the month moved, update CHANGELOG, tag, push the tag.</li>
-<li data-id="mandy-permissions-check" data-untracked="waits on the release">macintosh-mandy is back online (his word, 15/11). After the release, update her Thoth and read <code>get_system</code>'s <code>permissions</code> over SSH (her Thoth's MCP), or the <code>permissions</code> event in Loki, and dictate once.</li>
-<li data-id="ci-rerun-rule" data-untracked="own slip, noted so it is not repeated">A failed main run is never re-run (<code>rules-library/fleet/ci.md</code>): fix forward or dispatch <code>change</code> with <code>roll</code>. On 15/11 this session re-ran one after a runner shutdown on titan.</li>
+<li data-id="review-writeup" data-track="#208">The write-up is <code>docs/research/2026-11-15-holistic-review.md</code>, gitignored and local to huginn's checkout, with the three reads beside it. Keep its findings tables current as packages land.</li>
+<li data-id="settings-design-lane" data-track="#207">A Penpot design lane is drawing Settings before and after (dispatch <code>20261115T124822Z-2a77da54</code>). Its renders go to <code>docs/research/settings-restructure/</code>; put them to him as a <code>read</code> ask when it lands. No code until he approves.</li>
+<li data-id="thoth-next-packages" data-track="#208">Next for Thoth, after the structural clean-up:<br>
+• one settings contract: <code>patch_config</code> over <code>merge_json</code>, camelCase structs, and the guards and bypass setters deleted;<br>
+• pooled SQLite with WAL and a busy timeout, as Bragi has.<br>
+Both labs proposed the first.</li>
+<li data-id="bragi-updater-adopt" data-track="radar-hooves/app-factory#133">Bragi adopts the factory updater once his public download path is chosen. Mint its own keypair into repo secrets, take the edits in the factory's <code>docs/development/desktop-updater.md</code>, release, and install that first updater build by hand once on each Mac.</li>
+<li data-id="thoth-updater-converge" data-track="radar-hooves/app-factory#133">Thoth converges on the factory updater. Keep its public key and secrets, delete <code>src/lib/stores/updater.svelte.ts</code> and its own <code>report_update_check</code>, and call the kit.</li>
+<li data-id="apps-become-stamps" data-track="radar-hooves/app-factory#138">Both apps become stamps of the desktop skeleton, so factory changes reach them. Thoth's <code>.canonical-exceptions:73</code> gives the reason "no desktop archetype", which is false today.</li>
+<li data-id="public-pipeline" data-track="radar-hooves/master-project#460">Thoth carries a 4,600-line copy of master's change pipeline because Thoth is public. Master's answer decides whether the copy can go.</li>
+<li data-id="release-2026-11-7" data-track="#208">His ruling of 15/11, recorded on #208: publish only once the review is worked through. Then, on a green <code>change</code> run at the head of main: run <code>scripts/bump-version.sh</code> if the month moved, update the CHANGELOG, tag, and push the tag.</li>
+<li data-id="mandy-permissions-check" data-untracked="waits on the release">macintosh-mandy is back online (his word, 15/11). After the release, update her Thoth, then read <code>get_system</code>'s <code>permissions</code> over SSH (her Thoth's MCP) or the <code>permissions</code> event in Loki, and dictate once.</li>
+<li data-id="ci-rerun-rule" data-untracked="own slip, noted so it is not repeated">A failed main run is never re-run (<code>rules-library/fleet/ci.md</code>): fix forward, or dispatch <code>change</code> with <code>roll</code>. On 15/11 this session re-ran one after a runner shutdown on titan.</li>
 </ul>
 </details>
 
