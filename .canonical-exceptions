@@ -88,4 +88,4 @@ skeleton:vite.config.ts                 2026-12-31  # template is the SvelteKit 
 skeleton:tsconfig.json                  2026-12-31  # extends $app/tsconfig (SvelteKit 3); Thoth is on Kit 2, held
 skeleton:stylelint.config.js            2026-12-31  # template's style rules flag 44 existing findings (40 autofixable); adopting them is a separate pass
 skeleton:.pre-commit-config.yaml        2026-12-31  # default_language_version python3.14: huginn has no usable python3.15 (pip 25 breaks on 3.15's typing), so the hook environment cannot build; restore 3.15 when the host has one
-skeleton:src-tauri/src/main.rs         2026-12-31  # comment wording only; taking it triggers the clippy hook, which cannot build FluidAudio's Swift package on huginn (corrupt SwiftPM cache)
+skeleton:scripts/bump-version.sh        2026-12-31  # keeps its forward-only and stray-declaration guards (tested by scripts/test-bump-version.sh) until the skeleton's carries them (app-factory#138)
