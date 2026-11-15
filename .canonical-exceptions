@@ -70,6 +70,22 @@ root-inventory:Dockerfile          2026-08-27  # ships as a signed desktop binar
 root-inventory:.dockerignore       2026-08-27  # nothing builds an image here; see Dockerfile above
 root-inventory:compose.yaml        2026-08-27  # runs on a user's own machine, not as a stack on a deployment host
 root-inventory:config              2026-08-27  # config/actors.yaml gates a deployed /mcp surface; this app's MCP server is embedded in the Rust binary and reachable only on loopback
-root-inventory:.copier-answers.yml 2026-08-27  # never stamped from the template — it predates it and no desktop archetype exists to stamp from
-root-inventory:.template-parity.json 2026-08-27  # the parity manifest measures a stamped app against the template it came from; nothing stamped this one
 root-inventory:.mcp.json           2026-08-27  # present on disk but gitignored: it is generated from majordomo's registry and names internal servers and ports, which this PUBLIC repo must not publish
+
+# ---------------------------------------------------------------------------
+# Skeleton-owned files Thoth keeps its own version of (v2026.11.56 stamp). Each is
+# a departure from the template; .template-parity.json hashes them as they stand.
+# ---------------------------------------------------------------------------
+skeleton:.github/workflows/change.yaml  2026-12-31  # Thoth is public and cannot call master's private pipeline (master-project#460); calls its own copy
+skeleton:scripts/tauri-release.sh       2026-12-31  # release path: check-release-writable and the macOS devShell install; template's would change the release
+skeleton:scripts/cargo-codesign.sh      2026-12-31  # verify-bundles also runs verify-macos-libraries and the hardened-runtime check; signing path
+skeleton:src/app.html                   2026-12-31  # template carries web-only /elements/placed.js and no dark class; Thoth is dark-only
+skeleton:src/test/setup.ts              2026-12-31  # template's imports ./mocks/app-state.svelte, which the desktop skeleton does not stamp
+skeleton:.github/actionlint.yaml        2026-12-31  # runner labels light, gradle, release, ubuntu-26.04 are used by nix-check.yaml and release.yaml
+skeleton:renovate.json                  2026-12-31  # Thoth's holds (SvelteKit 3, TypeScript 7, superforms, tauri-action, ubuntu)
+skeleton:src/lib/utils.ts               2026-12-31  # vendored shadcn ui components import WithElementRef from $lib/utils
+skeleton:vite.config.ts                 2026-12-31  # template is the SvelteKit 3 shape (kit options in vite config, ignores svelte.config.js); Thoth is on Kit 2, held
+skeleton:tsconfig.json                  2026-12-31  # extends $app/tsconfig (SvelteKit 3); Thoth is on Kit 2, held
+skeleton:stylelint.config.js            2026-12-31  # template's style rules flag 44 existing findings (40 autofixable); adopting them is a separate pass
+skeleton:.pre-commit-config.yaml        2026-12-31  # default_language_version python3.14: huginn has no usable python3.15 (pip 25 breaks on 3.15's typing), so the hook environment cannot build; restore 3.15 when the host has one
+skeleton:src-tauri/src/main.rs         2026-12-31  # comment wording only; taking it triggers the clippy hook, which cannot build FluidAudio's Swift package on huginn (corrupt SwiftPM cache)

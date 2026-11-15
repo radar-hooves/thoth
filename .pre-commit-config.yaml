@@ -1,114 +1,10 @@
-# Pre-commit hooks configuration for thoth
-
-# Install with: pip install pre-commit && pre-commit install
-# Run manually: pre-commit run --all-files
-# Update hooks: pre-commit autoupdate
+default_language_version:
+  python: python3.14
 
 # Merge commits run no gate without pre-merge-commit; changing this needs `pre-commit install` re-run.
-default_install_hook_types: [pre-commit, pre-merge-commit]
+default_install_hook_types: [pre-commit, pre-merge-commit, commit-msg]
 
 repos:
-  # ---------------------------------------------------------------------------- #
-  #                              Security Scanning                                #
-  # ---------------------------------------------------------------------------- #
-
-  # An orphaned empty `env:` key makes GitHub reject the whole workflow before
-  # any job starts: no logs, no check-run. actionlint reads it as a syntax error.
-  - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.12
-    hooks:
-      - id: actionlint
-        name: 'ci - Lint GitHub Actions workflows'
-
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.30.0
-    hooks:
-      - id: gitleaks
-        name: 'security - Detect hardcoded secrets'
-
-  - repo: local
-    hooks:
-      - id: check-pii
-        name: 'security - Detect PII (names, mobiles, personal emails)'
-        entry: household-precommit-pii
-        language: system
-        types: [text]
-
-      - id: rules-fence
-        name: 'governance - Rule content lands only at an open sunset-review sitting'
-        entry: household-precommit-rules-fence
-        language: system
-        pass_filenames: true
-        files: '^\.claude/rules/.*\.md$'
-
-      - id: check-history
-        name: 'governance - A file states what is, not what was'
-        entry: household-precommit-history
-        language: system
-        types: [text]
-
-  # ---------------------------------------------------------------------------- #
-  #                              File Validation                                  #
-  # ---------------------------------------------------------------------------- #
-
-  # ---------------------------------------------------------------------------- #
-  #                              Frontend / Design                                #
-  # ---------------------------------------------------------------------------- #
-
-  - repo: local
-    hooks:
-      - id: svelte-check
-        name: svelte-check
-        entry: pnpm check
-        language: system
-        types_or: [svelte, ts]
-        pass_filenames: false
-
-      - id: stylelint
-        name: stylelint (blocks raw colour literals)
-        entry: pnpm lint:css
-        language: system
-        types_or: [svelte, css]
-        pass_filenames: false
-
-      # Both gate on NEW findings only, against a checked-in baseline, so they
-      # never fail on the backlog that existed when they landed. Rebank with
-      # `pnpm lint:drift --baseline` / `pnpm lint:design --baseline`.
-      - id: check-ui-drift
-        name: design - Hand-rolled what @poodle64/ui already ships
-        entry: pnpm lint:drift
-        language: system
-        types_or: [svelte, ts]
-        pass_filenames: false
-
-      - id: check-design-craft
-        name: design - Craft defects no other gate can see
-        entry: pnpm lint:design
-        language: system
-        types_or: [svelte, ts, css]
-        pass_filenames: false
-
-      # The frontend had three gates and Rust had none, so `cargo fmt --all
-      # --check` — a required CI step — was the first thing to see the drift.
-      # It sat red across six commits on 02/09/2026 for thirty formatting
-      # diffs. Same command CI runs, though not necessarily the same rustfmt:
-      # CI floats to whatever `stable` is that day and there is no
-      # rust-toolchain.toml, so a rustfmt release that changes output can still
-      # part the two.
-      - id: cargo-fmt
-        name: rust - cargo fmt
-        entry: cargo fmt --manifest-path src-tauri/Cargo.toml --all
-        language: system
-        types: [rust]
-        pass_filenames: false
-
-      - id: cargo-clippy
-        name: 'rust - cargo clippy'
-        entry: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-        language: system
-        types: [rust]
-        pass_filenames: false
-
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
@@ -133,3 +29,99 @@ repos:
         name: 'filesystem - Check case sensitivity'
       - id: detect-private-key
         name: 'security - Detect private keys'
+
+  # An orphaned empty `env:` key makes GitHub reject the whole workflow before
+  # any job starts: no logs, no check-run. actionlint reads it as a syntax error.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+        name: 'ci - Lint GitHub Actions workflows'
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+        name: 'security - Detect hardcoded secrets'
+
+  - repo: local
+    hooks:
+      - id: check-pii
+        name: 'security - Detect PII (names, mobiles, personal emails)'
+        entry: household-precommit-pii
+        language: system
+        types: [text]
+
+      - id: check-history
+        name: 'governance - A file states what is, not what was'
+        entry: household-precommit-history
+        language: system
+        types: [text]
+
+      - id: rules-fence
+        name: 'governance - Rule content lands only at an open sunset-review sitting'
+        entry: household-precommit-rules-fence
+        language: system
+        pass_filenames: true
+        files: '^\.claude/rules/.*\.md$'
+        always_run: true
+
+      - id: check-handoff-tracks-work
+        name: 'governance - Handoff open items are tracked'
+        entry: household-precommit-handoff-tracking
+        language: system
+        files: '^HANDOFF\.html$'
+        pass_filenames: true
+
+      - id: check-handoff-closed-trailer
+        name: 'governance - Handoff removals name their ids'
+        entry: household-precommit-handoff-tracking --commit-msg
+        language: system
+        stages: [commit-msg]
+        always_run: true
+        pass_filenames: true
+
+      # The same commands CI runs, so a red CI is never the first to see them.
+      - id: cargo-fmt
+        name: 'rust - cargo fmt'
+        entry: cargo fmt --manifest-path src-tauri/Cargo.toml --all
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: 'rust - cargo clippy'
+        entry: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: svelte-check
+        name: 'frontend - svelte-check'
+        entry: pnpm check
+        language: system
+        types_or: [svelte, ts]
+        pass_filenames: false
+
+      - id: stylelint
+        name: 'frontend - stylelint (blocks raw colour literals)'
+        entry: pnpm lint:css
+        language: system
+        types_or: [svelte, css]
+        pass_filenames: false
+
+      # Both gate on NEW findings only, against a checked-in baseline. Rebank
+      # with `pnpm lint:drift --baseline` / `pnpm lint:design --baseline`.
+      - id: check-ui-drift
+        name: 'design - Hand-rolled what @poodle64/ui already ships'
+        entry: pnpm lint:drift
+        language: system
+        types_or: [svelte, ts]
+        pass_filenames: false
+
+      - id: check-design-craft
+        name: 'design - Craft defects no other gate can see'
+        entry: pnpm lint:design
+        language: system
+        types_or: [svelte, ts, css]
+        pass_filenames: false

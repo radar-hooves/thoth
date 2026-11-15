@@ -21,6 +21,11 @@
           };
         };
 
+        pkg = builtins.fromJSON (builtins.readFile ./package.json);
+        # The kit crates are git dependencies of one repository, so one hash
+        # covers them all; `scripts/update-kit-hash.sh` sets it from Cargo.lock.
+        kitHash = "sha256-JLbjtyEKlMMVm5Zj8yXjgOqHYbcRlIpmpyfSx9cmds0=";
+
         # Rust toolchain with Tauri prerequisites
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
           extensions = [ "rust-src" "rust-analyzer" ];
@@ -279,13 +284,8 @@
         # ---------------------------------------------------------------------
         thothPackage = rustPlatform.buildRustPackage (finalAttrs: {
           pname = "thoth";
-          # Read from tauri.conf.json rather than hardcoding: scripts/bump-version.sh
-          # only rewrites Cargo.toml, tauri.conf.json and package.json, so a literal
-          # here silently rots at every release (it sat at 2026.6.3 while the app
-          # shipped 2026.6.7, naming the store path after a version that did not
-          # match the binary). Deriving it means the two cannot disagree.
-          version =
-            (builtins.fromJSON (builtins.readFile ./src-tauri/tauri.conf.json)).version;
+          # package.json is the one source: scripts/bump-version.sh.
+          inherit (pkg) version;
           src = ./.;
 
           cargoRoot = "src-tauri";
@@ -299,12 +299,11 @@
             lockFile = ./src-tauri/Cargo.lock;
             outputHashes = {
               "fluidaudio-rs-0.10.0" = "sha256-z7c8tibtfevefrYAwh3hJM/sr/OWnbSrxjDS4Tda8+k=";
-              # The three app-factory crates share one hash, the pinned tag's source tree:
-              # nix flake prefetch "git+https://github.com/radar-hooves/app-factory?ref=refs/tags/<tag>"
-              "telemetry-0.7.0" = "sha256-JLbjtyEKlMMVm5Zj8yXjgOqHYbcRlIpmpyfSx9cmds0=";
-              "tauri-plugin-telemetry-0.3.0" = "sha256-JLbjtyEKlMMVm5Zj8yXjgOqHYbcRlIpmpyfSx9cmds0=";
-              "desktop-shell-0.4.0" = "sha256-JLbjtyEKlMMVm5Zj8yXjgOqHYbcRlIpmpyfSx9cmds0=";
-            };
+            } // builtins.listToAttrs (map
+              (c: { name = "${c.name}-${c.version}"; value = kitHash; })
+              (builtins.filter
+                (c: pkgs.lib.hasPrefix "git+https://github.com/radar-hooves/app-factory" (c.source or ""))
+                (builtins.fromTOML (builtins.readFile ./src-tauri/Cargo.lock)).package));
           };
 
           # GPU Parakeet (sherpa-onnx CUDA via SHERPA_ONNX_LIB_DIR) + Whisper (Vulkan).

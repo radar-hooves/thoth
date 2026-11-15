@@ -1,72 +1,58 @@
 #!/usr/bin/env bash
 #
-# Regenerate the pnpmDeps hash in flake.nix.
+# Regenerate flake.nix's pnpmDeps hash after pnpm-lock.yaml changes.
 #
-# WHY THIS EXISTS
+# pnpmDeps is a fixed-output derivation: Nix needs its content hash up front, a
+# lockfile change invalidates it, and nothing derives it from the lockfile the
+# way cargoLock derives Cargo's from Cargo.lock. An app's own workflow runs this
+# on a pull request and pushes the correction, where it wants a dependency bump
+# to need nobody to run Nix by hand.
 #
-# `pnpmDeps` is a fixed-output derivation: Nix needs its content hash up front,
-# so the hash has to be recorded in flake.nix. Any change to pnpm-lock.yaml
-# changes that content and invalidates it. Cargo has no equivalent problem
-# because `cargoLock.lockFile` derives everything from Cargo.lock's own
-# per-crate checksums; nixpkgs has no pnpm equivalent, so this value is the one
-# thing in the repo that a lockfile change cannot update by itself.
+# It always builds against a deliberately wrong hash first. A fixed-output path
+# is addressed by hash and name, so a store already holding the old hash's path
+# skips the fetch and reports success against a stale hash; the wrong hash has
+# no path, which forces a real fetch.
 #
-# That mattered because Renovate cannot run Nix. Every dependency PR it opened
-# arrived with a stale hash and failed `Flake eval` until a human regenerated
-# it by hand. This script is that step, so CI can do it instead of a person.
+# A flake that packages no pnpm dependencies (a first stamp's devShell-only
+# flake) has nothing to refresh.
 #
-# THE WARM-STORE TRAP
-#
-# Do not "verify" a hash by running `nix build` on a machine that has built
-# this before. A fixed-output derivation's store path is addressed by
-# hash + name, so if the path for the OLD hash is already present, Nix skips
-# the fetch entirely and reports success against a stale hash. CI, with a cold
-# store, then fails. This script always goes through a deliberately wrong hash
-# first, which forces a real fetch, because that path cannot already exist.
-#
-# Usage:
-#   scripts/update-pnpm-deps-hash.sh          # rewrite flake.nix if needed
-#   scripts/update-pnpm-deps-hash.sh --check  # exit 1 if stale, change nothing
-#
-# Exit codes:
-#   0  hash already correct, or updated (without --check)
-#   1  hash is stale (--check only)
-#   2  something went wrong
+# Usage: scripts/update-pnpm-deps-hash.sh [--check]
+# Exit:  0 correct, updated or absent · 1 stale (--check) · 2 could not run
 
 set -euo pipefail
 
-# Prefer the enclosing git worktree over the script's own location: CI runs a
-# copy of this script extracted from the base branch (see nix-check.yaml), so
-# the path it was invoked from is not necessarily inside the repo.
-if REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
-  :
-else
+# The enclosing worktree before the script's own location: CI runs the base
+# branch's copy from a file beside this one.
+if ! REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
   REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fi
 FLAKE="${REPO_ROOT}/flake.nix"
 
-# lib.fakeHash. Any value that cannot be the real one works; this is the
-# conventional one and is recognisable in a diff if the script dies midway.
+# lib.fakeHash: recognisable in a diff if the script dies midway.
 FAKE_HASH="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 
 CHECK_ONLY=0
 if [ "${1:-}" = "--check" ]; then
   CHECK_ONLY=1
 elif [ -n "${1:-}" ]; then
-  echo "unknown argument: $1" >&2
   echo "usage: $0 [--check]" >&2
   exit 2
+fi
+
+# Every edit stays inside the pnpmDeps block: a flake carries other `hash =`
+# lines (a git dependency's, the cargo outputHashes) that a file-wide
+# substitution would corrupt.
+readonly BLOCK_START='pnpmDeps = pkgs.fetchPnpmDeps {'
+
+if ! grep -qF "$BLOCK_START" "$FLAKE"; then
+  echo "flake.nix packages no pnpm dependencies; nothing to refresh."
+  exit 0
 fi
 
 if ! command -v nix >/dev/null 2>&1; then
   echo "error: nix is not on PATH" >&2
   exit 2
 fi
-
-# Restrict every edit to the pnpmDeps block. flake.nix carries other `hash =`
-# lines (the fluidaudio git dep, for one) and a repo-wide substitution would
-# silently corrupt them.
-readonly BLOCK_START='pnpmDeps = pkgs.fetchPnpmDeps {'
 
 current_hash() {
   sed -n "/${BLOCK_START}/,/};/ s|.*hash = \"\\(sha256-[^\"]*\\)\";.*|\\1|p" "$FLAKE"
@@ -78,54 +64,38 @@ set_hash() {
 
 ORIGINAL="$(current_hash)"
 if [ -z "$ORIGINAL" ]; then
-  echo "error: could not find the pnpmDeps hash in $FLAKE" >&2
-  echo "       (looked for a hash inside the '${BLOCK_START}' block)" >&2
+  echo "error: no hash inside the '${BLOCK_START}' block of $FLAKE" >&2
   exit 2
 fi
 
-# Any early exit from here on must put flake.nix back as we found it, or a
-# failed run leaves the tree with a fake hash committed.
-restore() {
-  set_hash "$ORIGINAL"
-}
-trap restore EXIT
+# Any exit from here on puts the recorded hash back, so a failed run never
+# leaves the fake one in the tree.
+trap 'set_hash "$ORIGINAL"' EXIT
 
-echo "Current pnpmDeps hash: $ORIGINAL"
-echo "Forcing a real fetch to compute the true hash..."
-
+echo "Recorded pnpmDeps hash: $ORIGINAL"
 set_hash "$FAKE_HASH"
 
-# The build is expected to fail; the hash mismatch is the payload.
-build_log="$(nix build "${REPO_ROOT}#thoth.pnpmDeps" --no-link 2>&1 || true)"
-
-ACTUAL="$(printf '%s\n' "$build_log" \
-  | sed -n 's|.*got: *\(sha256-[A-Za-z0-9+/=]*\).*|\1|p' \
-  | head -1)"
+# The build fails by design; the hash it reports is the payload.
+build_log="$(nix build "${REPO_ROOT}#default.pnpmDeps" --no-link 2>&1 || true)"
+ACTUAL="$(printf '%s\n' "$build_log" | sed -n 's|.*got: *\(sha256-[A-Za-z0-9+/=]*\).*|\1|p' | head -1)"
 
 if [ -z "$ACTUAL" ]; then
-  echo "error: could not read the computed hash from the build output." >&2
-  echo "       flake.nix has been restored to $ORIGINAL." >&2
-  echo "--- build output ---" >&2
+  echo "error: the build reported no hash; flake.nix keeps $ORIGINAL." >&2
   printf '%s\n' "$build_log" >&2
   exit 2
 fi
 
 if [ "$ACTUAL" = "$ORIGINAL" ]; then
-  # restore() has already put the original back, which is the correct value.
-  echo "Hash is already correct: $ORIGINAL"
+  echo "The hash is correct."
   exit 0
 fi
 
-echo "Hash is stale."
-echo "  recorded: $ORIGINAL"
-echo "  actual:   $ACTUAL"
-
+echo "The hash is stale: recorded $ORIGINAL, actual $ACTUAL."
 if [ "$CHECK_ONLY" -eq 1 ]; then
   echo "Run scripts/update-pnpm-deps-hash.sh to fix it." >&2
   exit 1
 fi
 
-# Write the real hash and stop the trap from reverting it.
 trap - EXIT
 set_hash "$ACTUAL"
-echo "Updated $FLAKE to $ACTUAL"
+echo "Updated $FLAKE to $ACTUAL."

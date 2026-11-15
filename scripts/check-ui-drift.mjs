@@ -11,15 +11,18 @@
  *
  * `canonical-app-shape.md` makes this gate binding on every full-stack app.
  *
- * THREE RULES:
+ * FOUR RULES:
  *   1. vendored-copy — a local component whose name matches one @poodle64/ui
- *      ships, and which does not delegate to it.
- *   2. hand-rolled-page-title — a route writing its own <h1> instead of
- *      composing the shared PageHeader.
+ *      ships, and which does not delegate to it; or a `components/ui/`
+ *      primitive the package has since shipped.
+ *   2. hand-rolled-page-title — a route drawing its own title (an <h1> or
+ *      PageHeader) over the rail's, which names the page.
  *   3. surface-brief-divergence — a route composing a package component its
  *      surface brief does not name. Inert until the app grows
  *      `docs/product/surfaces/`; surface briefs are optional, so an app
  *      without them never sees this rule fire.
+ *   4. viewport-variants — the app's count of viewport breakpoint variants
+ *      (`hidden md:flex`, `lg:grid-cols-3`) rising above its banked count.
  *
  * Usage:  node scripts/check-ui-drift.mjs [--json] [--baseline]
  * Exit:   0 clean · 1 new drift · 2 could not run
@@ -95,17 +98,40 @@ const findings = [];
 // the copy grows a prop, the shared one grows a different one, and the two
 // diverge silently because nothing compares them.
 //
-// `components/ui/` is excluded: those are this app's own shadcn primitives for
-// things the package genuinely does not ship (chart, form, sheet, sidebar).
-//
-// A local file that IMPORTS the shipped component of the same name is excluded
-// too, and that distinction is the rule rather than a hole in it: a DELEGATING
+// A local file that IMPORTS the shipped component of the same name is excluded,
+// and that distinction is the rule rather than a hole in it: a DELEGATING
 // composition is the opposite of a fork — a thin wrapper that adapts the
 // package's API to a call shape this app repeats. A genuine fork cannot pass
 // the test, because it does not import the thing it forked.
+//
+// `components/ui/<name>/` is judged as a whole instead: it holds a shadcn
+// primitive this app vendored because the package did not ship <name>, and
+// that reason expires the day the package does. A primitive is the package's
+// to own, so there is no delegating exception; a part the local copy has and
+// the package lacks is a need filed with the package. Measured 23/09/2026: four
+// apps still carried `form` and a fifth `dropdown-menu`, `popover` and
+// `switch`, all shipped since, while this rule skipped the directory entirely.
 // ---------------------------------------------------------------------------
+const UI_DIR = `${path.sep}components${path.sep}ui${path.sep}`;
+const vendoredPrimitives = new Set();
+for (const f of files) {
+	const at = f.indexOf(UI_DIR);
+	if (at === -1) continue;
+	const [name, ...rest] = f.slice(at + UI_DIR.length).split(path.sep);
+	if (rest.length && shipped.has(name))
+		vendoredPrimitives.add(f.slice(0, at + UI_DIR.length) + name);
+}
+for (const dir of vendoredPrimitives) {
+	const name = path.basename(dir);
+	findings.push({
+		rule: 'vendored-copy',
+		file: rel(dir),
+		detail: `local ${name} primitive duplicates @poodle64/ui/${name}, which ships it now; import the shipped one`
+	});
+}
+
 for (const f of files.filter((f) => f.endsWith('.svelte'))) {
-	if (f.includes(`${path.sep}components${path.sep}ui${path.sep}`)) continue;
+	if (f.includes(UI_DIR)) continue;
 	const name = path.basename(f, '.svelte');
 	if (!shipped.has(kebab(name))) continue;
 	const src = readFileSync(f, 'utf8');
@@ -118,30 +144,27 @@ for (const f of files.filter((f) => f.endsWith('.svelte'))) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. A route page that writes its own <h1> instead of composing PageHeader.
+// 2. A route page that draws its own title.
 //
-// Each hand-rolled title looks perfectly reasonable in its own file; the
-// divergence is only visible across files, which is why a human never catches
-// it and a script always does.
-//
-// No route type is exempt here, on purpose. A route that legitimately owns its
-// own title treatment (an immersive surface rendering without the workbench
-// shell) banks the finding in .ui-drift-baseline.json; a whole class of such
-// routes is argued as an app-local exception with its reason recorded — never
-// inherited from another app.
+// Under the one shell the rail names the
+// page: the breadcrumbs' last crumb is the title and the shell writes the one
+// hidden <h1>. A page that writes an <h1>, or composes PageHeader (which draws
+// one, and a trail, over the rail's), draws a second title. A section heading
+// (<h2>, <h3>) is the page's own content and is right; the lead sentence is
+// PageLead's. Children are read one level deep, as rule 3 reads them.
 // ---------------------------------------------------------------------------
+const H1 = /<h1[\s>]/;
+const PAGE_HEADER = /<PageHeader[\s>/]/;
+
 for (const f of files.filter((f) => path.basename(f) === '+page.svelte')) {
 	const src = readFileSync(f, 'utf8');
-	// Deliberately NOT "…and does not import PageHeader": a page that swapped its
-	// PageHeader back for a raw <h1> while leaving the now-unused import behind
-	// would satisfy that condition. PageHeader emits the page's <h1> itself, so a
-	// route writing its own is wrong either way — it has abandoned the shared
-	// treatment, or it has shipped two h1s.
-	if (/<h1[\s>]/.test(src)) {
+	const drawn = [src, ...childComponentFiles(src).map((c) => readFileSync(c, 'utf8'))];
+	if (drawn.some((s) => H1.test(s) || PAGE_HEADER.test(s))) {
 		findings.push({
 			rule: 'hand-rolled-page-title',
 			file: rel(f),
-			detail: 'writes its own <h1>; compose PageHeader so every route shares one title treatment'
+			detail:
+				'draws its own title (an <h1> or PageHeader); the rail names the page from `title` in the route load data. Lead with PageLead, put actions in ShellActions'
 		});
 	}
 }
@@ -181,6 +204,7 @@ const PRIMITIVES = new Set([
 	'progress',
 	'select',
 	'separator',
+	'sheet',
 	'skeleton',
 	'sonner',
 	'switch',
@@ -254,20 +278,18 @@ function composedImports(src) {
 
 /**
  * A page's own presentation frequently lives one level down, not in the route
- * file itself. Only direct children (`$components`/`$lib` imports resolving to
+ * file itself. Only direct children (`#lib` imports resolving to
  * a `.svelte` file) are followed; a grandchild is out of scope, matching "one
  * level deep" in the brief contract.
  */
 function childComponentFiles(pageSrc) {
 	const out = [];
-	const importRe = /from\s+['"](\$components\/[^'"]+|\$lib\/[^'"]+)['"]/g;
+	const importRe = /from\s+['"](#lib\/[^'"]+)['"]/g;
 	let m;
 	while ((m = importRe.exec(pageSrc))) {
 		const spec = m[1];
 		if (!spec.endsWith('.svelte')) continue;
-		const relPath = spec.startsWith('$components/')
-			? spec.replace('$components/', 'lib/components/')
-			: spec.replace('$lib/', 'lib/');
+		const relPath = spec.replace('#lib/', 'lib/');
 		const full = path.join(SRC, relPath);
 		if (existsSync(full)) out.push(full);
 	}
@@ -311,6 +333,24 @@ for (const surfaceFile of surfaceFiles) {
 }
 
 // ---------------------------------------------------------------------------
+// 4. Viewport variants: one count per app, which only falls.
+//
+// A route renders inside the shell's content panel, which beside a sidebar or
+// a second column runs far narrower than the window. A viewport breakpoint
+// (`hidden lg:table-cell`, `md:grid-cols-3`) fires on the window, so it reveals
+// or splits content in a panel a third that size. A layout inside the shell
+// gates on its panel with a container query instead (`@container` on the
+// wrapper, `@lg:` on the cell), which is not counted. The first run banks the
+// app's count as `viewport-variants:<n>`; from then on it may fall, and each
+// fall is banked, but it never rises.
+// ---------------------------------------------------------------------------
+const VIEWPORT_VARIANT =
+	/(?<![\w@-])(?:(?:max-|min-)?(?:sm|md|lg|xl|2xl)|(?:max|min)-\[[^\]\s]+\]):(?=[!\w[-])/g;
+const viewportVariants = files
+	.filter((f) => f.endsWith('.svelte'))
+	.reduce((n, f) => n + (readFileSync(f, 'utf8').match(VIEWPORT_VARIANT)?.length ?? 0), 0);
+
+// ---------------------------------------------------------------------------
 // Informational: shipped components this app never imports.
 //
 // NOT a failure — plenty are legitimately unneeded. It is printed so the list
@@ -334,8 +374,11 @@ const unused = [...shipped]
 // there is nothing to grandfather. It is in copier's `_skip_if_exists`, so
 // `copier update` never wipes the debt an app has since banked.
 //
-// The baseline is a debt register, not an amnesty: `--baseline` rewrites it, so
-// shrinking it is a visible diff and growing it needs a deliberate act.
+// The baseline is a debt register, not an amnesty, and it only shrinks:
+// `--baseline` drops what has been fixed and banks a fall in the viewport
+// count, but never banks a fresh finding or a rise. A finding the app must keep
+// is added by hand, a diff a reviewer reads. Only an app with no baseline file
+// at all banks its whole backlog with `--baseline`, once.
 // ---------------------------------------------------------------------------
 //
 // The key is `${rule}:${file}` — deliberately NOT a line number or a selector,
@@ -356,17 +399,45 @@ const key = (f) =>
 		? `${f.rule}:${f.file}:${f.component}`
 		: `${f.rule}:${f.file}`;
 
-if (process.argv.includes('--baseline')) {
-	writeFileSync(BASELINE, JSON.stringify([...new Set(findings.map(key))].sort(), null, 2) + '\n');
-	console.log(
-		`Baseline written: ${findings.length} known finding(s) in ${path.relative(FRONTEND_ROOT, BASELINE)}`
-	);
-	process.exit(0);
-}
-
-const known = new Set(existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : []);
+const VIEWPORT_KEY = 'viewport-variants:';
+const BASELINE_NAME = path.relative(FRONTEND_ROOT, BASELINE);
+const hasBaseline = existsSync(BASELINE);
+const known = new Set(hasBaseline ? JSON.parse(readFileSync(BASELINE, 'utf8')) : []);
+const viewportEntry = [...known].find((k) => k.startsWith(VIEWPORT_KEY));
+const viewportBanked =
+	viewportEntry === undefined ? undefined : Number(viewportEntry.slice(VIEWPORT_KEY.length));
+known.delete(viewportEntry);
 const fresh = findings.filter((f) => !known.has(key(f)));
 const fixed = [...known].filter((k) => !findings.some((f) => key(f) === k));
+
+const writeBaseline = (keys, viewport) =>
+	writeFileSync(
+		BASELINE,
+		JSON.stringify([...new Set(keys), `${VIEWPORT_KEY}${viewport}`].sort(), null, 2) + '\n'
+	);
+
+if (process.argv.includes('--baseline')) {
+	const keep = findings.map(key).filter((k) => !hasBaseline || known.has(k));
+	const viewport = Math.min(viewportVariants, viewportBanked ?? viewportVariants);
+	writeBaseline(keep, viewport);
+	console.log(
+		`Baseline written: ${new Set(keep).size} known finding(s) and ${viewport} viewport variant(s) in ${BASELINE_NAME}`
+	);
+	const unbanked = [
+		...(hasBaseline ? fresh : []).map((f) => `${f.file} [${f.rule}]`),
+		...(viewportVariants > viewport ? [`${viewportVariants - viewport} viewport variant(s)`] : [])
+	];
+	for (const u of unbanked) console.error(`Not banked, fix it: ${u}`);
+	process.exit(unbanked.length ? 1 : 0);
+}
+
+const viewportProblem =
+	viewportBanked === undefined || viewportVariants === viewportBanked
+		? null
+		: viewportVariants > viewportBanked
+			? `${viewportVariants} viewport variants against ${viewportBanked} banked; inside the shell, gate a layout on its panel with a container query (@container, @lg:), not a viewport breakpoint`
+			: `${viewportVariants} viewport variants against ${viewportBanked} banked; rerun with --baseline to bank the fall`;
+const failed = fresh.length > 0 || viewportProblem !== null;
 
 if (process.argv.includes('--json')) {
 	console.log(
@@ -375,6 +446,7 @@ if (process.argv.includes('--json')) {
 				fresh,
 				grandfathered: findings.length - fresh.length,
 				fixed,
+				viewportVariants: { count: viewportVariants, banked: viewportBanked ?? null },
 				unusedShippedComponents: unused,
 				staleBriefs
 			},
@@ -382,15 +454,25 @@ if (process.argv.includes('--json')) {
 			2
 		)
 	);
-	process.exit(fresh.length ? 1 : 0);
+	process.exit(failed ? 1 : 0);
+}
+
+if (viewportBanked === undefined) {
+	writeBaseline(known, viewportVariants);
+	console.log(
+		`Banked ${viewportVariants} viewport variant(s) in ${BASELINE_NAME} on this first run; commit it.\n`
+	);
 }
 
 for (const f of fresh) console.error(`${f.file}\n  [${f.rule}] ${f.detail}`);
+if (viewportProblem) console.error(`${rel(SRC)}\n  [viewport-variants] ${viewportProblem}`);
 if (fresh.length) {
 	console.error(`\n${fresh.length} NEW design-system drift finding(s).`);
 	console.error('Compose what the package ships; a local copy cannot receive an upstream fix.');
-} else {
-	console.log(`No new design-system drift. (${known.size} known, grandfathered.)`);
+} else if (!viewportProblem) {
+	console.log(
+		`No new design-system drift. (${known.size} known, grandfathered; ${viewportVariants} viewport variant(s).)`
+	);
 }
 if (fixed.length) {
 	console.log(`\n${fixed.length} baseline finding(s) fixed — rerun with --baseline to bank it:`);
@@ -407,4 +489,4 @@ if (staleBriefs.length) {
 	console.log('  A brief for a route that has gone is a decision nobody is reading any more.');
 }
 
-process.exit(fresh.length ? 1 : 0);
+process.exit(failed ? 1 : 0);
