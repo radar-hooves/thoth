@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Thoth: open work</title>
-<meta name="description" content="2026.11.7 to publish on his word; macintosh-mandy to check after; Settings restructure to design in Penpot (#207).">
+<meta name="description" content="Holistic review of Thoth and Bragi with the factory (#208): three decisions for him; packages landing; release after.">
 <style>
 /* A shift-handover sheet: what waits on him, by when, in columns that fill the width; then each thread folded to its state line. */
 :root {
@@ -140,9 +140,17 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <section class="when today">
 <h3>Today</h3>
 <div class="asks">
-<article class="ask" data-id="publish-2026-11-7" data-kind="decide" data-untracked="release go-ahead, put to him in chat 15/11">
-<h4>Publish Thoth 2026.11.7 once main's checks pass?</h4>
-<p>It carries the two-permission rework, the instant record key, the History and hands-free settings fix, the UX audit's small fixes and the menu bar fix. Publishing pushes it to every Mac through Thoth's updater, and it is the only way macintosh-mandy gets it. A yes lets the session wait on CI and tag the release when it goes green.</p>
+<article class="ask" data-id="bragi-updater-public" data-kind="decide" data-track="#208 radar-hooves/bragi#244">
+<h4>How should Bragi's new versions be downloadable, given its repo is private?</h4>
+<p>The factory now gives every desktop app a self-updater. It fetches <code>latest.json</code> and the signed installer with no credential, and GitHub refuses that for a private repo. There are three ways round it. Make Bragi public: the runbook in bragi#244 is ready, and you and the co-contributor pick the day. Publish only Bragi's signed installers to a public releases repo: one more repo, plus a write token in the release job. Ship a GitHub token inside the app: not recommended, because anyone holding the app can extract it. The recommendation is to go public, which needs nothing new. Bragi's updater is built either way; it reaches the Macs once you choose.</p>
+</article>
+<article class="ask" data-id="thoth-not-worth-it" data-kind="decide" data-track="#208">
+<h4>Close eight Thoth feature ideas as not worth building?</h4>
+<p>Working the backlog to zero, these eight were judged to cost more than they give. Voice editing by phrases such as "scratch that" (#87): idea only, no design. A picker over past transcriptions (#131): Copy Last and History already cover it. A broader model catalogue with streaming (#182), and the live transcript overlay that depends on it (#189). Multilingual and translate (#184): English-only is today's scope, and no household speaker has asked. Muting other audio while recording (#186). Detecting macOS Secure Input (#187): no reproduction yet. Restoring the clipboard on paste receipt rather than after a fixed second (#188): the fixed second has not failed anyone. A yes closes all eight, each with its reason. Name any you want kept and it gets built.</p>
+</article>
+<article class="ask" data-id="unreached-features" data-kind="decide" data-track="#208">
+<h4>Build or drop five features the docs promise but no screen ever reached?</h4>
+<p>Thoth's product docs describe three: clipboard history, the clipboard as context for AI enhancement, and typing the text instead of pasting it. Bragi stores a ReplayGain setting it never applies, and has a stop-with-fade it never triggers. The unreachable code for Thoth's first two was removed today, since nothing could call it. Typing insertion is hard-coded off. Bragi's two are kept until you say. Building any of them adds a control to Settings, designed in Penpot first. Dropping one removes its lines from the docs.</p>
 </article>
 <article class="ask" data-id="reopen-shows-window" data-kind="read" data-track="#206">
 <h4>Opening Thoth from Spotlight should bring its window back</h4>
@@ -155,21 +163,38 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <section class="threads" aria-labelledby="threads">
 <h2 id="threads">Threads</h2>
 
-<details class="thread" id="macos-permissions" open>
-<summary><h3>macOS permissions and the record key</h3><span class="state">On main through 834bef4 and drive-tested on huginn 15/11: two permissions kept across reinstalls, the record key instant on rapid taps. Version 2026.11.7, not yet tagged.</span></summary>
-<p class="next" data-id="release-2026-11-7" data-untracked="release step, no issue">On his yes, once main's <code>change</code> run on the head of main is green, <code>git tag -a v2026.11.7 -m "Release 2026.11.7"</code> on it and push the tag; the release workflow builds macOS on huginn's runner and publishes. This ships the tray fix too.</p>
+<details class="thread" id="holistic-review" open>
+<summary><h3>Holistic review: Thoth and Bragi as one cloth, with the factory</h3><span class="state">Verdict posted on #208 (15/11): Thoth refactor, Bragi carry on, factory converge. Thirteen Thoth fixes landed; packages in flight in all three repos.</span></summary>
+<p class="next" data-id="review-packages" data-track="#208">Land, one at a time, each read as our own diff:<br>
+• Thoth's structural clean-up, from the implementer in this checkout;<br>
+• Bragi's dead-code branch (<code>foreman/wt-502706d7</code>) once its <code>change</code> run is green, then bragi#257's branch on top of it;<br>
+• the factory lane for #135, #136, #137 and #139.<br>
+Then tag factory v2026.11.53 on a green self-test, then the next Thoth packages: one settings contract (<code>patch_config</code>), then pooled SQLite with WAL.</p>
 <ul class="items">
-<li data-id="settings-restructure-penpot" data-track="#207">The 08/10 UX audit's pane restructure (History, Insights, Transcribe out of Settings; Overview's switches into General; Integrations behind Advanced) is designed in Penpot and shown to him as before/after before any code. Not part of 2026.11.7.</li>
-<li data-id="mandy-permissions-check" data-untracked="waits on the release and on her Mac being awake">macintosh-mandy: update to 2026.11.7, then read <code>get_system</code>'s <code>permissions</code> over SSH (her Thoth's MCP) or the <code>permissions</code> event in Loki, and dictate once. On 15/11 her sshd reset every connection from huginn, direct and through atlas; huginn holds no ARP entry for 10.0.1.20, so she was most likely asleep or off the network.</li>
+<li data-id="review-writeup" data-track="#208">The write-up is <code>docs/research/2026-11-15-holistic-review.md</code> (gitignored, local to huginn's checkout), with the three reads beside it. Keep its findings tables current as packages land.</li>
+<li data-id="bragi-updater-adopt" data-track="radar-hooves/app-factory#133">Bragi adopts the factory updater once its public download path is chosen: mint its own keypair into repo secrets, take the by-hand edits in the factory's <code>docs/development/desktop-updater.md</code>, release, and install that first updater build by hand once on each Mac.</li>
+<li data-id="thoth-updater-converge" data-track="radar-hooves/app-factory#133">Thoth converges on the factory updater: keep its public key and secrets, delete <code>src/lib/stores/updater.svelte.ts</code> and its own <code>report_update_check</code>, and call the kit.</li>
+<li data-id="apps-become-stamps" data-track="radar-hooves/app-factory#138">Both apps become stamps of the desktop skeleton, so factory changes reach them. Thoth's <code>.canonical-exceptions:73</code> reason ("no desktop archetype") is false today.</li>
+<li data-id="public-pipeline" data-track="radar-hooves/master-project#460">Thoth carries a 4,600-line copy of master's change pipeline because it is public; master's answer decides whether the copy can go.</li>
+<li data-id="release-2026-11-7" data-track="#208">His ruling of 15/11 (recorded on #208): publish only once the review is worked through. Then, on a green <code>change</code> run at the head of main, bump with <code>scripts/bump-version.sh</code> if the month moved, update CHANGELOG, tag, push the tag.</li>
+<li data-id="mandy-permissions-check" data-untracked="waits on the release">macintosh-mandy is back online (his word, 15/11). After the release, update her Thoth and read <code>get_system</code>'s <code>permissions</code> over SSH (her Thoth's MCP), or the <code>permissions</code> event in Loki, and dictate once.</li>
+<li data-id="ci-rerun-rule" data-untracked="own slip, noted so it is not repeated">A failed main run is never re-run (<code>rules-library/fleet/ci.md</code>): fix forward or dispatch <code>change</code> with <code>roll</code>. On 15/11 this session re-ran one after a runner shutdown on titan.</li>
+</ul>
+</details>
+
+<details class="thread" id="macos-permissions">
+<summary><h3>macOS permissions and the record key</h3><span class="state">On main and drive-tested on huginn 15/11: two permissions kept across reinstalls, the record key instant on rapid taps. Ships with the release above.</span></summary>
+<ul class="items">
+<li data-id="settings-restructure-penpot" data-track="#207">The 08/10 UX audit's pane restructure (History, Insights, Transcribe out of Settings; Overview's switches into General; Integrations behind Advanced), onto the factory's <code>SettingsShell</code> as Bragi is, designed in Penpot and shown to him before and after any code.</li>
 <li data-id="nix-check-keep" data-untracked="decision recorded here for master's handoff item">Master asked Thoth's session to keep or delete <code>nix-check.yaml</code>: keep. It refreshes the <code>pnpmDeps</code> hash on pull requests, which the change pipeline does not.</li>
 <li data-id="pre-27-capture" data-untracked="no pre-27 Mac in the fleet to test on">On macOS before 27, recording a shortcut with an ordinary letter asks for Input Monitoring just in time (<code>ensure_listen_access</code>). Unexercised: every household Mac read so far runs 27.</li>
 </ul>
 </details>
 
 <details class="thread" id="tray-missing">
-<summary><h3>Menu bar icon missing, window unreachable</h3><span class="state">Fixed on main and installed on huginn; ships in 2026.11.7 (see the permissions thread).</span></summary>
+<summary><h3>Menu bar icon missing, window unreachable</h3><span class="state">Fixed on main and installed on huginn; ships with the release.</span></summary>
 <ul class="items">
-<li data-id="tray-guard-invisible" data-track="#206">The tray failure was invisible: the app-factory desktop-shell <code>guard_tray</code> logs only locally, so nothing reached Loki. Raise this with app-factory.</li>
+<li data-id="tray-guard-invisible" data-track="#206 radar-hooves/app-factory#139">The tray failure was invisible: <code>guard_tray</code> logs only locally. Filed as app-factory#139, in the factory lane now.</li>
 </ul>
 </details>
 
