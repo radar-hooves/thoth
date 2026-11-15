@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::OnceLock;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
@@ -82,14 +82,25 @@ pub(crate) enum Edge {
     Release,
 }
 
-/// Whether a release should start a recording action at all.
+/// How long a press must be held, in tap-or-hold mode, for its release to stop
+/// the recording; a shorter press is a tap and latches it (#185, the 300 ms
+/// default other dictation tools use).
+const TAP_OR_HOLD_THRESHOLD: Duration = Duration::from_millis(300);
+
+/// Whether a release should stop a recording at all.
 ///
 /// Releases are dispatched unconditionally by the transports and filtered
-/// here. Two conditions, and both matter: the mode has to be hold-to-record,
-/// and it has to be a recording shortcut — releasing the copy-last or
-/// toggle-enhancement key must not do it a second time.
-pub fn release_acts(mode: RecordingMode, shortcut_id: &str) -> bool {
-    mode == RecordingMode::HoldToRecord && is_recording_shortcut(shortcut_id)
+/// here. Two conditions, and both matter: the mode has to act on a release
+/// (hold-to-record always; tap-or-hold only after a hold, `held` being how long
+/// the key was down), and it has to be a recording shortcut — releasing the
+/// copy-last or toggle-enhancement key must not do it a second time.
+pub fn release_acts(mode: RecordingMode, shortcut_id: &str, held: Option<Duration>) -> bool {
+    is_recording_shortcut(shortcut_id)
+        && match mode {
+            RecordingMode::HoldToRecord => true,
+            RecordingMode::TapOrHold => held.is_some_and(|h| h >= TAP_OR_HOLD_THRESHOLD),
+            RecordingMode::Toggle | RecordingMode::HandsFree => false,
+        }
 }
 
 /// The debounce map key for one shortcut's one edge.
@@ -118,7 +129,12 @@ pub(crate) fn dispatch_shortcut_action<R: Runtime>(
         let mode = crate::config::get_config()
             .map(|c| c.shortcuts.recording_mode)
             .unwrap_or_default();
-        if !release_acts(mode, shortcut_id) {
+        let held = get_manager()
+            .read()
+            .last_press_times
+            .get(shortcut_id)
+            .map(Instant::elapsed);
+        if !release_acts(mode, shortcut_id, held) {
             tracing::debug!(
                 "Shortcut released: {} (no action in {:?})",
                 shortcut_id,
@@ -433,18 +449,36 @@ mod tests {
         assert_eq!(deserialised.is_enabled, info.is_enabled);
     }
 
-    /// Hold-to-record is the ONLY mode that acts on a key release. Toggle
-    /// acting on one would stop the recording the same press just started.
+    /// Without a hold, hold-to-record is the only mode that acts on a key
+    /// release. Toggle acting on one would stop the recording the same press
+    /// just started.
     #[test]
-    fn only_hold_to_record_acts_on_a_release() {
+    fn without_a_hold_only_hold_to_record_acts_on_a_release() {
         for id in [
             shortcut_ids::TOGGLE_RECORDING,
             shortcut_ids::TOGGLE_RECORDING_ALT,
         ] {
-            assert!(release_acts(RecordingMode::HoldToRecord, id), "{id}");
-            assert!(!release_acts(RecordingMode::Toggle, id), "{id}");
-            assert!(!release_acts(RecordingMode::HandsFree, id), "{id}");
+            assert!(release_acts(RecordingMode::HoldToRecord, id, None), "{id}");
+            assert!(!release_acts(RecordingMode::Toggle, id, None), "{id}");
+            assert!(!release_acts(RecordingMode::HandsFree, id, None), "{id}");
         }
+    }
+
+    /// Tap-or-hold acts on a release only after a hold: a tap latches the
+    /// recording until the next press, and an unknown hold is a tap.
+    #[test]
+    fn tap_or_hold_stops_on_release_only_after_a_hold() {
+        let id = shortcut_ids::TOGGLE_RECORDING;
+        let mode = RecordingMode::TapOrHold;
+        assert!(!release_acts(mode, id, Some(Duration::from_millis(120))));
+        assert!(!release_acts(mode, id, None));
+        assert!(release_acts(mode, id, Some(TAP_OR_HOLD_THRESHOLD)));
+        assert!(release_acts(mode, id, Some(Duration::from_secs(4))));
+        assert!(!release_acts(
+            mode,
+            shortcut_ids::COPY_LAST_TRANSCRIPTION,
+            Some(Duration::from_secs(4))
+        ));
     }
 
     /// Releasing a non-recording shortcut must do nothing in any mode —
@@ -455,8 +489,8 @@ mod tests {
             shortcut_ids::COPY_LAST_TRANSCRIPTION,
             shortcut_ids::TOGGLE_ENHANCEMENT,
         ] {
-            assert!(!release_acts(RecordingMode::HoldToRecord, id), "{id}");
-            assert!(!release_acts(RecordingMode::Toggle, id), "{id}");
+            assert!(!release_acts(RecordingMode::HoldToRecord, id, None), "{id}");
+            assert!(!release_acts(RecordingMode::Toggle, id, None), "{id}");
         }
     }
 

@@ -341,6 +341,10 @@ pub enum RecordingMode {
     /// Hold to record: recording runs for exactly as long as the key is held
     /// (#111). The classic push-to-talk.
     HoldToRecord,
+    /// Tap or hold (#185): a press starts recording; a tap latches it until the
+    /// next press, and a hold past the threshold stops it on release. Where a
+    /// transport sends no release (Hyprland's FIFO) it behaves as Toggle.
+    TapOrHold,
 }
 
 /// Bounds on `hands_free_silence_secs`.

@@ -238,6 +238,11 @@
       label: 'Hold to record',
       hint: 'Records for exactly as long as you hold the key',
     },
+    {
+      value: 'tap_or_hold',
+      label: 'Tap or hold',
+      hint: 'Tap to start and tap again to stop, or hold to talk and let go to stop',
+    },
   ];
 
   /**
