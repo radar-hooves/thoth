@@ -157,6 +157,7 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <ul class="items">
 <li data-id="mandy-permissions-check" data-untracked="waits on the release and on her Mac being awake">macintosh-mandy: update to 2026.11.7, then read <code>get_system</code>'s <code>permissions</code> over SSH (her Thoth's MCP) or the <code>permissions</code> event in Loki, and dictate once. On 15/11 her sshd reset every connection from huginn, direct and through atlas; huginn holds no ARP entry for 10.0.1.20, so she was most likely asleep or off the network.</li>
 <li data-id="tcc-probe-cleanup" data-untracked="local scratch, no issue">Delete the throwaway <code>TCCProbe.app</code> from <code>~/Applications</code> on huginn (its privacy rows are already cleared).</li>
+<li data-id="nix-check-keep" data-untracked="decision recorded here for master's handoff item">Master asked Thoth's session to keep or delete <code>nix-check.yaml</code>: keep. It refreshes the <code>pnpmDeps</code> hash on pull requests, which the change pipeline does not.</li>
 <li data-id="pre-27-capture" data-untracked="no pre-27 Mac in the fleet to test on">On macOS before 27, recording a shortcut with an ordinary letter asks for Input Monitoring just in time (<code>ensure_listen_access</code>). Unexercised: every household Mac read so far runs 27.</li>
 </ul>
 </details>

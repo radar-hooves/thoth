@@ -122,6 +122,8 @@
   let cruftLoaded = $state(false);
   let cruftSelectedIds = $state(new Set<string>());
   let quarantineConfirm = $state(false);
+  /** Trash entry awaiting confirmation of permanent deletion. */
+  let purgeConfirmId = $state<string | null>(null);
 
   let trashEntries = $state<TrashEntry[]>([]);
   let trashOpen = $state(false);
@@ -831,7 +833,7 @@
                       <Button
                         variant="ghost"
                         size="sm"
-                        onclick={() => handlePurge(entry.id)}
+                        onclick={() => (purgeConfirmId = entry.id)}
                         class="h-6 text-[11px] text-destructive hover:text-destructive hover:bg-destructive/10"
                         title="Delete permanently"
                       >
@@ -909,6 +911,36 @@
       <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
       <AlertDialog.Action onclick={confirmQuarantine} variant="destructive">
         Move to Trash
+      </AlertDialog.Action>
+    </AlertDialog.Footer>
+  </AlertDialog.Content>
+</AlertDialog.Root>
+
+<!-- Permanent delete confirm dialog -->
+<AlertDialog.Root
+  open={purgeConfirmId !== null}
+  onOpenChange={(open) => {
+    if (!open) purgeConfirmId = null;
+  }}
+>
+  <AlertDialog.Content>
+    <AlertDialog.Header>
+      <AlertDialog.Title>Delete this recording permanently?</AlertDialog.Title>
+      <AlertDialog.Description>
+        Its audio and transcription are removed for good; this cannot be undone.
+      </AlertDialog.Description>
+    </AlertDialog.Header>
+    <AlertDialog.Footer>
+      <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+      <AlertDialog.Action
+        variant="destructive"
+        onclick={() => {
+          const id = purgeConfirmId;
+          purgeConfirmId = null;
+          if (id) handlePurge(id);
+        }}
+      >
+        Delete permanently
       </AlertDialog.Action>
     </AlertDialog.Footer>
   </AlertDialog.Content>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
+  import { toast } from 'svelte-sonner';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { onMount } from 'svelte';
   import { Button } from '@poodle64/ui/button';
@@ -102,7 +103,9 @@
             await invoke('init_transcription', { modelPath: modelDir });
           }
         } catch (e) {
-          console.warn('[ModelManager] Failed to initialise transcription after download:', e);
+          toast.error('Model downloaded but failed to load', {
+            description: e instanceof Error ? e.message : String(e),
+          });
         }
       }
     });

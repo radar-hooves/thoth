@@ -228,7 +228,9 @@
     // intentional clear works), so we must not call it on an untouched blur.
     if (!apiKeyDirty) return;
     apiKeyDirty = false;
-    await configStore.setEnhancementApiKey(configStore.config.enhancement.apiKey);
+    if (!(await configStore.setEnhancementApiKey(configStore.config.enhancement.apiKey))) {
+      toast.error('Failed to save API key', { description: configStore.error ?? undefined });
+    }
   }
 
   function handleOpenaiCompatModelInput(event: Event): void {
@@ -337,7 +339,8 @@
         <div class="flex flex-col gap-0.5">
           <Label class="text-sm font-medium">Backend</Label>
           <p class="text-xs text-muted-foreground">
-            Choose your local AI server. Both run entirely on your machine — no cloud required.
+            Ollama runs on this Mac. An OpenAI-compatible server goes wherever its URL points,
+            local or remote.
           </p>
         </div>
         <Select.Root

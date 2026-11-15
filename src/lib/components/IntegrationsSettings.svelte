@@ -186,7 +186,9 @@
       endpoint = next.fromEnv ? next.endpoint : next.savedEndpoint;
       headersHelper = next.fromEnv ? next.headersHelper : next.savedHeadersHelper;
     } catch (e) {
-      console.error('Failed to load telemetry settings:', e);
+      toast.error('Failed to load telemetry settings', {
+        description: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
@@ -463,7 +465,7 @@
         <Input
           type="url"
           bind:value={endpoint}
-          disabled={telemetry?.fromEnv ?? false}
+          disabled={!telemetry || telemetry.fromEnv}
           placeholder="https://otlp.example"
           class="font-mono text-xs mt-1"
           aria-label="Telemetry endpoint"
@@ -478,7 +480,7 @@
         </span>
         <Input
           bind:value={headersHelper}
-          disabled={telemetry?.fromEnv ?? false}
+          disabled={!telemetry || telemetry.fromEnv}
           placeholder="a command that prints JSON headers"
           class="font-mono text-xs mt-1"
           aria-label="Authorisation helper command"
@@ -513,7 +515,11 @@
           {isTesting ? 'Testing…' : 'Test'}
         </Button>
         {#if !telemetry?.fromEnv}
-          <Button size="sm" onclick={handleSaveTelemetry} disabled={isSavingTelemetry}>
+          <Button
+            size="sm"
+            onclick={handleSaveTelemetry}
+            disabled={isSavingTelemetry || !telemetry}
+          >
             {isSavingTelemetry ? 'Saving…' : 'Save'}
           </Button>
         {/if}

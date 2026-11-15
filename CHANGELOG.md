@@ -16,6 +16,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Deleting a recording from the Trash asks first.** Permanent delete in Insights fired on one click, beside a reversible action that asked.
+- **Failures you could not see now say so.** A failed microphone test, API-key save or model load after download shows a message; Storage's delete actions confirm what they did; Integrations' telemetry fields stay locked until they have loaded.
+- The AI Enhancement backend text no longer says "no cloud required" beside an OpenAI-compatible server that can point anywhere.
 - **The menu bar icon is back for right-Shift users.** A bare-modifier record key stopped the tray menu from building, and with the Dock icon off nothing could show the window. Opening Thoth while it runs now shows its window.
 
 ## [2026.11.6] - 2026-11-14

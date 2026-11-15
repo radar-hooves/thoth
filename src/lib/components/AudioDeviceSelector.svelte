@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { toast } from 'svelte-sonner';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { settingsStore } from '../stores/settings.svelte';
   import { Button } from '@poodle64/ui/button';
@@ -84,7 +85,9 @@
       });
       isPreviewActive = true;
     } catch (e) {
-      console.error('Failed to start audio preview:', e);
+      toast.error('Microphone test failed', {
+        description: e instanceof Error ? e.message : String(e),
+      });
       await stopPreview();
     }
   }

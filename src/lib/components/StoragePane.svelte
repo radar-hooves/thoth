@@ -8,6 +8,7 @@
 
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { toast } from 'svelte-sonner';
   import { Button } from '@poodle64/ui/button';
   import { Alert, AlertDescription } from '@poodle64/ui/alert';
   import * as AlertDialog from '@poodle64/ui/alert-dialog';
@@ -50,15 +51,19 @@
     return (bytes / usage.totalBytes) * 100;
   }
 
+  function actionFailed(title: string, e: unknown) {
+    toast.error(title, { description: e instanceof Error ? e.message : String(e) });
+  }
+
   async function executeDeleteRecordings() {
     confirmAction = null;
     actionInProgress = 'recordings';
     try {
       const deleted = await invoke<number>('delete_all_recordings');
-      console.log(`Deleted ${deleted} recordings`);
+      toast.success(`Deleted ${deleted} recording${deleted === 1 ? '' : 's'}`);
       await loadUsage();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      actionFailed('Failed to delete recordings', e);
     } finally {
       actionInProgress = null;
     }
@@ -69,9 +74,10 @@
     actionInProgress = 'fluidaudio';
     try {
       await invoke('delete_fluidaudio_cache');
+      toast.success('Neural Engine cache cleared');
       await loadUsage();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      actionFailed('Failed to clear the Neural Engine cache', e);
     } finally {
       actionInProgress = null;
     }
@@ -82,9 +88,10 @@
     actionInProgress = 'all';
     try {
       await invoke('delete_all_data');
+      toast.success('All data deleted');
       await loadUsage();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      actionFailed('Failed to delete all data', e);
     } finally {
       actionInProgress = null;
     }
