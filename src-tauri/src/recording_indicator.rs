@@ -249,11 +249,8 @@ pub fn show_indicator_instant<R: Runtime>(app: &AppHandle<R>) -> Result<(), Stri
 /// Show the recording indicator window (command form of `show_indicator_instant`).
 #[tauri::command]
 pub async fn show_recording_indicator(app: AppHandle) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced("show_recording_indicator", async move {
-        tracing::info!("show_recording_indicator called");
-        show_indicator_instant(&app).map_err(Into::into)
-    })
-    .await
+    tracing::info!("show_recording_indicator called");
+    show_indicator_instant(&app).map_err(Into::into)
 }
 
 /// Hide the recording indicator window.
@@ -267,21 +264,19 @@ pub async fn show_recording_indicator(app: AppHandle) -> Result<(), Error> {
 /// already-mapped 58px borderless window is fast.
 #[tauri::command]
 pub fn hide_recording_indicator(app: AppHandle) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced_sync("hide_recording_indicator", || {
-        tracing::info!("hide_recording_indicator called");
+    tracing::info!("hide_recording_indicator called");
 
-        // Stop mouse tracking before hiding
-        mouse_tracker::stop_tracking();
+    // Stop mouse tracking before hiding
+    mouse_tracker::stop_tracking();
 
-        let window = app
-            .get_webview_window(INDICATOR_WINDOW_LABEL)
-            .ok_or_else(|| "Recording indicator window not found".to_string())?;
+    let window = app
+        .get_webview_window(INDICATOR_WINDOW_LABEL)
+        .ok_or_else(|| "Recording indicator window not found".to_string())?;
 
-        window.hide().map_err(|e| e.to_string())?;
-        tracing::info!("Recording indicator hidden");
+    window.hide().map_err(|e| e.to_string())?;
+    tracing::info!("Recording indicator hidden");
 
-        Ok(())
-    })
+    Ok(())
 }
 
 /// Show the indicator and play the start tone when a new recording is starting.

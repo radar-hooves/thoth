@@ -794,40 +794,6 @@ fn save_to_disk(config: &Config) -> Result<(), String> {
     })
 }
 
-/// Write `contents` to `path`, readable by the owner only from the moment it
-/// exists: a temporary file beside it is created `0o600`, then renamed over it,
-/// so neither a half-written file nor a world-readable one is ever on disk. Each
-/// call has its own temporary name, so two saves at once cannot collide; the
-/// last rename wins, as the last write did before.
-pub(crate) fn write_private_file(path: &std::path::Path, contents: &[u8]) -> std::io::Result<()> {
-    use std::io::Write;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static SEQ: AtomicU64 = AtomicU64::new(0);
-    let tmp = path.with_extension(format!(
-        "tmp.{}.{}",
-        std::process::id(),
-        SEQ.fetch_add(1, Ordering::Relaxed)
-    ));
-    let mut options = fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let written = options.open(&tmp).and_then(|mut file| {
-        file.write_all(contents)?;
-        file.sync_all()
-    });
-    match written.and_then(|()| fs::rename(&tmp, path)) {
-        Ok(()) => Ok(()),
-        Err(e) => {
-            let _ = fs::remove_file(&tmp);
-            Err(e)
-        }
-    }
-}
-
 fn try_save_to_disk(config: &Config) -> Result<(), String> {
     ensure_config_dir()?;
 
@@ -850,7 +816,7 @@ fn try_save_to_disk(config: &Config) -> Result<(), String> {
         .map_err(|e| format!("Failed to serialise config: {}", e))?;
 
     // Owner-only: it may hold an API key in plaintext.
-    write_private_file(&path, contents.as_bytes())
+    desktop_shell::secrets::write_private(&path, contents.as_bytes())
         .map_err(|e| format!("Failed to write config file: {}", e))?;
 
     tracing::info!(
@@ -934,7 +900,7 @@ fn get_config_instance() -> &'static RwLock<Config> {
 /// Returns the current configuration state. The config is cached in memory
 /// and loaded from disk on first access.
 pub fn get_config() -> Result<Config, Error> {
-    tauri_plugin_telemetry::traced_sync("get_config", || Ok(get_config_instance().read().clone()))
+    Ok(get_config_instance().read().clone())
 }
 
 /// Return the built-in default configuration.
@@ -947,7 +913,7 @@ pub fn get_config() -> Result<Config, Error> {
 ///
 /// This reads nothing from disk and mutates nothing — it is `Config::default()`.
 pub fn get_default_config() -> Config {
-    tauri_plugin_telemetry::traced_sync_value("get_default_config", Config::default)
+    Config::default()
 }
 
 /// Apply a partial update to the live config: the one write path.
@@ -958,22 +924,20 @@ pub fn get_default_config() -> Config {
 /// overwrite what it never named. Disk is written before memory; the lock is
 /// held throughout so two patches cannot lose each other's update.
 pub fn patch_config(patch: serde_json::Value) -> Result<Config, Error> {
-    tauri_plugin_telemetry::traced_sync("patch_config", || {
-        let mut cached = get_config_instance().write();
-        let mut doc = serde_json::to_value(&*cached)
-            .map_err(|e| Error::Other(format!("Failed to serialise config: {e}")))?;
-        merge_json(&mut doc, &canonicalise_patch_keys(patch));
-        let mut next: Config =
-            serde_json::from_value(doc).map_err(|e| Error::InvalidPatch(e.to_string()))?;
-        next.version = CURRENT_VERSION;
+    let mut cached = get_config_instance().write();
+    let mut doc = serde_json::to_value(&*cached)
+        .map_err(|e| Error::Other(format!("Failed to serialise config: {e}")))?;
+    merge_json(&mut doc, &canonicalise_patch_keys(patch));
+    let mut next: Config =
+        serde_json::from_value(doc).map_err(|e| Error::InvalidPatch(e.to_string()))?;
+    next.version = CURRENT_VERSION;
 
-        save_to_disk(&next)?;
-        *cached = next.clone();
-        drop(cached);
+    save_to_disk(&next)?;
+    *cached = next.clone();
+    drop(cached);
 
-        apply_enhancement_backend(&next.enhancement);
-        Ok(next)
-    })
+    apply_enhancement_backend(&next.enhancement);
+    Ok(next)
 }
 
 /// Set or clear the enhancement API key.
@@ -984,20 +948,18 @@ pub fn patch_config(patch: serde_json::Value) -> Result<Config, Error> {
 /// Pass `Some(key)` to store a new key, `None` to clear it.
 #[tauri::command]
 pub fn set_enhancement_api_key(key: Option<String>) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced_sync("set_enhancement_api_key", || {
-        let mut cached = get_config_instance().write();
-        cached.enhancement.api_key = key;
-        save_to_disk(&cached)?;
-        tracing::info!(
-            "Enhancement API key {}",
-            if cached.enhancement.api_key.is_some() {
-                "updated"
-            } else {
-                "cleared"
-            }
-        );
-        Ok(())
-    })
+    let mut cached = get_config_instance().write();
+    cached.enhancement.api_key = key;
+    save_to_disk(&cached)?;
+    tracing::info!(
+        "Enhancement API key {}",
+        if cached.enhancement.api_key.is_some() {
+            "updated"
+        } else {
+            "cleared"
+        }
+    );
+    Ok(())
 }
 
 /// Record the running binary's version as `last_run_version`, persisting only
@@ -1028,20 +990,17 @@ pub fn record_whats_new_seen(version: &str) -> Result<(), Error> {
 ///
 /// Resets all settings to their default values and persists to disk.
 pub async fn reset_config() -> Result<Config, Error> {
-    tauri_plugin_telemetry::traced("reset_config", async move {
-        let default_config = Config::default();
+    let default_config = Config::default();
 
-        // Save to disk
-        save_to_disk(&default_config)?;
+    // Save to disk
+    save_to_disk(&default_config)?;
 
-        // Update cached config
-        let mut cached = get_config_instance().write();
-        *cached = default_config.clone();
+    // Update cached config
+    let mut cached = get_config_instance().write();
+    *cached = default_config.clone();
 
-        tracing::info!("Configuration reset to defaults");
-        Ok(default_config)
-    })
-    .await
+    tracing::info!("Configuration reset to defaults");
+    Ok(default_config)
 }
 
 /// Get the configuration file path
@@ -1049,9 +1008,7 @@ pub async fn reset_config() -> Result<Config, Error> {
 /// Returns the path to the config file for debugging or user information.
 #[tauri::command]
 pub fn get_config_path_cmd() -> String {
-    tauri_plugin_telemetry::traced_sync_value("get_config_path_cmd", || {
-        get_config_path().to_string_lossy().to_string()
-    })
+    get_config_path().to_string_lossy().to_string()
 }
 
 #[cfg(test)]
@@ -1064,25 +1021,6 @@ mod tests {
     /// `get_config_instance()` and writes to it must hold this guard for its
     /// full lifetime.
     static CONFIG_TEST_LOCK: StdMutex<()> = StdMutex::new(());
-
-    #[cfg(unix)]
-    #[test]
-    fn a_private_file_is_owner_only_from_creation_and_on_replace() {
-        use std::os::unix::fs::PermissionsExt;
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("secret");
-        // An existing world-readable file, as an older build left it.
-        fs::write(&path, "old").unwrap();
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
-
-        write_private_file(&path, b"new").unwrap();
-
-        assert_eq!(fs::read_to_string(&path).unwrap(), "new");
-        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
-        assert_eq!(mode, 0o600);
-        let leftovers: Vec<_> = fs::read_dir(dir.path()).unwrap().collect();
-        assert_eq!(leftovers.len(), 1, "no temporary file is left behind");
-    }
 
     #[test]
     fn test_default_config_has_current_version() {

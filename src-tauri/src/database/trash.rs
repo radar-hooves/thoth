@@ -610,14 +610,11 @@ pub fn auto_purge_expired(conn: &mut Connection) -> Result<u32, DatabaseError> {
 /// Returns the count of recordings successfully quarantined.
 #[tauri::command]
 pub async fn quarantine_recordings(ids: Vec<String>) -> Result<u32, Error> {
-    tauri_plugin_telemetry::traced("quarantine_recordings", async move {
-        let mut conn = connection()?;
-        quarantine_recordings_with_conn(&mut conn, &ids).map_err(|e| {
-            tracing::error!("quarantine_recordings failed: {}", e);
-            Error::Database(e)
-        })
+    let mut conn = connection()?;
+    quarantine_recordings_with_conn(&mut conn, &ids).map_err(|e| {
+        tracing::error!("quarantine_recordings failed: {}", e);
+        Error::Database(e)
     })
-    .await
 }
 
 /// Restore quarantined recordings back to the live history.
@@ -625,14 +622,11 @@ pub async fn quarantine_recordings(ids: Vec<String>) -> Result<u32, Error> {
 /// Returns the count of recordings successfully restored.
 #[tauri::command]
 pub async fn restore_recordings(ids: Vec<String>) -> Result<u32, Error> {
-    tauri_plugin_telemetry::traced("restore_recordings", async move {
-        let mut conn = connection()?;
-        restore_recordings_with_conn(&mut conn, &ids).map_err(|e| {
-            tracing::error!("restore_recordings failed: {}", e);
-            Error::Database(e)
-        })
+    let mut conn = connection()?;
+    restore_recordings_with_conn(&mut conn, &ids).map_err(|e| {
+        tracing::error!("restore_recordings failed: {}", e);
+        Error::Database(e)
     })
-    .await
 }
 
 /// Permanently delete trash entries.
@@ -640,28 +634,22 @@ pub async fn restore_recordings(ids: Vec<String>) -> Result<u32, Error> {
 /// `ids = None` purges the entire trash.  Returns the count purged.
 #[tauri::command]
 pub async fn purge_trash(ids: Option<Vec<String>>) -> Result<u32, Error> {
-    tauri_plugin_telemetry::traced("purge_trash", async move {
-        let mut conn = connection()?;
-        let id_slice = ids.as_deref();
-        purge_trash_with_conn(&mut conn, id_slice).map_err(|e| {
-            tracing::error!("purge_trash failed: {}", e);
-            Error::Database(e)
-        })
+    let mut conn = connection()?;
+    let id_slice = ids.as_deref();
+    purge_trash_with_conn(&mut conn, id_slice).map_err(|e| {
+        tracing::error!("purge_trash failed: {}", e);
+        Error::Database(e)
     })
-    .await
 }
 
 /// List all entries currently in the trash.
 #[tauri::command]
 pub async fn list_trash() -> Result<Vec<TrashEntry>, Error> {
-    tauri_plugin_telemetry::traced("list_trash", async move {
-        let conn = connection()?;
-        list_trash_with_conn(&conn).map_err(|e| {
-            tracing::error!("list_trash failed: {}", e);
-            Error::Database(e)
-        })
+    let conn = connection()?;
+    list_trash_with_conn(&conn).map_err(|e| {
+        tracing::error!("list_trash failed: {}", e);
+        Error::Database(e)
     })
-    .await
 }
 
 // =============================================================================

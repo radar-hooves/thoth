@@ -668,22 +668,18 @@ pub fn get_transcription_stats() -> Result<TranscriptionStats, DatabaseError> {
 /// Returns aggregated transcription statistics for the performance dashboard.
 #[tauri::command]
 pub fn get_transcription_stats_cmd() -> Result<TranscriptionStats, Error> {
-    tauri_plugin_telemetry::traced_sync("get_transcription_stats_cmd", || {
-        get_transcription_stats().map_err(|e| {
-            tracing::error!("Failed to get transcription stats: {}", e);
-            Error::Other(format!("Failed to get stats: {}", e))
-        })
+    get_transcription_stats().map_err(|e| {
+        tracing::error!("Failed to get transcription stats: {}", e);
+        Error::Other(format!("Failed to get stats: {}", e))
     })
 }
 
 /// Retrieves a transcription by its ID.
 #[tauri::command]
 pub fn get_transcription_by_id(id: String) -> Result<Option<Transcription>, Error> {
-    tauri_plugin_telemetry::traced_sync("get_transcription_by_id", || {
-        get_transcription(&id).map_err(|e| {
-            tracing::error!("Failed to get transcription {}: {}", id, e);
-            Error::Other(format!("Failed to get transcription: {}", e))
-        })
+    get_transcription(&id).map_err(|e| {
+        tracing::error!("Failed to get transcription {}: {}", id, e);
+        Error::Other(format!("Failed to get transcription: {}", e))
     })
 }
 
@@ -693,37 +689,28 @@ pub async fn list_all_transcriptions(
     limit: Option<i64>,
     offset: Option<i64>,
 ) -> Result<Vec<Transcription>, Error> {
-    tauri_plugin_telemetry::traced("list_all_transcriptions", async move {
-        list_transcriptions(limit, offset).map_err(|e| {
-            tracing::error!("Failed to list transcriptions: {}", e);
-            Error::Other(format!("Failed to list transcriptions: {}", e))
-        })
+    list_transcriptions(limit, offset).map_err(|e| {
+        tracing::error!("Failed to list transcriptions: {}", e);
+        Error::Other(format!("Failed to list transcriptions: {}", e))
     })
-    .await
 }
 
 /// Deletes a transcription by its ID.
 #[tauri::command]
 pub async fn delete_transcription_by_id(id: String) -> Result<bool, Error> {
-    tauri_plugin_telemetry::traced("delete_transcription_by_id", async move {
-        delete_transcription(&id).map_err(|e| {
-            tracing::error!("Failed to delete transcription {}: {}", id, e);
-            Error::Other(format!("Failed to delete transcription: {}", e))
-        })
+    delete_transcription(&id).map_err(|e| {
+        tracing::error!("Failed to delete transcription {}: {}", id, e);
+        Error::Other(format!("Failed to delete transcription: {}", e))
     })
-    .await
 }
 
 /// Deletes all transcriptions.
 #[tauri::command]
 pub async fn delete_all_transcriptions_cmd() -> Result<usize, Error> {
-    tauri_plugin_telemetry::traced("delete_all_transcriptions_cmd", async move {
-        delete_all_transcriptions().map_err(|e| {
-            tracing::error!("Failed to delete all transcriptions: {}", e);
-            Error::Other(format!("Failed to delete all transcriptions: {}", e))
-        })
+    delete_all_transcriptions().map_err(|e| {
+        tracing::error!("Failed to delete all transcriptions: {}", e);
+        Error::Other(format!("Failed to delete all transcriptions: {}", e))
     })
-    .await
 }
 
 #[cfg(test)]

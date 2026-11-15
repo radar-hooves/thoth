@@ -93,15 +93,12 @@ pub fn initialise_database() -> Result<(), DatabaseError> {
 /// Initialises the database. Call this on application startup.
 #[tauri::command]
 pub async fn init_database() -> Result<(), Error> {
-    tauri_plugin_telemetry::traced("init_database", async move {
-        initialise_database()
-            .map_err(|e| {
-                tracing::error!("Failed to initialise database: {}", e);
-                format!("Failed to initialise database: {}", e)
-            })
-            .map_err(Into::into)
-    })
-    .await
+    initialise_database()
+        .map_err(|e| {
+            tracing::error!("Failed to initialise database: {}", e);
+            format!("Failed to initialise database: {}", e)
+        })
+        .map_err(Into::into)
 }
 
 // =============================================================================

@@ -33,9 +33,7 @@ pub fn read_token() -> Option<String> {
 /// Persist the token to the store, creating `~/.thoth` if needed and
 /// restricting the file to owner-only (`0o600`) because it is a secret.
 fn write_token(token: &str) -> io::Result<()> {
-    let dir = crate::config::data_dir();
-    fs::create_dir_all(&dir)?;
-    crate::config::write_private_file(&token_path(), token.as_bytes())
+    desktop_shell::secrets::write_private(&token_path(), token.as_bytes())
 }
 
 /// One-time migration source: the token a previous version stored inside

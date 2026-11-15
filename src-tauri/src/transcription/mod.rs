@@ -699,37 +699,31 @@ fn warmup_whisper_fallback(manifest: &manifest::ModelManifest) {
 /// Check if transcription service is ready
 #[tauri::command]
 pub fn is_transcription_ready() -> bool {
-    tauri_plugin_telemetry::traced_sync_value("is_transcription_ready", || {
-        get_service().lock().is_some()
-    })
+    get_service().lock().is_some()
 }
 
 /// Get the current transcription backend
 #[tauri::command]
 pub fn get_transcription_backend() -> Option<String> {
-    tauri_plugin_telemetry::traced_sync_value("get_transcription_backend", || {
-        {
-            get_service().lock().as_ref().map(|s| match s.backend() {
-                TranscriptionBackend::Whisper => "whisper".to_string(),
-                TranscriptionBackend::Parakeet => "parakeet".to_string(),
-                TranscriptionBackend::FluidAudio => "fluidaudio".to_string(),
-            })
-        }
-    })
+    {
+        get_service().lock().as_ref().map(|s| match s.backend() {
+            TranscriptionBackend::Whisper => "whisper".to_string(),
+            TranscriptionBackend::Parakeet => "parakeet".to_string(),
+            TranscriptionBackend::FluidAudio => "fluidaudio".to_string(),
+        })
+    }
 }
 
 /// Get the default model directory path for the currently selected/recommended model
 #[tauri::command]
 pub fn get_model_directory() -> String {
-    tauri_plugin_telemetry::traced_sync_value("get_model_directory", || {
-        let config_model_id = crate::config::get_config()
-            .ok()
-            .and_then(|c| c.transcription.model_id);
+    let config_model_id = crate::config::get_config()
+        .ok()
+        .and_then(|c| c.transcription.model_id);
 
-        model_directory_for_selection(config_model_id.as_deref())
-            .to_string_lossy()
-            .to_string()
-    })
+    model_directory_for_selection(config_model_id.as_deref())
+        .to_string_lossy()
+        .to_string()
 }
 
 /// Resolves a configured model id to the directory this build will actually
@@ -748,44 +742,34 @@ fn model_directory_for_selection(configured: Option<&str>) -> PathBuf {
 /// Get the whisper model directory path
 #[tauri::command]
 pub fn get_whisper_model_directory() -> String {
-    tauri_plugin_telemetry::traced_sync_value("get_whisper_model_directory", || {
-        {
-            whisper::get_whisper_model_directory()
-                .to_string_lossy()
-                .to_string()
-        }
-    })
+    {
+        whisper::get_whisper_model_directory()
+            .to_string_lossy()
+            .to_string()
+    }
 }
 
 /// Check if a whisper model is downloaded
 #[tauri::command]
 pub fn is_whisper_model_downloaded(model_id: String) -> bool {
-    tauri_plugin_telemetry::traced_sync_value("is_whisper_model_downloaded", || {
-        whisper::is_whisper_model_downloaded(&model_id)
-    })
+    whisper::is_whisper_model_downloaded(&model_id)
 }
 
 /// Filter transcription text to clean up filler words and formatting
 #[tauri::command]
 pub fn filter_transcription(text: String, options: Option<FilterOptions>) -> String {
-    tauri_plugin_telemetry::traced_sync_value("filter_transcription", || {
-        let filter_options = options.unwrap_or_default();
-        let output_filter = OutputFilter::new(filter_options);
-        output_filter.filter(&text)
-    })
+    let filter_options = options.unwrap_or_default();
+    let output_filter = OutputFilter::new(filter_options);
+    output_filter.filter(&text)
 }
 
 /// Set the selected model ID in config
 #[tauri::command]
 pub fn set_selected_model_id(model_id: Option<String>) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced_sync("set_selected_model_id", || {
-        crate::config::patch_config(
-            serde_json::json!({ "transcription": { "model_id": model_id } }),
-        )?;
+    crate::config::patch_config(serde_json::json!({ "transcription": { "model_id": model_id } }))?;
 
-        tracing::info!("Selected model ID set to: {:?}", model_id);
-        Ok(())
-    })
+    tracing::info!("Selected model ID set to: {:?}", model_id);
+    Ok(())
 }
 
 #[cfg(test)]

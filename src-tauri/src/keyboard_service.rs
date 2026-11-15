@@ -333,52 +333,49 @@ pub fn restart_monitoring(app: AppHandle) {
 /// Returns "native" or "webview" to indicate the capture backend.
 #[tauri::command]
 pub async fn enter_capture_mode(app: AppHandle) -> Result<String, Error> {
-    tauri_plugin_telemetry::traced("enter_capture_mode", async move {
-        #[cfg(target_os = "macos")]
-        {
-            if !crate::platform::check_accessibility() {
-                return Err(
-                    "Accessibility permission required: press Grant on the Overview \
-                            page, then switch Thoth on in System Settings."
-                        .to_string()
-                        .into(),
-                );
-            }
-            crate::platform::macos::ensure_listen_access();
+    #[cfg(target_os = "macos")]
+    {
+        if !crate::platform::check_accessibility() {
+            return Err(
+                "Accessibility permission required: press Grant on the Overview \
+                        page, then switch Thoth on in System Settings."
+                    .to_string()
+                    .into(),
+            );
         }
+        crate::platform::macos::ensure_listen_access();
+    }
 
-        #[cfg(target_os = "linux")]
-        {
-            if crate::shortcuts::is_wayland() {
-                tracing::info!("Running on Wayland - using webview keyboard capture");
-                // Still set Capturing mode so GlobalShortcut callbacks are suppressed
-                MODE.store(KeyboardMode::Capturing as u8, Ordering::Release);
-                // Unregister GlobalShortcuts
-                crate::shortcuts::manager::unregister_all(&app)
-                    .map_err(|e| format!("Failed to unregister shortcuts: {}", e))?;
-                return Ok("webview".to_string());
-            }
+    #[cfg(target_os = "linux")]
+    {
+        if crate::shortcuts::is_wayland() {
+            tracing::info!("Running on Wayland - using webview keyboard capture");
+            // Still set Capturing mode so GlobalShortcut callbacks are suppressed
+            MODE.store(KeyboardMode::Capturing as u8, Ordering::Release);
+            // Unregister GlobalShortcuts
+            crate::shortcuts::manager::unregister_all(&app)
+                .map_err(|e| format!("Failed to unregister shortcuts: {}", e))?;
+            return Ok("webview".to_string());
         }
+    }
 
-        // 1. Switch mode FIRST (atomic, instant)
-        //    The polling thread will see this on its next mode check.
-        MODE.store(KeyboardMode::Capturing as u8, Ordering::Release);
+    // 1. Switch mode FIRST (atomic, instant)
+    //    The polling thread will see this on its next mode check.
+    MODE.store(KeyboardMode::Capturing as u8, Ordering::Release);
 
-        // 2. Clear all key states (prevents stale monitoring state leaking in)
-        clear_all_key_states();
+    // 2. Clear all key states (prevents stale monitoring state leaking in)
+    clear_all_key_states();
 
-        // 3. Unregister Tauri GlobalShortcuts (F13, Cmd+Shift+Space, etc.)
-        //    Even if a queued callback fires after this, it checks MODE and discards.
-        crate::shortcuts::manager::unregister_all(&app)
-            .map_err(|e| format!("Failed to unregister shortcuts: {}", e))?;
+    // 3. Unregister Tauri GlobalShortcuts (F13, Cmd+Shift+Space, etc.)
+    //    Even if a queued callback fires after this, it checks MODE and discards.
+    crate::shortcuts::manager::unregister_all(&app)
+        .map_err(|e| format!("Failed to unregister shortcuts: {}", e))?;
 
-        // 4. Ensure polling thread is running
-        ensure_thread_running(app);
+    // 4. Ensure polling thread is running
+    ensure_thread_running(app);
 
-        tracing::info!("Entered capture mode");
-        Ok("native".to_string())
-    })
-    .await
+    tracing::info!("Entered capture mode");
+    Ok("native".to_string())
 }
 
 /// Exit capture mode, returning to normal operation.
@@ -390,28 +387,24 @@ pub async fn enter_capture_mode(app: AppHandle) -> Result<String, Error> {
 pub async fn exit_capture_mode(
     app: AppHandle,
 ) -> Result<Vec<crate::shortcuts::ShortcutConflict>, Error> {
-    tauri_plugin_telemetry::traced("exit_capture_mode", async move {
-        // 1. Switch mode back (atomic, instant)
-        let has_modifier_shortcuts = !get_registry().read().shortcuts.is_empty();
-        let new_mode = if has_modifier_shortcuts {
-            KeyboardMode::Monitoring
-        } else {
-            KeyboardMode::Idle
-        };
-        MODE.store(new_mode as u8, Ordering::Release);
+    // 1. Switch mode back (atomic, instant)
+    let has_modifier_shortcuts = !get_registry().read().shortcuts.is_empty();
+    let new_mode = if has_modifier_shortcuts {
+        KeyboardMode::Monitoring
+    } else {
+        KeyboardMode::Idle
+    };
+    MODE.store(new_mode as u8, Ordering::Release);
 
-        // 2. Clear all key states (prevents stale capture state leaking back)
-        clear_all_key_states();
+    // 2. Clear all key states (prevents stale capture state leaking back)
+    clear_all_key_states();
 
-        // 3. Re-register ALL shortcuts from config (clean slate)
-        let cfg =
-            crate::config::get_config().map_err(|e| format!("Failed to load config: {}", e))?;
-        let failed = crate::register_shortcuts_from_config(&app, &cfg);
+    // 3. Re-register ALL shortcuts from config (clean slate)
+    let cfg = crate::config::get_config().map_err(|e| format!("Failed to load config: {}", e))?;
+    let failed = crate::register_shortcuts_from_config(&app, &cfg);
 
-        tracing::info!("Exited capture mode, shortcuts re-registered from config");
-        Ok(failed)
-    })
-    .await
+    tracing::info!("Exited capture mode, shortcuts re-registered from config");
+    Ok(failed)
 }
 
 /// Report a key event from the webview (used on Wayland where native capture doesn't work)
@@ -428,29 +421,26 @@ pub async fn report_key_event(
     meta: bool,
     event_type: String,
 ) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced("report_key_event", async move {
-        if !is_capture_active() {
-            return Ok(());
-        }
+    if !is_capture_active() {
+        return Ok(());
+    }
 
-        tracing::debug!(
-            "Webview key event: key={}, code={}, modifiers=({}{}{}{}), type={}",
-            key,
-            code,
-            if ctrl { "Ctrl " } else { "" },
-            if shift { "Shift " } else { "" },
-            if alt { "Alt " } else { "" },
-            if meta { "Meta " } else { "" },
-            event_type
-        );
+    tracing::debug!(
+        "Webview key event: key={}, code={}, modifiers=({}{}{}{}), type={}",
+        key,
+        code,
+        if ctrl { "Ctrl " } else { "" },
+        if shift { "Shift " } else { "" },
+        if alt { "Alt " } else { "" },
+        if meta { "Meta " } else { "" },
+        event_type
+    );
 
-        if event_type == "keydown" {
-            process_webview_keydown(&app, &key, &code, ctrl, shift, alt, meta);
-        }
+    if event_type == "keydown" {
+        process_webview_keydown(&app, &key, &code, ctrl, shift, alt, meta);
+    }
 
-        Ok(())
-    })
-    .await
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

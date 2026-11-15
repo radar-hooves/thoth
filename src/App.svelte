@@ -18,7 +18,7 @@
   import { settingsStore } from './lib/stores/settings.svelte';
   import { shortcutsStore } from './lib/stores/shortcuts.svelte';
   import { soundStore } from './lib/stores/sound.svelte';
-  import { checkForUpdate, startPeriodicUpdateChecks } from './lib/stores/updater.svelte';
+  import { startUpdateChecks } from '@poodle64/ui/updater';
 
   /** Debug logging — only active in development builds */
   const debug = import.meta.env.DEV
@@ -26,7 +26,6 @@
     : () => {};
 
   let indicatorLogUnlisten: UnlistenFn | null = null;
-  const stopUpdateChecks = startPeriodicUpdateChecks(() => configStore.general.checkForUpdates);
 
   let isInitialising = $state(true);
   let initError = $state<string | null>(null);
@@ -64,22 +63,17 @@
 
       isInitialising = false;
       debug('Initialisation complete');
-
-      // Check for updates if enabled (delay slightly to avoid blocking UI)
-      if (configStore.general.checkForUpdates) {
-        setTimeout(() => {
-          debug('Checking for updates...');
-          checkForUpdate().catch((err) => {
-            console.warn('[App] Update check failed:', err);
-          });
-        }, 2000);
-      }
     } catch (e) {
       console.error('[App] Initialisation failed:', e);
       initError = e instanceof Error ? e.message : String(e);
       isInitialising = false;
     }
   }
+
+  // Checks now and every six hours while the setting is on; turning it off stops them.
+  $effect(() => {
+    if (!isInitialising && configStore.general.checkForUpdates) return startUpdateChecks();
+  });
 
   onMount(async () => {
     // Listen for logs from the indicator window (since it has a separate console)
@@ -91,7 +85,6 @@
   });
 
   onDestroy(() => {
-    stopUpdateChecks();
     pipelineStore.cleanup();
     if (indicatorLogUnlisten) {
       indicatorLogUnlisten();

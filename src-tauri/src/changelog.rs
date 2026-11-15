@@ -178,24 +178,19 @@ fn parse_item(bullet: &str) -> NotesItem {
 /// later.
 #[tauri::command]
 pub fn whats_new(version: String) -> Option<ReleaseNotes> {
-    tauri_plugin_telemetry::traced_sync_value("whats_new", || {
-        let seen = crate::config::get_config()
-            .ok()
-            .and_then(|c| c.general.whats_new_seen_version);
-        if seen.as_deref() == Some(version.as_str()) {
-            return None;
-        }
-        release(&version)
-    })
+    let seen = crate::config::get_config()
+        .ok()
+        .and_then(|c| c.general.whats_new_seen_version);
+    if seen.as_deref() == Some(version.as_str()) {
+        return None;
+    }
+    release(&version)
 }
 
 /// Record that this version's notes have been seen, so they are shown once.
 #[tauri::command]
 pub async fn mark_whats_new_seen(version: String) -> Result<(), crate::error::Error> {
-    tauri_plugin_telemetry::traced("mark_whats_new_seen", async move {
-        crate::config::record_whats_new_seen(&version)
-    })
-    .await
+    crate::config::record_whats_new_seen(&version)
 }
 
 #[cfg(test)]

@@ -685,15 +685,12 @@ fn oldest_file_mtime(dir: &std::path::Path) -> Option<String> {
 /// Returns aggregated insights for the Insights dashboard.
 #[tauri::command]
 pub async fn get_insights(range: InsightsRange) -> Result<InsightsData, Error> {
-    tauri_plugin_telemetry::traced("get_insights", async move {
-        // The directory walk runs before the connection is taken.
-        let storage = compute_storage();
-        get_insights_with_conn(&*connection()?, &range, storage).map_err(|e| {
-            tracing::error!("Failed to compute insights: {}", e);
-            format!("Failed to compute insights: {}", e).into()
-        })
+    // The directory walk runs before the connection is taken.
+    let storage = compute_storage();
+    get_insights_with_conn(&*connection()?, &range, storage).map_err(|e| {
+        tracing::error!("Failed to compute insights: {}", e);
+        format!("Failed to compute insights: {}", e).into()
     })
-    .await
 }
 
 /// Returns recordings flagged as likely cruft by a low text-density heuristic.

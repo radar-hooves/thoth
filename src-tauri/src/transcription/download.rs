@@ -55,99 +55,95 @@ fn get_download_state() -> &'static Mutex<DownloadState> {
 /// Check if the model files are downloaded and valid
 #[tauri::command]
 pub fn check_model_downloaded(model_id: Option<String>) -> bool {
-    tauri_plugin_telemetry::traced_sync_value("check_model_downloaded", || {
-        // Get the model info from manifest
-        let manifest = get_fallback_manifest();
+    // Get the model info from manifest
+    let manifest = get_fallback_manifest();
 
-        // Use the provided model_id, else resolve the effective selection. Resolution
-        // filters on backend availability (#128), so this no longer reports on a model
-        // the build cannot run — the recommended model is macOS-only.
-        let model_id = model_id.unwrap_or_else(|| {
-            let configured = crate::config::get_config()
-                .ok()
-                .and_then(|c| c.transcription.model_id.clone());
+    // Use the provided model_id, else resolve the effective selection. Resolution
+    // filters on backend availability (#128), so this no longer reports on a model
+    // the build cannot run — the recommended model is macOS-only.
+    let model_id = model_id.unwrap_or_else(|| {
+        let configured = crate::config::get_config()
+            .ok()
+            .and_then(|c| c.transcription.model_id.clone());
 
-            super::manifest::resolve_selected_id(&manifest.models, configured.as_deref())
-                .map(|id| id.to_string())
-                .unwrap_or_else(|| "ggml-large-v3-turbo".to_string())
-        });
+        super::manifest::resolve_selected_id(&manifest.models, configured.as_deref())
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| "ggml-large-v3-turbo".to_string())
+    });
 
-        let model = manifest.models.iter().find(|m| m.id == model_id);
+    let model = manifest.models.iter().find(|m| m.id == model_id);
 
-        // FluidAudio readiness is its compiled CoreML cache, not the on-disk
-        // required_files sentinel; defer to the manifest's cache-aware check.
-        if let Some(m) = model
-            && m.model_type == "fluidaudio_coreml"
-        {
-            return super::manifest::is_model_downloaded(m);
+    // FluidAudio readiness is its compiled CoreML cache, not the on-disk
+    // required_files sentinel; defer to the manifest's cache-aware check.
+    if let Some(m) = model
+        && m.model_type == "fluidaudio_coreml"
+    {
+        return super::manifest::is_model_downloaded(m);
+    }
+
+    let required_files: Vec<&str> = match &model {
+        Some(m) => m.required_files.iter().map(|s| s.as_str()).collect(),
+        None => vec![
+            "encoder.int8.onnx",
+            "decoder.int8.onnx",
+            "joiner.int8.onnx",
+            "tokens.txt",
+        ],
+    };
+
+    // For direct downloads (single file), we can verify against the expected size
+    let expected_size = model
+        .as_ref()
+        .filter(|m| m.model_type == "whisper_ggml" && m.required_files.len() == 1)
+        .map(|m| m.download_size);
+
+    let model_dir = get_model_directory(&model_id);
+
+    for file in required_files {
+        let path = model_dir.join(file);
+        if !path.exists() {
+            tracing::debug!("Model file missing: {}", path.display());
+            return false;
         }
 
-        let required_files: Vec<&str> = match &model {
-            Some(m) => m.required_files.iter().map(|s| s.as_str()).collect(),
-            None => vec![
-                "encoder.int8.onnx",
-                "decoder.int8.onnx",
-                "joiner.int8.onnx",
-                "tokens.txt",
-            ],
-        };
-
-        // For direct downloads (single file), we can verify against the expected size
-        let expected_size = model
-            .as_ref()
-            .filter(|m| m.model_type == "whisper_ggml" && m.required_files.len() == 1)
-            .map(|m| m.download_size);
-
-        let model_dir = get_model_directory(&model_id);
-
-        for file in required_files {
-            let path = model_dir.join(file);
-            if !path.exists() {
-                tracing::debug!("Model file missing: {}", path.display());
-                return false;
-            }
-
-            // Verify file has content (not empty) and correct size
-            match std::fs::metadata(&path) {
-                Ok(metadata) => {
-                    if metadata.len() == 0 {
-                        tracing::warn!("Model file is empty: {}", path.display());
-                        return false;
-                    }
-
-                    // For direct downloads, verify file is at least 90% of expected size
-                    // (exact size may differ slightly from manifest estimate)
-                    if let Some(expected) = expected_size {
-                        let min_size = expected * 9 / 10;
-                        if metadata.len() < min_size {
-                            tracing::warn!(
-                                "Model file appears incomplete: {} bytes, expected ~{} bytes ({})",
-                                metadata.len(),
-                                expected,
-                                path.display()
-                            );
-                            return false;
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to read model file metadata: {}", e);
+        // Verify file has content (not empty) and correct size
+        match std::fs::metadata(&path) {
+            Ok(metadata) => {
+                if metadata.len() == 0 {
+                    tracing::warn!("Model file is empty: {}", path.display());
                     return false;
                 }
+
+                // For direct downloads, verify file is at least 90% of expected size
+                // (exact size may differ slightly from manifest estimate)
+                if let Some(expected) = expected_size {
+                    let min_size = expected * 9 / 10;
+                    if metadata.len() < min_size {
+                        tracing::warn!(
+                            "Model file appears incomplete: {} bytes, expected ~{} bytes ({})",
+                            metadata.len(),
+                            expected,
+                            path.display()
+                        );
+                        return false;
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to read model file metadata: {}", e);
+                return false;
             }
         }
+    }
 
-        tracing::info!("All model files present and valid for {}", model_id);
-        true
-    })
+    tracing::info!("All model files present and valid for {}", model_id);
+    true
 }
 
 /// Get the current download progress state
 #[tauri::command]
 pub fn get_download_progress() -> DownloadState {
-    tauri_plugin_telemetry::traced_sync_value("get_download_progress", || {
-        get_download_state().lock().clone()
-    })
+    get_download_state().lock().clone()
 }
 
 /// Download the model archive and extract it
@@ -789,65 +785,28 @@ fn emit_progress(app: &AppHandle, progress: DownloadProgress) {
 /// default was a trap with no user.
 #[tauri::command]
 pub fn delete_model(model_id: String) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced_sync("delete_model", || {
-        let manifest = get_fallback_manifest();
+    let manifest = get_fallback_manifest();
 
-        let model = manifest
-            .models
-            .iter()
-            .find(|m| m.id == model_id)
-            .ok_or_else(|| format!("Model not found: {}", model_id))?;
+    let model = manifest
+        .models
+        .iter()
+        .find(|m| m.id == model_id)
+        .ok_or_else(|| format!("Model not found: {}", model_id))?;
 
-        // FluidAudio: remove the sentinel marker (actual models live in FluidAudio's cache)
-        if model.model_type == "fluidaudio_coreml" {
-            #[cfg(all(target_os = "macos", feature = "fluidaudio"))]
-            {
-                super::fluidaudio::remove_ready_marker()
-                    .map_err(|e| format!("Failed to remove FluidAudio marker: {}", e))?;
-            }
-            #[cfg(not(all(target_os = "macos", feature = "fluidaudio")))]
-            {
-                // Without the feature, just remove the marker file directly
-                let marker = get_model_directory(&model_id).join(".fluidaudio_ready");
-                if marker.exists() {
-                    std::fs::remove_file(&marker)
-                        .map_err(|e| format!("Failed to remove marker: {}", e))?;
-                }
-            }
-
-            // Reset download state
-            {
-                let mut state = get_download_state().lock();
-                *state = DownloadState::Idle;
-            }
-
-            tracing::info!(
-                "FluidAudio marker removed. CoreML cache remains at \
-             ~/Library/Application Support/FluidAudio/Models/ — \
-             delete manually to reclaim ~500 MB."
-            );
-            return Ok(());
+    // FluidAudio: remove the sentinel marker (actual models live in FluidAudio's cache)
+    if model.model_type == "fluidaudio_coreml" {
+        #[cfg(all(target_os = "macos", feature = "fluidaudio"))]
+        {
+            super::fluidaudio::remove_ready_marker()
+                .map_err(|e| format!("Failed to remove FluidAudio marker: {}", e))?;
         }
-
-        let model_dir = get_model_directory(&model_id);
-
-        for file in &model.required_files {
-            let path = model_dir.join(file);
-            if path.exists() {
-                std::fs::remove_file(&path)
-                    .map_err(|e| format!("Failed to delete {}: {}", file, e))?;
-                tracing::info!("Deleted model file: {}", path.display());
-            }
-        }
-
-        // Remove the model directory if it's now empty
-        if model_dir.exists() {
-            let is_empty = std::fs::read_dir(&model_dir)
-                .map(|mut entries| entries.next().is_none())
-                .unwrap_or(false);
-            if is_empty {
-                let _ = std::fs::remove_dir(&model_dir);
-                tracing::info!("Removed empty model directory: {}", model_dir.display());
+        #[cfg(not(all(target_os = "macos", feature = "fluidaudio")))]
+        {
+            // Without the feature, just remove the marker file directly
+            let marker = get_model_directory(&model_id).join(".fluidaudio_ready");
+            if marker.exists() {
+                std::fs::remove_file(&marker)
+                    .map_err(|e| format!("Failed to remove marker: {}", e))?;
             }
         }
 
@@ -857,19 +816,51 @@ pub fn delete_model(model_id: String) -> Result<(), Error> {
             *state = DownloadState::Idle;
         }
 
-        tracing::info!("Model {} files deleted", model_id);
-        Ok(())
-    })
+        tracing::info!(
+            "FluidAudio marker removed. CoreML cache remains at \
+         ~/Library/Application Support/FluidAudio/Models/ — \
+         delete manually to reclaim ~500 MB."
+        );
+        return Ok(());
+    }
+
+    let model_dir = get_model_directory(&model_id);
+
+    for file in &model.required_files {
+        let path = model_dir.join(file);
+        if path.exists() {
+            std::fs::remove_file(&path).map_err(|e| format!("Failed to delete {}: {}", file, e))?;
+            tracing::info!("Deleted model file: {}", path.display());
+        }
+    }
+
+    // Remove the model directory if it's now empty
+    if model_dir.exists() {
+        let is_empty = std::fs::read_dir(&model_dir)
+            .map(|mut entries| entries.next().is_none())
+            .unwrap_or(false);
+        if is_empty {
+            let _ = std::fs::remove_dir(&model_dir);
+            tracing::info!("Removed empty model directory: {}", model_dir.display());
+        }
+    }
+
+    // Reset download state
+    {
+        let mut state = get_download_state().lock();
+        *state = DownloadState::Idle;
+    }
+
+    tracing::info!("Model {} files deleted", model_id);
+    Ok(())
 }
 
 /// Reset the download state to idle
 #[tauri::command]
 pub fn reset_download_state() {
-    tauri_plugin_telemetry::traced_sync_value("reset_download_state", || {
-        let mut state = get_download_state().lock();
-        *state = DownloadState::Idle;
-        tracing::info!("Download state reset to idle");
-    })
+    let mut state = get_download_state().lock();
+    *state = DownloadState::Idle;
+    tracing::info!("Download state reset to idle");
 }
 
 #[cfg(test)]

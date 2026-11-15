@@ -62,31 +62,29 @@ pub fn register_shortcut(
     accelerator: String,
     description: String,
 ) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced_sync("register_shortcut", || {
-        // Route modifier-only shortcuts to the keyboard service
-        if keyboard_service::is_modifier_shortcut(&accelerator) {
-            if keyboard_service::register_modifier_shortcut(
-                id.clone(),
-                accelerator.clone(),
-                description,
-            ) {
-                keyboard_service::restart_monitoring(app);
-                Ok(())
-            } else {
-                Err(format!("Failed to register modifier shortcut: {}", accelerator).into())
-            }
+    // Route modifier-only shortcuts to the keyboard service
+    if keyboard_service::is_modifier_shortcut(&accelerator) {
+        if keyboard_service::register_modifier_shortcut(
+            id.clone(),
+            accelerator.clone(),
+            description,
+        ) {
+            keyboard_service::restart_monitoring(app);
+            Ok(())
         } else {
-            // Platform-specific registration
-            #[cfg(target_os = "linux")]
-            {
-                linux::register(&app, id, accelerator, description).map_err(Into::into)
-            }
-            #[cfg(not(target_os = "linux"))]
-            {
-                manager::register(&app, id, accelerator, description).map_err(Into::into)
-            }
+            Err(format!("Failed to register modifier shortcut: {}", accelerator).into())
         }
-    })
+    } else {
+        // Platform-specific registration
+        #[cfg(target_os = "linux")]
+        {
+            linux::register(&app, id, accelerator, description).map_err(Into::into)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            manager::register(&app, id, accelerator, description).map_err(Into::into)
+        }
+    }
 }
 
 /// List all currently registered shortcuts
@@ -95,27 +93,25 @@ pub fn register_shortcut(
 /// A vector of `ShortcutInfo` for all registered shortcuts
 #[tauri::command]
 pub fn list_registered_shortcuts() -> Vec<ShortcutInfo> {
-    tauri_plugin_telemetry::traced_sync_value("list_registered_shortcuts", || {
-        {
-            // Platform-specific listing
-            #[cfg(target_os = "linux")]
-            let mut shortcuts = linux::list_registered();
-            #[cfg(not(target_os = "linux"))]
-            let mut shortcuts = manager::list_registered();
+    {
+        // Platform-specific listing
+        #[cfg(target_os = "linux")]
+        let mut shortcuts = linux::list_registered();
+        #[cfg(not(target_os = "linux"))]
+        let mut shortcuts = manager::list_registered();
 
-            // Add modifier shortcuts
-            for (id, accelerator, description) in keyboard_service::list_modifier_shortcuts() {
-                shortcuts.push(ShortcutInfo {
-                    id,
-                    accelerator,
-                    description,
-                    is_enabled: true,
-                });
-            }
-
-            shortcuts
+        // Add modifier shortcuts
+        for (id, accelerator, description) in keyboard_service::list_modifier_shortcuts() {
+            shortcuts.push(ShortcutInfo {
+                id,
+                accelerator,
+                description,
+                is_enabled: true,
+            });
         }
-    })
+
+        shortcuts
+    }
 }
 
 /// Get the default shortcuts for Thoth
@@ -132,7 +128,7 @@ pub fn list_registered_shortcuts() -> Vec<ShortcutInfo> {
 /// A vector of `ShortcutInfo` describing the default shortcuts
 #[tauri::command]
 pub fn get_default_shortcuts() -> Vec<ShortcutInfo> {
-    tauri_plugin_telemetry::traced_sync_value("get_default_shortcuts", manager::get_defaults)
+    manager::get_defaults()
 }
 
 /// Unregister all shortcuts
@@ -144,18 +140,16 @@ pub fn get_default_shortcuts() -> Vec<ShortcutInfo> {
 /// * `Ok(())` on success
 /// * `Err(String)` if unregistration fails
 pub fn unregister_all_shortcuts(app: AppHandle) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced_sync("unregister_all_shortcuts", || {
-        // Unregister all modifier shortcuts (thread stays alive for mode transitions)
-        keyboard_service::unregister_all_modifier_shortcuts();
+    // Unregister all modifier shortcuts (thread stays alive for mode transitions)
+    keyboard_service::unregister_all_modifier_shortcuts();
 
-        // Platform-specific unregistration
-        #[cfg(target_os = "linux")]
-        {
-            linux::unregister_all(&app).map_err(Into::into)
-        }
-        #[cfg(not(target_os = "linux"))]
-        {
-            manager::unregister_all(&app).map_err(Into::into)
-        }
-    })
+    // Platform-specific unregistration
+    #[cfg(target_os = "linux")]
+    {
+        linux::unregister_all(&app).map_err(Into::into)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        manager::unregister_all(&app).map_err(Into::into)
+    }
 }
