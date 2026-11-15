@@ -96,7 +96,7 @@ jobs:
         # field above and shells out to the pnpm binary to resolve the
         # store path, even though this job caches pnpm's store manually
         # below rather than via setup-node's own cache input.
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: lts/*
 
@@ -130,7 +130,7 @@ jobs:
 
       - name: Rust cache
         if: matrix.platform != 'huginn'
-        uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: './src-tauri -> target'
 
