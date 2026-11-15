@@ -70,23 +70,29 @@ fn register_single_shortcut(
 /// Unregisters everything first, then registers from the current config.
 /// Called by the frontend after clearing or resetting a shortcut.
 #[tauri::command]
-async fn reregister_shortcuts(app: tauri::AppHandle) -> Result<(), Error> {
+async fn reregister_shortcuts(
+    app: tauri::AppHandle,
+) -> Result<Vec<shortcuts::ShortcutConflict>, Error> {
     tauri_plugin_telemetry::traced("reregister_shortcuts", async move {
         // Unregister everything
         shortcuts::unregister_all_shortcuts(app.clone())?;
 
         // Re-register from config
         let cfg = config::get_config().map_err(|e| format!("Failed to load config: {}", e))?;
-        register_shortcuts_from_config(&app, &cfg);
+        let failed = register_shortcuts_from_config(&app, &cfg);
 
         tracing::info!("Re-registered all shortcuts from config");
-        Ok(())
+        Ok(failed)
     })
     .await
 }
 
-/// Register shortcuts from saved configuration
-fn register_shortcuts_from_config(app: &tauri::AppHandle, cfg: &config::Config) {
+/// Register shortcuts from saved configuration, returning the ones the system
+/// refused so the caller can tell the user.
+fn register_shortcuts_from_config(
+    app: &tauri::AppHandle,
+    cfg: &config::Config,
+) -> Vec<shortcuts::ShortcutConflict> {
     use shortcuts::manager::shortcut_ids;
 
     // On Wayland, the actual global-shortcut binding is owned by the XDG portal,
@@ -129,15 +135,25 @@ fn register_shortcuts_from_config(app: &tauri::AppHandle, cfg: &config::Config) 
     .filter(|(_, accel, _)| !accel.is_empty())
     .collect();
 
+    let mut failed = Vec::new();
     for (id, accelerator, description) in shortcuts {
         match register_single_shortcut(app, id, accelerator, description) {
             Ok(()) => tracing::info!("Registered {} shortcut: {}", id, accelerator),
-            Err(e) => tracing::warn!("Failed to register {} shortcut: {}", id, e),
+            Err(e) => {
+                tracing::warn!("Failed to register {} shortcut: {}", id, e);
+                failed.push(shortcuts::conflict::create_conflict(
+                    accelerator,
+                    id,
+                    &e.to_string(),
+                ));
+            }
         }
     }
 
     // Start the keyboard service if any modifier shortcuts were registered
     keyboard_service::start_monitoring(app.clone());
+
+    failed
 }
 
 /// Installs the `ring` crypto provider as the process-wide rustls default,
@@ -540,15 +556,8 @@ pub fn run() {
             config::reset_config,
             config::get_config_path_cmd,
             // Shortcuts
-            shortcuts::register_shortcut,
-            shortcuts::unregister_shortcut,
             shortcuts::list_registered_shortcuts,
             shortcuts::get_default_shortcuts,
-            shortcuts::register_default_shortcuts,
-            shortcuts::unregister_all_shortcuts,
-            shortcuts::try_register_shortcut,
-            shortcuts::check_shortcut_available,
-            shortcuts::get_shortcut_suggestions,
             reregister_shortcuts,
             // Dictionary
             dictionary::get_dictionary_entries,

@@ -31,9 +31,7 @@ pub struct StorageUsage {
 
 /// Get the Thoth data directory (~/.thoth)
 fn thoth_dir() -> PathBuf {
-    dirs::home_dir()
-        .expect("Could not determine home directory")
-        .join(".thoth")
+    crate::config::data_dir()
 }
 
 /// Get the FluidAudio model cache directory, if applicable on this platform.
@@ -61,29 +59,22 @@ fn fluidaudio_models_dir() -> Option<PathBuf> {
     }
 }
 
-/// Calculate total size of a directory recursively
-fn dir_size(path: &Path) -> u64 {
-    if !path.exists() {
+/// Total size of a directory, recursively; 0 if it does not exist.
+pub(crate) fn dir_size(path: &Path) -> u64 {
+    let Ok(entries) = fs::read_dir(path) else {
         return 0;
-    }
-
-    walkdir(path)
-}
-
-/// Recursive directory size calculation
-fn walkdir(path: &Path) -> u64 {
-    let mut total = 0;
-    if let Ok(entries) = fs::read_dir(path) {
-        for entry in entries.flatten() {
-            let entry_path = entry.path();
-            if entry_path.is_dir() {
-                total += walkdir(&entry_path);
-            } else if let Ok(meta) = entry_path.metadata() {
-                total += meta.len();
+    };
+    entries
+        .flatten()
+        .map(|entry| {
+            let p = entry.path();
+            if p.is_dir() {
+                dir_size(&p)
+            } else {
+                p.metadata().map(|m| m.len()).unwrap_or(0)
             }
-        }
-    }
-    total
+        })
+        .sum()
 }
 
 /// Count files in a directory (non-recursive)

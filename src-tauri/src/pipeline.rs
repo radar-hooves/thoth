@@ -1275,52 +1275,9 @@ fn get_transcription_model_name() -> Option<String> {
     model_id.or_else(transcription::get_transcription_backend)
 }
 
-/// Get audio file duration (placeholder - returns None for now)
+/// Duration of a WAV file in seconds, or `None` if it cannot be read.
 fn get_audio_duration(audio_path: &str) -> Option<f64> {
-    // Try to read WAV file header to get duration
-    let path = PathBuf::from(audio_path);
-    if !path.exists() {
-        return None;
-    }
-
-    // Read WAV header for duration calculation
-    match std::fs::File::open(&path) {
-        Ok(file) => {
-            use std::io::Read;
-            let mut reader = std::io::BufReader::new(file);
-
-            // WAV format: bytes 24-27 = sample rate, bytes 28-31 = byte rate
-            // Total samples = (file_size - 44) / (bits_per_sample / 8 * num_channels)
-            // Duration = total_samples / sample_rate
-
-            let mut header = [0u8; 44];
-            if reader.read_exact(&mut header).is_ok() {
-                // Get sample rate from bytes 24-27 (little-endian)
-                let sample_rate =
-                    u32::from_le_bytes([header[24], header[25], header[26], header[27]]);
-                // Get byte rate from bytes 28-31 (little-endian)
-                let byte_rate =
-                    u32::from_le_bytes([header[28], header[29], header[30], header[31]]);
-
-                if byte_rate > 0 {
-                    // Get file size
-                    if let Ok(metadata) = std::fs::metadata(&path) {
-                        let data_size = metadata.len().saturating_sub(44) as f64;
-                        let duration = data_size / byte_rate as f64;
-                        tracing::debug!(
-                            "Audio duration: {:.2}s (sample_rate={}, byte_rate={})",
-                            duration,
-                            sample_rate,
-                            byte_rate
-                        );
-                        return Some(duration);
-                    }
-                }
-            }
-            None
-        }
-        Err(_) => None,
-    }
+    crate::audio::wav::duration_secs(std::path::Path::new(audio_path))
 }
 
 /// Transcribe an imported audio file through the full pipeline.
@@ -1372,8 +1329,7 @@ pub async fn pipeline_transcribe_file(
         config.auto_paste = false;
 
         // Generate output path for the decoded WAV
-        let home = dirs::home_dir().ok_or("Could not find home directory")?;
-        let recordings_dir = home.join(".thoth").join("Recordings");
+        let recordings_dir = crate::config::data_dir().join("Recordings");
         std::fs::create_dir_all(&recordings_dir)
             .map_err(|e| format!("Failed to create recordings directory: {}", e))?;
 

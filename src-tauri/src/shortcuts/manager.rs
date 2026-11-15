@@ -337,40 +337,9 @@ pub fn record_shortcut(id: String, accelerator: String, description: String) {
     get_manager().write().shortcuts.insert(id, info);
 }
 
-/// Forget a recorded shortcut without an OS unbind call (Wayland book-keeping).
-pub fn forget_shortcut(id: &str) {
-    get_manager().write().shortcuts.remove(id);
-}
-
 /// Clear all recorded shortcuts without OS unbind calls (Wayland book-keeping).
 pub fn clear_shortcuts() {
     get_manager().write().shortcuts.clear();
-}
-
-/// Unregister a shortcut by its ID
-pub fn unregister<R: Runtime>(app: &AppHandle<R>, id: &str) -> Result<(), String> {
-    let accelerator = {
-        let manager = get_manager().read();
-        manager
-            .shortcuts
-            .get(id)
-            .map(|info| info.accelerator.clone())
-            .ok_or_else(|| format!("Shortcut '{}' is not registered", id))?
-    };
-
-    let global_shortcut = app.global_shortcut();
-
-    global_shortcut
-        .unregister(accelerator.as_str())
-        .map_err(|e| format!("Failed to unregister shortcut '{}': {}", accelerator, e))?;
-
-    {
-        let mut manager = get_manager().write();
-        manager.shortcuts.remove(id);
-    }
-
-    tracing::info!("Unregistered shortcut '{}'", id);
-    Ok(())
 }
 
 /// List all currently registered shortcuts

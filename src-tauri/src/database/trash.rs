@@ -59,7 +59,7 @@ pub struct TrashEntry {
 
 /// Path to `~/.thoth/Trash/` (or `$THOTH_DATA_DIR/Trash/` in tests).
 fn trash_dir() -> Result<std::path::PathBuf, DatabaseError> {
-    let base = super::get_thoth_directory()?;
+    let base = crate::config::data_dir();
     let dir = base.join("Trash");
     if !dir.exists() {
         std::fs::create_dir_all(&dir)?;

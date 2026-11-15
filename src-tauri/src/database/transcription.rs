@@ -130,7 +130,7 @@ pub fn create_transcription(transcription: &Transcription) -> Result<(), Databas
 }
 
 /// Column list for all SELECT queries.
-const SELECT_COLUMNS: &str = r#"
+pub(crate) const SELECT_COLUMNS: &str = r#"
     id, text, raw_text, duration_seconds, created_at, audio_path,
     is_enhanced, enhancement_prompt,
     transcription_model_name, transcription_duration_seconds,
@@ -138,7 +138,7 @@ const SELECT_COLUMNS: &str = r#"
 "#;
 
 /// Map a database row to a Transcription struct.
-fn row_to_transcription(row: &rusqlite::Row) -> rusqlite::Result<Transcription> {
+pub(crate) fn row_to_transcription(row: &rusqlite::Row) -> rusqlite::Result<Transcription> {
     Ok(Transcription {
         id: row.get(0)?,
         text: row.get(1)?,
@@ -334,24 +334,15 @@ fn delete_all_transcriptions_with_conn(
 }
 
 /// Returns the recordings directory (~/.thoth/Recordings/).
-fn recordings_dir() -> Option<std::path::PathBuf> {
-    dirs::home_dir().map(|h| h.join(".thoth").join("Recordings"))
+fn recordings_dir() -> std::path::PathBuf {
+    crate::config::data_dir().join("Recordings")
 }
 
 /// Scans ~/.thoth/Recordings/ for WAV files that are not referenced by any
 /// DB row and removes them, returning a count and bytes freed.
 pub fn reconcile_orphaned_recordings() -> Result<ReconcileResult, DatabaseError> {
     let conn = open_connection()?;
-    let dir = match recordings_dir() {
-        Some(d) => d,
-        None => {
-            return Ok(ReconcileResult {
-                removed_count: 0,
-                bytes_freed: 0,
-            });
-        }
-    };
-    reconcile_orphaned_recordings_with_conn(&conn, &dir)
+    reconcile_orphaned_recordings_with_conn(&conn, &recordings_dir())
 }
 
 /// Inner implementation used by tests.
@@ -678,12 +669,10 @@ pub fn get_transcription_stats() -> Result<TranscriptionStats, DatabaseError> {
 #[tauri::command]
 pub fn get_transcription_stats_cmd() -> Result<TranscriptionStats, Error> {
     tauri_plugin_telemetry::traced_sync("get_transcription_stats_cmd", || {
-        get_transcription_stats()
-            .map_err(|e| {
-                tracing::error!("Failed to get transcription stats: {}", e);
-                format!("Failed to get stats: {}", e)
-            })
-            .map_err(Into::into)
+        get_transcription_stats().map_err(|e| {
+            tracing::error!("Failed to get transcription stats: {}", e);
+            Error::Other(format!("Failed to get stats: {}", e))
+        })
     })
 }
 
@@ -691,12 +680,10 @@ pub fn get_transcription_stats_cmd() -> Result<TranscriptionStats, Error> {
 #[tauri::command]
 pub fn get_transcription_by_id(id: String) -> Result<Option<Transcription>, Error> {
     tauri_plugin_telemetry::traced_sync("get_transcription_by_id", || {
-        get_transcription(&id)
-            .map_err(|e| {
-                tracing::error!("Failed to get transcription {}: {}", id, e);
-                format!("Failed to get transcription: {}", e)
-            })
-            .map_err(Into::into)
+        get_transcription(&id).map_err(|e| {
+            tracing::error!("Failed to get transcription {}: {}", id, e);
+            Error::Other(format!("Failed to get transcription: {}", e))
+        })
     })
 }
 
@@ -707,12 +694,10 @@ pub async fn list_all_transcriptions(
     offset: Option<i64>,
 ) -> Result<Vec<Transcription>, Error> {
     tauri_plugin_telemetry::traced("list_all_transcriptions", async move {
-        list_transcriptions(limit, offset)
-            .map_err(|e| {
-                tracing::error!("Failed to list transcriptions: {}", e);
-                format!("Failed to list transcriptions: {}", e)
-            })
-            .map_err(Into::into)
+        list_transcriptions(limit, offset).map_err(|e| {
+            tracing::error!("Failed to list transcriptions: {}", e);
+            Error::Other(format!("Failed to list transcriptions: {}", e))
+        })
     })
     .await
 }
@@ -721,12 +706,10 @@ pub async fn list_all_transcriptions(
 #[tauri::command]
 pub async fn delete_transcription_by_id(id: String) -> Result<bool, Error> {
     tauri_plugin_telemetry::traced("delete_transcription_by_id", async move {
-        delete_transcription(&id)
-            .map_err(|e| {
-                tracing::error!("Failed to delete transcription {}: {}", id, e);
-                format!("Failed to delete transcription: {}", e)
-            })
-            .map_err(Into::into)
+        delete_transcription(&id).map_err(|e| {
+            tracing::error!("Failed to delete transcription {}: {}", id, e);
+            Error::Other(format!("Failed to delete transcription: {}", e))
+        })
     })
     .await
 }
@@ -735,12 +718,10 @@ pub async fn delete_transcription_by_id(id: String) -> Result<bool, Error> {
 #[tauri::command]
 pub async fn delete_all_transcriptions_cmd() -> Result<usize, Error> {
     tauri_plugin_telemetry::traced("delete_all_transcriptions_cmd", async move {
-        delete_all_transcriptions()
-            .map_err(|e| {
-                tracing::error!("Failed to delete all transcriptions: {}", e);
-                format!("Failed to delete all transcriptions: {}", e)
-            })
-            .map_err(Into::into)
+        delete_all_transcriptions().map_err(|e| {
+            tracing::error!("Failed to delete all transcriptions: {}", e);
+            Error::Other(format!("Failed to delete all transcriptions: {}", e))
+        })
     })
     .await
 }

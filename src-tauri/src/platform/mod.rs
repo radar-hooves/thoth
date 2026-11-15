@@ -136,14 +136,15 @@ pub fn get_gpu_info() -> Result<SystemGpuInfo, Error> {
 
         #[cfg(target_os = "macos")]
         {
+            let gpu_name = get_macos_gpu_name();
             Ok(SystemGpuInfo {
                 compiled_backend: "Metal".to_string(),
                 gpu_available: true,
-                gpu_name: get_macos_gpu_name(),
+                gpu_name: gpu_name.clone(),
                 vram_mb: None,
                 detected_gpus: vec![DetectedGpu {
                     backend: "Metal".to_string(),
-                    name: get_macos_gpu_name().unwrap_or_else(|| "Apple GPU".to_string()),
+                    name: gpu_name.unwrap_or_else(|| "Apple GPU".to_string()),
                     vram_mb: None,
                 }],
                 permissions: permissions(),

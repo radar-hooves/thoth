@@ -94,10 +94,7 @@ pub struct CanonicalRegistry {
 static REGISTRY: OnceLock<RwLock<CanonicalRegistry>> = OnceLock::new();
 
 fn get_registry_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".thoth")
-        .join("canonical_terms.json")
+    crate::config::data_dir().join("canonical_terms.json")
 }
 
 fn load_or_seed() -> CanonicalRegistry {
@@ -278,27 +275,6 @@ fn word_indices(spans: &[Span<'_>]) -> Vec<usize> {
 // Casing
 // ---------------------------------------------------------------------------
 
-/// Restore the leading-capitalisation style of `original` onto `replacement`.
-///
-/// - ALL-CAPS original → replacement uppercased
-/// - Capitalised original → replacement capitalised
-/// - all-lower original → replacement unchanged
-fn restore_case(original: &str, replacement: &str) -> String {
-    let all_upper =
-        original.chars().all(|c| !c.is_lowercase()) && original.chars().any(|c| c.is_uppercase());
-    if all_upper {
-        return replacement.to_uppercase();
-    }
-    if original.chars().next().is_some_and(|c| c.is_uppercase()) {
-        let mut out = replacement.to_string();
-        if let Some(first) = out.get_mut(0..1) {
-            first.make_ascii_uppercase();
-        }
-        return out;
-    }
-    replacement.to_string()
-}
-
 /// Decide the output form of `canonical_term` when it matched `matched_span`.
 ///
 /// If the term itself carries mixed or upper casing (e.g. "LiteLLM",
@@ -309,7 +285,7 @@ fn output_form(canonical_term: &str, matched_span: &str) -> String {
     if term_is_cased {
         canonical_term.to_string()
     } else {
-        restore_case(matched_span, canonical_term)
+        crate::transcription::filter::restore_case(matched_span, canonical_term)
     }
 }
 

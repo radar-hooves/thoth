@@ -79,10 +79,7 @@ pub fn get_builtin_prompts() -> Vec<PromptTemplate> {
 
 /// Get the path to custom prompts file
 pub fn get_custom_prompts_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".thoth")
-        .join("prompts.json")
+    crate::config::data_dir().join("prompts.json")
 }
 
 /// Load custom prompts from disk

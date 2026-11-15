@@ -11,6 +11,7 @@ pub mod preview;
 pub mod ring_buffer;
 pub mod speech_gate;
 pub mod vad;
+pub mod wav;
 
 pub use capture::AudioRecorder;
 pub use device::{AudioDevice, get_device_display_name, get_recording_device, list_input_devices};
@@ -146,8 +147,7 @@ pub fn start_recording() -> Result<String, Error> {
         IDLE_GENERATION.fetch_add(1, Ordering::Relaxed);
 
         // Generate output path in ~/.thoth/Recordings/
-        let home = dirs::home_dir().ok_or("Could not find home directory")?;
-        let recordings_dir = home.join(".thoth").join("Recordings");
+        let recordings_dir = crate::config::data_dir().join("Recordings");
         std::fs::create_dir_all(&recordings_dir)
             .map_err(|e| format!("Failed to create recordings directory: {}", e))?;
 

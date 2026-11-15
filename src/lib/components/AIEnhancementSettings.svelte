@@ -7,7 +7,7 @@
   import * as Select from '@poodle64/ui/select';
   import * as Dialog from '@poodle64/ui/dialog';
   import { Alert, AlertDescription } from '@poodle64/ui/alert';
-  import * as Form from '$components/ui/form';
+  import * as Form from '@poodle64/ui/form';
   import { Select as SelectPrimitive } from 'bits-ui';
   import { Input } from '@poodle64/ui/input';
   import { Textarea } from '@poodle64/ui/textarea';

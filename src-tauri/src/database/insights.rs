@@ -188,52 +188,28 @@ fn get_insights_with_conn(
 
     // --- Totals ---
     let (total_count, total_audio_seconds, total_words_raw, enhanced_count, first_recording_at) =
-        if let Some(lb) = &lower {
-            conn.query_row(
-                r#"
-                SELECT
-                    COUNT(*),
-                    COALESCE(SUM(duration_seconds), 0.0),
-                    COALESCE(SUM(LENGTH(text)), 0),
-                    COALESCE(SUM(CASE WHEN is_enhanced = 1 THEN 1 ELSE 0 END), 0),
-                    MIN(created_at)
-                FROM transcriptions
-                WHERE created_at >= ?1
-                "#,
-                params![lb],
-                |row| {
-                    Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, f64>(1)?,
-                        row.get::<_, i64>(2)?,
-                        row.get::<_, i64>(3)?,
-                        row.get::<_, Option<String>>(4)?,
-                    ))
-                },
-            )?
-        } else {
-            conn.query_row(
-                r#"
-                SELECT
-                    COUNT(*),
-                    COALESCE(SUM(duration_seconds), 0.0),
-                    COALESCE(SUM(LENGTH(text)), 0),
-                    COALESCE(SUM(CASE WHEN is_enhanced = 1 THEN 1 ELSE 0 END), 0),
-                    MIN(created_at)
-                FROM transcriptions
-                "#,
-                [],
-                |row| {
-                    Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, f64>(1)?,
-                        row.get::<_, i64>(2)?,
-                        row.get::<_, i64>(3)?,
-                        row.get::<_, Option<String>>(4)?,
-                    ))
-                },
-            )?
-        };
+        conn.query_row(
+            r#"
+            SELECT
+                COUNT(*),
+                COALESCE(SUM(duration_seconds), 0.0),
+                COALESCE(SUM(LENGTH(text)), 0),
+                COALESCE(SUM(CASE WHEN is_enhanced = 1 THEN 1 ELSE 0 END), 0),
+                MIN(created_at)
+            FROM transcriptions
+            WHERE (?1 IS NULL OR created_at >= ?1)
+            "#,
+            params![lower],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, f64>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                ))
+            },
+        )?;
 
     let total_words = (total_words_raw as f64 / 5.5) as i64;
     let typing_wpm: f64 = 40.0; // no typing_wpm field in config; spec says default 40
@@ -288,51 +264,27 @@ fn query_daily_activity(
     conn: &Connection,
     lower: Option<&str>,
 ) -> Result<Vec<DailyActivity>, DatabaseError> {
-    let sql = if lower.is_some() {
+    let mut stmt = conn.prepare(
         r#"
         SELECT
             date(created_at, 'localtime') AS day,
             COUNT(*) AS cnt,
             COALESCE(CAST(SUM(LENGTH(text)) / 5.5 AS INTEGER), 0) AS words
         FROM transcriptions
-        WHERE created_at >= ?1
+        WHERE (?1 IS NULL OR created_at >= ?1)
         GROUP BY day
         ORDER BY day ASC
-        "#
-        .to_string()
-    } else {
-        r#"
-        SELECT
-            date(created_at, 'localtime') AS day,
-            COUNT(*) AS cnt,
-            COALESCE(CAST(SUM(LENGTH(text)) / 5.5 AS INTEGER), 0) AS words
-        FROM transcriptions
-        GROUP BY day
-        ORDER BY day ASC
-        "#
-        .to_string()
-    };
-
-    let mut stmt = conn.prepare(&sql)?;
-    let rows = if let Some(lb) = lower {
-        stmt.query_map(params![lb], |row| {
+        "#,
+    )?;
+    let rows = stmt
+        .query_map(params![lower], |row| {
             Ok(DailyActivity {
                 day: row.get(0)?,
                 count: row.get(1)?,
                 words: row.get(2)?,
             })
         })?
-        .collect::<Result<Vec<_>, _>>()?
-    } else {
-        stmt.query_map([], |row| {
-            Ok(DailyActivity {
-                day: row.get(0)?,
-                count: row.get(1)?,
-                words: row.get(2)?,
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?
-    };
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
 }
 
@@ -398,7 +350,7 @@ fn query_throughput(
     conn: &Connection,
     lower: Option<&str>,
 ) -> Result<Vec<ThroughputStats>, DatabaseError> {
-    let sql = if lower.is_some() {
+    let mut stmt = conn.prepare(
         r#"
         SELECT
             transcription_model_name,
@@ -408,35 +360,14 @@ fn query_throughput(
         FROM transcriptions
         WHERE transcription_model_name IS NOT NULL
           AND transcription_duration_seconds IS NOT NULL
-          AND created_at >= ?1
+          AND (?1 IS NULL OR created_at >= ?1)
         GROUP BY transcription_model_name
         ORDER BY cnt DESC
-        "#
-        .to_string()
-    } else {
-        r#"
-        SELECT
-            transcription_model_name,
-            COUNT(*) AS cnt,
-            COALESCE(AVG(duration_seconds), 0.0) AS avg_audio,
-            COALESCE(AVG(transcription_duration_seconds), 0.0) AS avg_proc
-        FROM transcriptions
-        WHERE transcription_model_name IS NOT NULL
-          AND transcription_duration_seconds IS NOT NULL
-        GROUP BY transcription_model_name
-        ORDER BY cnt DESC
-        "#
-        .to_string()
-    };
-
-    let mut stmt = conn.prepare(&sql)?;
-    let rows = if let Some(lb) = lower {
-        stmt.query_map(params![lb], map_throughput_row)?
-            .collect::<Result<Vec<_>, _>>()?
-    } else {
-        stmt.query_map([], map_throughput_row)?
-            .collect::<Result<Vec<_>, _>>()?
-    };
+        "#,
+    )?;
+    let rows = stmt
+        .query_map(params![lower], map_throughput_row)?
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
 }
 
@@ -465,96 +396,47 @@ fn query_model_usage(
     total_count: i64,
 ) -> Result<ModelUsage, DatabaseError> {
     // Per-backend counts
-    let backend_counts = {
-        let sql = if lower.is_some() {
+    let backend_counts = conn
+        .prepare(
             r#"
             SELECT
                 COALESCE(transcription_model_name, 'unknown') AS name,
                 COUNT(*) AS cnt
             FROM transcriptions
-            WHERE created_at >= ?1
+            WHERE (?1 IS NULL OR created_at >= ?1)
             GROUP BY transcription_model_name
             ORDER BY cnt DESC
-            "#
-            .to_string()
-        } else {
-            r#"
-            SELECT
-                COALESCE(transcription_model_name, 'unknown') AS name,
-                COUNT(*) AS cnt
-            FROM transcriptions
-            GROUP BY transcription_model_name
-            ORDER BY cnt DESC
-            "#
-            .to_string()
-        };
-
-        let mut stmt = conn.prepare(&sql)?;
-        if let Some(lb) = lower {
-            stmt.query_map(params![lb], |row| {
-                Ok(BackendCount {
-                    name: row.get(0)?,
-                    count: row.get(1)?,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()?
-        } else {
-            stmt.query_map([], |row| {
-                Ok(BackendCount {
-                    name: row.get(0)?,
-                    count: row.get(1)?,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()?
-        }
-    };
+            "#,
+        )?
+        .query_map(params![lower], |row| {
+            Ok(BackendCount {
+                name: row.get(0)?,
+                count: row.get(1)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Enhancement prompt breakdown (enhanced rows only)
-    let enhancement_prompts = {
-        let sql = if lower.is_some() {
+    let enhancement_prompts = conn
+        .prepare(
             r#"
             SELECT
                 COALESCE(enhancement_prompt, 'unknown') AS prompt,
                 COUNT(*) AS cnt
             FROM transcriptions
             WHERE is_enhanced = 1
-              AND created_at >= ?1
+              AND (?1 IS NULL OR created_at >= ?1)
             GROUP BY enhancement_prompt
             ORDER BY cnt DESC
-            "#
-            .to_string()
-        } else {
-            r#"
-            SELECT
-                COALESCE(enhancement_prompt, 'unknown') AS prompt,
-                COUNT(*) AS cnt
-            FROM transcriptions
-            WHERE is_enhanced = 1
-            GROUP BY enhancement_prompt
-            ORDER BY cnt DESC
-            "#
-            .to_string()
-        };
-
-        let mut stmt = conn.prepare(&sql)?;
-        if let Some(lb) = lower {
-            stmt.query_map(params![lb], |row| {
-                Ok(PromptCount {
-                    prompt: row.get(0)?,
-                    count: row.get(1)?,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()?
-        } else {
-            stmt.query_map([], |row| {
-                Ok(PromptCount {
-                    prompt: row.get(0)?,
-                    count: row.get(1)?,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()?
-        }
-    };
+            "#,
+        )?
+        .query_map(params![lower], |row| {
+            Ok(PromptCount {
+                prompt: row.get(0)?,
+                count: row.get(1)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
 
     let enhanced_pct = if total_count > 0 {
         let enhanced_total: i64 = enhancement_prompts.iter().map(|p| p.count).sum();
@@ -589,24 +471,15 @@ fn query_length_histogram(
             COUNT(*) AS cnt
         FROM transcriptions
         WHERE duration_seconds IS NOT NULL
+          AND (?1 IS NULL OR created_at >= ?1)
+        GROUP BY bucket
+        ORDER BY MIN(duration_seconds)
     "#;
 
-    let where_clause = if lower.is_some() {
-        "  AND created_at >= ?1\n GROUP BY bucket ORDER BY MIN(duration_seconds)"
-    } else {
-        " GROUP BY bucket ORDER BY MIN(duration_seconds)"
-    };
-
-    let sql = format!("{}{}", bucket_sql, where_clause);
-    let mut stmt = conn.prepare(&sql)?;
-
-    let rows: Vec<(String, i64)> = if let Some(lb) = lower {
-        stmt.query_map(params![lb], |row| Ok((row.get(0)?, row.get(1)?)))?
-            .collect::<Result<Vec<_>, _>>()?
-    } else {
-        stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
-            .collect::<Result<Vec<_>, _>>()?
-    };
+    let mut stmt = conn.prepare(bucket_sql)?;
+    let rows: Vec<(String, i64)> = stmt
+        .query_map(params![lower], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Ensure all buckets appear in the correct order, even if empty.
     let ordered_labels = [
@@ -625,31 +498,17 @@ fn query_length_histogram(
 }
 
 fn query_time_of_day(conn: &Connection, lower: Option<&str>) -> Result<Vec<u32>, DatabaseError> {
-    let sql = if lower.is_some() {
+    let mut stmt = conn.prepare(
         r#"
         SELECT CAST(strftime('%H', created_at, 'localtime') AS INTEGER) AS hour, COUNT(*) AS cnt
         FROM transcriptions
-        WHERE created_at >= ?1
+        WHERE (?1 IS NULL OR created_at >= ?1)
         GROUP BY hour
-        "#
-        .to_string()
-    } else {
-        r#"
-        SELECT CAST(strftime('%H', created_at, 'localtime') AS INTEGER) AS hour, COUNT(*) AS cnt
-        FROM transcriptions
-        GROUP BY hour
-        "#
-        .to_string()
-    };
-
-    let mut stmt = conn.prepare(&sql)?;
-    let rows: Vec<(i64, i64)> = if let Some(lb) = lower {
-        stmt.query_map(params![lb], |row| Ok((row.get(0)?, row.get(1)?)))?
-            .collect::<Result<Vec<_>, _>>()?
-    } else {
-        stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
-            .collect::<Result<Vec<_>, _>>()?
-    };
+        "#,
+    )?;
+    let rows: Vec<(i64, i64)> = stmt
+        .query_map(params![lower], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<Vec<_>, _>>()?;
 
     let mut counts = vec![0u32; 24];
     for (hour, cnt) in rows {
@@ -661,14 +520,14 @@ fn query_time_of_day(conn: &Connection, lower: Option<&str>) -> Result<Vec<u32>,
 }
 
 fn compute_storage() -> Result<StorageBreakdown, DatabaseError> {
-    let base = super::get_thoth_directory()?;
+    let base = crate::config::data_dir();
 
     let recordings_dir = base.join("Recordings");
     let models_dir = base.join("models");
     let db_path = base.join("thoth.db");
 
-    let recordings_bytes = dir_size_bytes(&recordings_dir);
-    let models_bytes = dir_size_bytes(&models_dir);
+    let recordings_bytes = crate::storage::dir_size(&recordings_dir);
+    let models_bytes = crate::storage::dir_size(&models_dir);
     let db_bytes = std::fs::metadata(&db_path).map(|m| m.len()).unwrap_or(0);
 
     let total_bytes = recordings_bytes + models_bytes + db_bytes;
@@ -800,28 +659,6 @@ pub fn compute_wav_rms(path: &std::path::Path) -> Option<f64> {
 // =============================================================================
 // Filesystem helpers (storage)
 // =============================================================================
-
-fn dir_size_bytes(path: &std::path::Path) -> u64 {
-    if !path.exists() {
-        return 0;
-    }
-    walkdir_size(path)
-}
-
-fn walkdir_size(path: &std::path::Path) -> u64 {
-    let mut total = 0u64;
-    if let Ok(entries) = std::fs::read_dir(path) {
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if p.is_dir() {
-                total += walkdir_size(&p);
-            } else if let Ok(meta) = p.metadata() {
-                total += meta.len();
-            }
-        }
-    }
-    total
-}
 
 fn oldest_file_mtime(dir: &std::path::Path) -> Option<String> {
     if !dir.exists() {

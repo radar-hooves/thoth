@@ -3,7 +3,8 @@
 //! Provides commands for searching transcriptions and exporting them
 //! to various formats (JSON, CSV, TXT).
 
-use crate::database;
+use crate::database::transcription::{SELECT_COLUMNS, row_to_transcription};
+use crate::database::{self, Transcription};
 use crate::error::Error;
 use chrono::{DateTime, Utc};
 use csv::WriterBuilder;
@@ -11,24 +12,6 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-
-/// A transcription record for export and search operations.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TranscriptionRecord {
-    pub id: String,
-    pub text: String,
-    pub raw_text: Option<String>,
-    pub duration_seconds: Option<f64>,
-    pub created_at: String,
-    pub audio_path: Option<String>,
-    pub is_enhanced: bool,
-    pub enhancement_prompt: Option<String>,
-    pub transcription_model_name: Option<String>,
-    pub transcription_duration_seconds: Option<f64>,
-    pub enhancement_model_name: Option<String>,
-    pub enhancement_duration_seconds: Option<f64>,
-}
 
 /// Export format options.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,7 +38,7 @@ pub struct SearchParams {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResult {
-    pub records: Vec<TranscriptionRecord>,
+    pub records: Vec<Transcription>,
     pub total_count: u32,
     pub has_more: bool,
 }
@@ -137,23 +120,23 @@ fn search_transcriptions_db(params: &SearchParams) -> Result<SearchResult, Strin
 
     let sql = format!(
         r#"
-        SELECT id, text, raw_text, duration_seconds, created_at,
-               audio_path, is_enhanced, enhancement_prompt,
-               transcription_model_name, transcription_duration_seconds,
-               enhancement_model_name, enhancement_duration_seconds
+        SELECT {cols}
         FROM transcriptions
         {}
         ORDER BY created_at DESC
         LIMIT {} OFFSET {}
         "#,
-        where_clause, limit, offset
+        where_clause,
+        limit,
+        offset,
+        cols = SELECT_COLUMNS
     );
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let params_refs: Vec<&dyn rusqlite::ToSql> = query_params.iter().map(|p| p.as_ref()).collect();
 
     let records = stmt
-        .query_map(params_refs.as_slice(), export_row_to_record)
+        .query_map(params_refs.as_slice(), row_to_transcription)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -167,26 +150,8 @@ fn search_transcriptions_db(params: &SearchParams) -> Result<SearchResult, Strin
     })
 }
 
-/// Map a database row to an export TranscriptionRecord.
-fn export_row_to_record(row: &rusqlite::Row) -> rusqlite::Result<TranscriptionRecord> {
-    Ok(TranscriptionRecord {
-        id: row.get(0)?,
-        text: row.get(1)?,
-        raw_text: row.get(2)?,
-        duration_seconds: row.get(3)?,
-        created_at: row.get(4)?,
-        audio_path: row.get(5)?,
-        is_enhanced: row.get::<_, i32>(6)? != 0,
-        enhancement_prompt: row.get(7)?,
-        transcription_model_name: row.get(8)?,
-        transcription_duration_seconds: row.get(9)?,
-        enhancement_model_name: row.get(10)?,
-        enhancement_duration_seconds: row.get(11)?,
-    })
-}
-
 /// Gets transcriptions by their IDs for batch export.
-fn get_transcriptions_by_ids(ids: &[String]) -> Result<Vec<TranscriptionRecord>, String> {
+fn get_transcriptions_by_ids(ids: &[String]) -> Result<Vec<Transcription>, String> {
     if ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -200,22 +165,20 @@ fn get_transcriptions_by_ids(ids: &[String]) -> Result<Vec<TranscriptionRecord>,
     let placeholders: Vec<String> = (1..=ids.len()).map(|i| format!("?{}", i)).collect();
     let sql = format!(
         r#"
-        SELECT id, text, raw_text, duration_seconds, created_at,
-               audio_path, is_enhanced, enhancement_prompt,
-               transcription_model_name, transcription_duration_seconds,
-               enhancement_model_name, enhancement_duration_seconds
+        SELECT {cols}
         FROM transcriptions
         WHERE id IN ({})
         ORDER BY created_at DESC
         "#,
-        placeholders.join(", ")
+        placeholders.join(", "),
+        cols = SELECT_COLUMNS
     );
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let params: Vec<&dyn rusqlite::ToSql> = ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
 
     let records = stmt
-        .query_map(params.as_slice(), export_row_to_record)
+        .query_map(params.as_slice(), row_to_transcription)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -228,7 +191,7 @@ fn get_transcriptions_by_ids(ids: &[String]) -> Result<Vec<TranscriptionRecord>,
 // =============================================================================
 
 /// Exports records to JSON format.
-fn export_json(records: &[TranscriptionRecord], path: &Path) -> Result<(), String> {
+fn export_json(records: &[Transcription], path: &Path) -> Result<(), String> {
     let json = serde_json::to_string_pretty(records).map_err(|e| {
         tracing::error!("Failed to serialise records to JSON: {}", e);
         format!("Failed to create JSON: {}", e)
@@ -254,7 +217,7 @@ fn export_json(records: &[TranscriptionRecord], path: &Path) -> Result<(), Strin
 /// (transcription text, raw text, model names, enhancement prompt) are
 /// formula-injection sanitised before writing; numeric, boolean, and timestamp
 /// columns are written verbatim.
-fn export_csv(records: &[TranscriptionRecord], path: &Path) -> Result<(), String> {
+fn export_csv(records: &[Transcription], path: &Path) -> Result<(), String> {
     let file = File::create(path).map_err(|e| {
         tracing::error!("Failed to create export file: {}", e);
         format!("Failed to create file: {}", e)
@@ -335,7 +298,7 @@ pub(crate) fn sanitize_csv_field(s: &str) -> String {
 }
 
 /// Exports records to plain text format.
-fn export_txt(records: &[TranscriptionRecord], path: &Path) -> Result<(), String> {
+fn export_txt(records: &[Transcription], path: &Path) -> Result<(), String> {
     let mut file = File::create(path).map_err(|e| {
         tracing::error!("Failed to create export file: {}", e);
         format!("Failed to create file: {}", e)
@@ -379,7 +342,7 @@ fn export_records<F>(
     exporter: F,
 ) -> Result<u32, String>
 where
-    F: FnOnce(&[TranscriptionRecord], &Path) -> Result<(), String>,
+    F: FnOnce(&[Transcription], &Path) -> Result<(), String>,
 {
     let records = if ids.is_empty() {
         let params = search_params.unwrap_or(SearchParams {
@@ -518,7 +481,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("injection.csv");
 
-        let records = vec![TranscriptionRecord {
+        let records = vec![Transcription {
             id: "id3".to_string(),
             text: "=SUM(A1:A2)".to_string(),
             raw_text: Some("+malicious".to_string()),
@@ -555,7 +518,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("numeric.csv");
 
-        let records = vec![TranscriptionRecord {
+        let records = vec![Transcription {
             id: "id4".to_string(),
             text: "normal".to_string(),
             raw_text: None,
@@ -586,12 +549,12 @@ mod tests {
     }
 
     // =========================================================================
-    // TranscriptionRecord tests
+    // Transcription tests
     // =========================================================================
 
     #[test]
     fn test_transcription_record_creation() {
-        let record = TranscriptionRecord {
+        let record = Transcription {
             id: "test-id".to_string(),
             text: "Hello world".to_string(),
             raw_text: Some("hello world".to_string()),
@@ -613,7 +576,7 @@ mod tests {
 
     #[test]
     fn test_transcription_record_optional_fields() {
-        let record = TranscriptionRecord {
+        let record = Transcription {
             id: "test-id".to_string(),
             text: "Hello".to_string(),
             raw_text: None,
@@ -636,7 +599,7 @@ mod tests {
 
     #[test]
     fn test_transcription_record_serialisation() {
-        let record = TranscriptionRecord {
+        let record = Transcription {
             id: "uuid-123".to_string(),
             text: "Test text".to_string(),
             raw_text: Some("test text".to_string()),
@@ -652,7 +615,7 @@ mod tests {
         };
 
         let json = serde_json::to_string(&record).unwrap();
-        let restored: TranscriptionRecord = serde_json::from_str(&json).unwrap();
+        let restored: Transcription = serde_json::from_str(&json).unwrap();
 
         assert_eq!(restored.id, record.id);
         assert_eq!(restored.text, record.text);
@@ -803,7 +766,7 @@ mod tests {
     #[test]
     fn test_search_result_with_records() {
         let records = vec![
-            TranscriptionRecord {
+            Transcription {
                 id: "1".to_string(),
                 text: "First".to_string(),
                 raw_text: None,
@@ -817,7 +780,7 @@ mod tests {
                 enhancement_model_name: None,
                 enhancement_duration_seconds: None,
             },
-            TranscriptionRecord {
+            Transcription {
                 id: "2".to_string(),
                 text: "Second".to_string(),
                 raw_text: None,
@@ -848,9 +811,9 @@ mod tests {
     // Export function tests (with temp files)
     // =========================================================================
 
-    fn create_test_records() -> Vec<TranscriptionRecord> {
+    fn create_test_records() -> Vec<Transcription> {
         vec![
-            TranscriptionRecord {
+            Transcription {
                 id: "id1".to_string(),
                 text: "First transcription".to_string(),
                 raw_text: Some("first transcription".to_string()),
@@ -864,7 +827,7 @@ mod tests {
                 enhancement_model_name: Some("llama3.2:3b".to_string()),
                 enhancement_duration_seconds: Some(0.8),
             },
-            TranscriptionRecord {
+            Transcription {
                 id: "id2".to_string(),
                 text: "Second, with \"quotes\"".to_string(),
                 raw_text: None,
@@ -904,7 +867,7 @@ mod tests {
         export_json(&records, &path).expect("Export should succeed");
 
         let content = std::fs::read_to_string(&path).unwrap();
-        let parsed: Vec<TranscriptionRecord> =
+        let parsed: Vec<Transcription> =
             serde_json::from_str(&content).expect("Should be valid JSON");
 
         assert_eq!(parsed.len(), 2);
@@ -916,7 +879,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("export.json");
 
-        let records: Vec<TranscriptionRecord> = Vec::new();
+        let records: Vec<Transcription> = Vec::new();
         export_json(&records, &path).expect("Export should succeed");
 
         let content = std::fs::read_to_string(&path).unwrap();
@@ -957,7 +920,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("export.csv");
 
-        let records: Vec<TranscriptionRecord> = Vec::new();
+        let records: Vec<Transcription> = Vec::new();
         export_csv(&records, &path).expect("Export should succeed");
 
         let content = std::fs::read_to_string(&path).unwrap();
@@ -1012,7 +975,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("export.txt");
 
-        let records: Vec<TranscriptionRecord> = Vec::new();
+        let records: Vec<Transcription> = Vec::new();
         export_txt(&records, &path).expect("Export should succeed");
 
         let content = std::fs::read_to_string(&path).unwrap();

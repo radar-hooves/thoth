@@ -383,10 +383,13 @@ pub async fn enter_capture_mode(app: AppHandle) -> Result<String, Error> {
 
 /// Exit capture mode, returning to normal operation.
 ///
-/// Re-registers all shortcuts from config (clean slate).
+/// Re-registers all shortcuts from config (clean slate) and returns the ones
+/// the system refused.
 /// The frontend MUST save config before calling this.
 #[tauri::command]
-pub async fn exit_capture_mode(app: AppHandle) -> Result<(), Error> {
+pub async fn exit_capture_mode(
+    app: AppHandle,
+) -> Result<Vec<crate::shortcuts::ShortcutConflict>, Error> {
     tauri_plugin_telemetry::traced("exit_capture_mode", async move {
         // 1. Switch mode back (atomic, instant)
         let has_modifier_shortcuts = !get_registry().read().shortcuts.is_empty();
@@ -403,10 +406,10 @@ pub async fn exit_capture_mode(app: AppHandle) -> Result<(), Error> {
         // 3. Re-register ALL shortcuts from config (clean slate)
         let cfg =
             crate::config::get_config().map_err(|e| format!("Failed to load config: {}", e))?;
-        crate::register_shortcuts_from_config(&app, &cfg);
+        let failed = crate::register_shortcuts_from_config(&app, &cfg);
 
         tracing::info!("Exited capture mode, shortcuts re-registered from config");
-        Ok(())
+        Ok(failed)
     })
     .await
 }

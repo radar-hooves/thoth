@@ -353,7 +353,7 @@ fn lookup_au_word(lower: &str) -> Option<&'static str> {
 ///
 /// Handles the three cases dictation produces: all-lower, Capitalised, and
 /// ALL-CAPS. Mixed/other casings fall back to matching the leading capital.
-fn restore_case(original: &str, converted: &str) -> String {
+pub(crate) fn restore_case(original: &str, converted: &str) -> String {
     let all_upper =
         original.chars().all(|c| !c.is_lowercase()) && original.chars().any(|c| c.is_uppercase());
     if all_upper {

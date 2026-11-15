@@ -681,25 +681,28 @@ fn camel_to_snake(s: &str) -> String {
 
 /// Get the path to the config file (~/.thoth/config.json)
 pub fn get_config_path() -> PathBuf {
-    home_dir_or_fallback().join(".thoth").join("config.json")
+    data_dir().join("config.json")
 }
 
-/// Get the path to the config directory (~/.thoth)
-pub(crate) fn get_config_dir() -> PathBuf {
-    home_dir_or_fallback().join(".thoth")
-}
-
-/// Get the home directory, falling back to /tmp if unavailable
-fn home_dir_or_fallback() -> PathBuf {
-    dirs::home_dir().unwrap_or_else(|| {
-        tracing::error!("Could not determine home directory, using /tmp");
-        PathBuf::from("/tmp")
-    })
+/// The Thoth data directory: `~/.thoth`, or `THOTH_DATA_DIR` when set to a
+/// non-empty path (tests and relocated data). Every file Thoth keeps lives here.
+pub(crate) fn data_dir() -> PathBuf {
+    if let Ok(dir) = std::env::var("THOTH_DATA_DIR")
+        && !dir.is_empty()
+    {
+        return PathBuf::from(dir);
+    }
+    dirs::home_dir()
+        .unwrap_or_else(|| {
+            tracing::error!("Could not determine home directory, using /tmp");
+            PathBuf::from("/tmp")
+        })
+        .join(".thoth")
 }
 
 /// Ensure the config directory exists
 fn ensure_config_dir() -> Result<(), String> {
-    let dir = get_config_dir();
+    let dir = data_dir();
     if !dir.exists() {
         fs::create_dir_all(&dir)
             .map_err(|e| format!("Failed to create config directory: {}", e))?;

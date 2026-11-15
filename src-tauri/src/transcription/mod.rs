@@ -394,60 +394,8 @@ pub fn transcribe_file_with_priority(
 /// Reads the audio samples and calculates RMS. If the RMS is below
 /// the silence threshold, returns false (no speech detected).
 fn audio_has_speech(path: &std::path::Path) -> Result<bool, String> {
-    use std::io::Read;
-
-    let file =
-        std::fs::File::open(path).map_err(|e| format!("Failed to open audio file: {}", e))?;
-    let mut reader = std::io::BufReader::new(file);
-
-    // Read WAV header (44 bytes minimum for standard WAV)
-    let mut header = [0u8; 44];
-    reader
-        .read_exact(&mut header)
-        .map_err(|e| format!("Failed to read WAV header: {}", e))?;
-
-    // Verify RIFF/WAVE header
-    if &header[0..4] != b"RIFF" || &header[8..12] != b"WAVE" {
-        return Err("Not a valid WAV file".to_string());
-    }
-
-    // Get format info
-    let channels = u16::from_le_bytes([header[22], header[23]]) as usize;
-    let bits_per_sample = u16::from_le_bytes([header[34], header[35]]);
-
-    if bits_per_sample != 16 {
-        // For non-16-bit audio, assume it has speech (can't easily check)
-        tracing::debug!(
-            "Non-16-bit audio ({}), assuming speech present",
-            bits_per_sample
-        );
-        return Ok(true);
-    }
-
-    // Read audio data and calculate RMS
-    let mut audio_data = Vec::new();
-    reader
-        .read_to_end(&mut audio_data)
-        .map_err(|e| format!("Failed to read audio data: {}", e))?;
-
-    // Convert i16 samples to f32
-    let samples: Vec<f32> = audio_data
-        .chunks_exact(2)
-        .map(|chunk| {
-            let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
-            sample as f32 / 32768.0
-        })
-        .collect();
-
-    // If stereo, average to mono for RMS calculation
-    let mono_samples: Vec<f32> = if channels > 1 {
-        samples
-            .chunks(channels)
-            .map(|frame| frame.iter().sum::<f32>() / channels as f32)
-            .collect()
-    } else {
-        samples
-    };
+    let (mono_samples, _) = crate::audio::wav::read_mono_f32(path)
+        .map_err(|e| format!("Failed to read audio file: {}", e))?;
 
     // Check for speech using windowed RMS rather than overall RMS.
     // Short recordings often contain startup silence from the audio stream

@@ -134,17 +134,6 @@ pub fn register<R: Runtime>(
     }
 }
 
-/// Unregister a shortcut on Linux
-pub fn unregister<R: Runtime>(app: &AppHandle<R>, id: &str) -> Result<(), String> {
-    match get_display_server() {
-        DisplayServer::Wayland => {
-            manager::forget_shortcut(id);
-            Ok(())
-        }
-        _ => manager::unregister(app, id),
-    }
-}
-
 /// List all registered shortcuts on Linux
 pub fn list_registered() -> Vec<ShortcutInfo> {
     manager::list_registered()

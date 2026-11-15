@@ -193,7 +193,7 @@ async fn reconcile(
 // ---------------------------------------------------------------------------
 
 fn last_good_path() -> PathBuf {
-    crate::config::get_config_dir().join(LAST_GOOD_FILE)
+    crate::config::data_dir().join(LAST_GOOD_FILE)
 }
 
 fn load_last_good(path: &Path) -> Option<SharedWordList> {
@@ -339,7 +339,7 @@ async fn sync_once(require_ready: bool) -> Result<(), String> {
     let local = capture_local();
     if base.is_none() {
         // First adoption replaces the local lists: keep what they were.
-        let _ = store_doc(&crate::config::get_config_dir().join(BEFORE_FILE), &local);
+        let _ = store_doc(&crate::config::data_dir().join(BEFORE_FILE), &local);
     }
     let etag = if base.is_some() {
         state().read().etag.clone()

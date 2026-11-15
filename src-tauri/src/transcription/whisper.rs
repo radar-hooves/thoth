@@ -114,7 +114,7 @@ impl WhisperTranscriptionService {
     ///
     /// The file should be 16kHz mono WAV. Returns the transcribed text.
     pub fn transcribe(&self, audio_path: &Path) -> Result<String> {
-        let (samples, sample_rate) = load_wav_samples(audio_path)?;
+        let (samples, sample_rate) = crate::audio::wav::read_mono_f32(audio_path)?;
 
         tracing::info!(
             "Loaded audio: {} samples at {}Hz ({:.2}s)",
@@ -140,10 +140,6 @@ impl WhisperTranscriptionService {
             );
         }
 
-        // Trim leading silence for long recordings (the tail is always kept).
-        let (trim_start, trim_end) = crate::audio::vad::trim_silence(&samples, sample_rate);
-        let samples = samples[trim_start..trim_end].to_vec();
-
         if sample_rate != 16000 {
             tracing::warn!(
                 "Audio sample rate is {}Hz, expected 16000Hz. Results may be affected.",
@@ -151,18 +147,9 @@ impl WhisperTranscriptionService {
             );
         }
 
-        // Pad with silence so the model can initialise before the first word
-        // and finalise after the last word. Whisper processes in 30-second
-        // windows, so the extra padding never causes a problem.
-        let samples = {
-            const LEADING_SILENCE: usize = 8_000; // 500 ms at 16 kHz
-            const TRAILING_SILENCE: usize = 24_000; // 1.5 s at 16 kHz
-            let mut padded = Vec::with_capacity(LEADING_SILENCE + samples.len() + TRAILING_SILENCE);
-            padded.extend(std::iter::repeat_n(0.0f32, LEADING_SILENCE));
-            padded.extend(samples);
-            padded.extend(std::iter::repeat_n(0.0f32, TRAILING_SILENCE));
-            padded
-        };
+        // Trim leading silence and pad with silence so the model can initialise
+        // before the first word and finalise after the last.
+        let samples = crate::audio::wav::trim_and_pad(&samples, sample_rate);
 
         self.transcribe_samples(&samples)
     }
@@ -266,54 +253,9 @@ impl WhisperTranscriptionService {
     }
 }
 
-/// Load samples from a WAV file
-fn load_wav_samples(path: &Path) -> Result<(Vec<f32>, u32)> {
-    let reader = hound::WavReader::open(path)?;
-    let spec = reader.spec();
-    let sample_rate = spec.sample_rate;
-
-    let samples: Vec<f32> = if spec.bits_per_sample == 16 {
-        reader
-            .into_samples::<i16>()
-            .filter_map(|s| s.ok())
-            .map(|s| s as f32 / 32768.0)
-            .collect()
-    } else if spec.bits_per_sample == 32 && spec.sample_format == hound::SampleFormat::Float {
-        reader
-            .into_samples::<f32>()
-            .filter_map(|s| s.ok())
-            .collect()
-    } else {
-        return Err(anyhow!(
-            "Unsupported audio format: {} bits, {:?}",
-            spec.bits_per_sample,
-            spec.sample_format
-        ));
-    };
-
-    // Mix to mono if stereo
-    let mono_samples = if spec.channels == 2 {
-        samples
-            .chunks(2)
-            .map(|c| (c[0] + c.get(1).copied().unwrap_or(0.0)) / 2.0)
-            .collect()
-    } else {
-        samples
-    };
-
-    Ok((mono_samples, sample_rate))
-}
-
 /// Get the default whisper model directory path
 pub fn get_whisper_model_directory() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| {
-            tracing::error!("Could not determine home directory, using /tmp");
-            PathBuf::from("/tmp")
-        })
-        .join(".thoth")
-        .join("models")
-        .join("whisper")
+    crate::config::data_dir().join("models").join("whisper")
 }
 
 /// Get the path to a specific whisper model

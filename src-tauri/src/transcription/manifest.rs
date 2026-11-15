@@ -107,17 +107,9 @@ struct CachedManifest {
 
 /// Get the manifest cache file path
 fn get_cache_path() -> PathBuf {
-    home_dir_or_fallback()
-        .join(".thoth")
+    crate::config::data_dir()
         .join("models")
         .join("manifest_cache.json")
-}
-
-fn home_dir_or_fallback() -> PathBuf {
-    dirs::home_dir().unwrap_or_else(|| {
-        tracing::error!("Could not determine home directory, using /tmp");
-        PathBuf::from("/tmp")
-    })
 }
 
 /// Load cached manifest if it exists and is not expired
@@ -292,10 +284,7 @@ pub fn is_model_downloaded(model: &RemoteModelInfo) -> bool {
 pub fn get_model_directory(model_id: &str) -> PathBuf {
     // Use model ID as directory name (sanitized)
     let safe_id = model_id.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
-    home_dir_or_fallback()
-        .join(".thoth")
-        .join("models")
-        .join(safe_id)
+    crate::config::data_dir().join("models").join(safe_id)
 }
 
 /// Get disk size for a downloaded model
@@ -306,7 +295,7 @@ pub fn get_model_disk_size(model: &RemoteModelInfo) -> Option<u64> {
         #[cfg(all(target_os = "macos", feature = "fluidaudio"))]
         {
             let cache_dir = super::fluidaudio::model_cache_directory();
-            let size = dir_size_recursive(&cache_dir);
+            let size = crate::storage::dir_size(&cache_dir);
             return if size > 0 { Some(size) } else { None };
         }
         #[cfg(not(all(target_os = "macos", feature = "fluidaudio")))]
@@ -341,26 +330,6 @@ fn fluidaudio_cache_present() -> bool {
     {
         false
     }
-}
-
-/// Recursively calculate directory size in bytes
-#[cfg(all(target_os = "macos", feature = "fluidaudio"))]
-fn dir_size_recursive(path: &std::path::Path) -> u64 {
-    if !path.exists() {
-        return 0;
-    }
-    let mut total = 0;
-    if let Ok(entries) = std::fs::read_dir(path) {
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if p.is_dir() {
-                total += dir_size_recursive(&p);
-            } else if let Ok(meta) = p.metadata() {
-                total += meta.len();
-            }
-        }
-    }
-    total
 }
 
 /// Check if the backend for a given model type is available in this build

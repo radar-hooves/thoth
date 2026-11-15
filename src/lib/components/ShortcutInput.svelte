@@ -15,7 +15,12 @@
   import { onDestroy } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-  import { formatForDisplay, validateShortcut } from '../stores/shortcuts.svelte';
+  import {
+    formatForDisplay,
+    reportShortcutFailures,
+    validateShortcut,
+    type ShortcutConflict,
+  } from '../stores/shortcuts.svelte';
   import { Button } from '@poodle64/ui/button';
   import X from '@lucide/svelte/icons/x';
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
@@ -197,7 +202,7 @@
     unlisteners = [];
 
     try {
-      await invoke('exit_capture_mode');
+      reportShortcutFailures(await invoke<ShortcutConflict[]>('exit_capture_mode'));
     } catch (e) {
       console.error('Failed to exit capture mode:', e);
     }

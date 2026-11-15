@@ -159,18 +159,18 @@ impl WebDavClient {
 /// owner-only file, never inside `config.json`, which a settings reset or
 /// schema change can clobber.
 fn password_path() -> PathBuf {
-    crate::config::get_config_dir().join("webdav_password")
+    crate::config::data_dir().join("webdav_password")
 }
 
 pub(crate) fn read_secret(name: &str) -> Option<String> {
-    fs::read_to_string(crate::config::get_config_dir().join(name))
+    fs::read_to_string(crate::config::data_dir().join(name))
         .ok()
         .map(|raw| raw.trim().to_string())
         .filter(|pw| !pw.is_empty())
 }
 
 pub(crate) fn write_secret(name: &str, secret: Option<&str>) -> Result<(), String> {
-    write_file_secret(&crate::config::get_config_dir().join(name), secret)
+    write_file_secret(&crate::config::data_dir().join(name), secret)
 }
 
 /// Read the stored password, or `None` if absent or empty.
@@ -186,7 +186,7 @@ fn write_password(password: Option<&str>) -> Result<(), String> {
 fn write_file_secret(path: &std::path::Path, password: Option<&str>) -> Result<(), String> {
     match password {
         Some(pw) => {
-            let dir = crate::config::get_config_dir();
+            let dir = crate::config::data_dir();
             fs::create_dir_all(&dir)
                 .map_err(|e| format!("Failed to create the config directory: {e}"))?;
             crate::config::write_private_file(path, pw.as_bytes())
@@ -507,7 +507,7 @@ mod tests {
     }
 
     // The password store is deliberately untested here: it writes the real
-    // `~/.thoth`, which `get_config_dir()` points at the operator's home with
+    // `~/.thoth`, which `data_dir()` points at the operator's home with
     // no test override, and touching a real stored credential from a test is
     // worse than not testing a ten-line file write.
 }

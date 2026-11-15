@@ -44,7 +44,12 @@
     type TypingTool,
   } from '../stores/config.svelte';
   import { pipelineStore } from '../stores/pipeline.svelte';
-  import { shortcutsStore, type ShortcutInfo } from '../stores/shortcuts.svelte';
+  import {
+    shortcutsStore,
+    reportShortcutFailures,
+    type ShortcutConflict,
+    type ShortcutInfo,
+  } from '../stores/shortcuts.svelte';
   import { soundStore } from '../stores/sound.svelte';
   import { Button } from '@poodle64/ui/button';
   import { Switch } from '@poodle64/ui/switch';
@@ -205,7 +210,7 @@
    */
   async function reRegisterShortcuts(): Promise<void> {
     try {
-      await invoke('reregister_shortcuts');
+      reportShortcutFailures(await invoke<ShortcutConflict[]>('reregister_shortcuts'));
       await shortcutsStore.loadRegistered();
     } catch (e) {
       console.error('Failed to re-register shortcuts:', e);

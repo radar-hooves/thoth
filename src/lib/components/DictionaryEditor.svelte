@@ -13,7 +13,7 @@
   import { Label } from '@poodle64/ui/label';
   import { Badge } from '@poodle64/ui/badge';
   import * as Table from '@poodle64/ui/table';
-  import * as Form from '$components/ui/form';
+  import * as Form from '@poodle64/ui/form';
   import { Alert, AlertDescription } from '@poodle64/ui/alert';
   import * as AlertDialog from '@poodle64/ui/alert-dialog';
   import Download from '@lucide/svelte/icons/download';
