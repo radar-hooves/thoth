@@ -351,20 +351,20 @@ fn find_silence_cuts(samples: &[f32], rate: u32) -> Vec<(usize, f32)> {
     for (fi, &v) in rms.iter().enumerate() {
         if v < threshold {
             run_start.get_or_insert(fi);
-        } else if let Some(s) = run_start.take() {
-            if fi - s >= min_gap_frames {
-                let mid = (s + fi) / 2 * frame;
-                let dur = (fi - s) as f32 * GAP_FRAME_SECS;
-                cuts.push((mid, dur));
-            }
-        }
-    }
-    if let Some(s) = run_start {
-        if rms.len() - s >= min_gap_frames {
-            let mid = (s + rms.len()) / 2 * frame;
-            let dur = (rms.len() - s) as f32 * GAP_FRAME_SECS;
+        } else if let Some(s) = run_start.take()
+            && fi - s >= min_gap_frames
+        {
+            let mid = (s + fi) / 2 * frame;
+            let dur = (fi - s) as f32 * GAP_FRAME_SECS;
             cuts.push((mid, dur));
         }
+    }
+    if let Some(s) = run_start
+        && rms.len() - s >= min_gap_frames
+    {
+        let mid = (s + rms.len()) / 2 * frame;
+        let dur = (rms.len() - s) as f32 * GAP_FRAME_SECS;
+        cuts.push((mid, dur));
     }
     cuts
 }
@@ -545,14 +545,14 @@ fn strip_trailing_terminal(s: &mut String) {
         '"', '\'', ')', ']', '}', '\u{201C}', '\u{201D}', '\u{2018}', '\u{2019}',
     ];
     let inner = s.trim_end_matches(|c| close_chars.contains(&c));
-    if let Some(last) = inner.chars().next_back() {
-        if matches!(last, '.' | '!' | '?') {
-            // Byte position of `last` in `inner`, then in `s`.
-            let inner_len = inner.len();
-            let char_len = last.len_utf8();
-            let remove_at = inner_len - char_len;
-            s.remove(remove_at);
-        }
+    if let Some(last) = inner.chars().next_back()
+        && matches!(last, '.' | '!' | '?')
+    {
+        // Byte position of `last` in `inner`, then in `s`.
+        let inner_len = inner.len();
+        let char_len = last.len_utf8();
+        let remove_at = inner_len - char_len;
+        s.remove(remove_at);
     }
 }
 

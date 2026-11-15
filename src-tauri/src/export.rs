@@ -76,15 +76,14 @@ fn search_transcriptions_db(params: &SearchParams) -> Result<SearchResult, Strin
     let mut query_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
     // Full-text search on text and raw_text
-    if let Some(query) = &params.query {
-        if !query.trim().is_empty() {
-            // Case-insensitive search using LIKE
-            let search_pattern = format!("%{}%", query.trim());
-            where_clauses.push(
-                "(text LIKE ?1 COLLATE NOCASE OR raw_text LIKE ?1 COLLATE NOCASE)".to_string(),
-            );
-            query_params.push(Box::new(search_pattern));
-        }
+    if let Some(query) = &params.query
+        && !query.trim().is_empty()
+    {
+        // Case-insensitive search using LIKE
+        let search_pattern = format!("%{}%", query.trim());
+        where_clauses
+            .push("(text LIKE ?1 COLLATE NOCASE OR raw_text LIKE ?1 COLLATE NOCASE)".to_string());
+        query_params.push(Box::new(search_pattern));
     }
 
     // Date range filtering
@@ -107,12 +106,12 @@ fn search_transcriptions_db(params: &SearchParams) -> Result<SearchResult, Strin
     }
 
     // Enhanced filter
-    if let Some(enhanced_only) = params.enhanced_only {
-        if enhanced_only {
-            let param_idx = query_params.len() + 1;
-            where_clauses.push(format!("is_enhanced = ?{}", param_idx));
-            query_params.push(Box::new(1i32));
-        }
+    if let Some(enhanced_only) = params.enhanced_only
+        && enhanced_only
+    {
+        let param_idx = query_params.len() + 1;
+        where_clauses.push(format!("is_enhanced = ?{}", param_idx));
+        query_params.push(Box::new(1i32));
     }
 
     // Build the WHERE clause

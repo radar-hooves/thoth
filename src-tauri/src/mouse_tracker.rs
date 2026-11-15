@@ -526,15 +526,14 @@ pub fn start_tracking() {
         tracing::error!("Failed to spawn mouse tracking thread: {}", e);
         tracker.read().is_running.store(false, Ordering::SeqCst);
         // Restore cursor events since we set click-through before spawn
-        if let Some(app_handle) = APP_HANDLE.get() {
-            if let Some(window) = app_handle.get_webview_window(INDICATOR_WINDOW_LABEL) {
-                if let Err(e2) = window.set_ignore_cursor_events(false) {
-                    tracing::warn!(
-                        "Failed to restore cursor events after spawn failure: {}",
-                        e2
-                    );
-                }
-            }
+        if let Some(app_handle) = APP_HANDLE.get()
+            && let Some(window) = app_handle.get_webview_window(INDICATOR_WINDOW_LABEL)
+            && let Err(e2) = window.set_ignore_cursor_events(false)
+        {
+            tracing::warn!(
+                "Failed to restore cursor events after spawn failure: {}",
+                e2
+            );
         }
     }
 }
@@ -553,12 +552,11 @@ pub fn stop_tracking() {
     tracing::info!("Stopping mouse cursor tracking");
 
     // Restore cursor events on the indicator window
-    if let Some(app) = APP_HANDLE.get() {
-        if let Some(window) = app.get_webview_window(INDICATOR_WINDOW_LABEL) {
-            if let Err(e) = window.set_ignore_cursor_events(false) {
-                tracing::warn!("Failed to restore cursor events: {}", e);
-            }
-        }
+    if let Some(app) = APP_HANDLE.get()
+        && let Some(window) = app.get_webview_window(INDICATOR_WINDOW_LABEL)
+        && let Err(e) = window.set_ignore_cursor_events(false)
+    {
+        tracing::warn!("Failed to restore cursor events: {}", e);
     }
 }
 

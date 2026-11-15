@@ -437,11 +437,11 @@ pub async fn copy_transcription(
         }
 
         // Preserve current clipboard content if configured
-        if settings.preserve_clipboard {
-            if let Ok(current) = app.clipboard().read_text() {
-                let mut manager = get_manager().lock();
-                manager.preserve_content(current);
-            }
+        if settings.preserve_clipboard
+            && let Ok(current) = app.clipboard().read_text()
+        {
+            let mut manager = get_manager().lock();
+            manager.preserve_content(current);
         }
 
         // Format the text according to settings

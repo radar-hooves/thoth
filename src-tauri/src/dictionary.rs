@@ -40,10 +40,10 @@ static DICTIONARY: OnceLock<RwLock<Dictionary>> = OnceLock::new();
 /// same override the database honours — so a test can point the dictionary at a
 /// throwaway file instead of editing the user's real one.
 fn get_dictionary_path() -> PathBuf {
-    if let Ok(dir) = std::env::var("THOTH_DATA_DIR") {
-        if !dir.is_empty() {
-            return PathBuf::from(dir).join("dictionary.json");
-        }
+    if let Ok(dir) = std::env::var("THOTH_DATA_DIR")
+        && !dir.is_empty()
+    {
+        return PathBuf::from(dir).join("dictionary.json");
     }
 
     dirs::home_dir()

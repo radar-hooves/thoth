@@ -76,10 +76,10 @@ pub fn check_model_downloaded(model_id: Option<String>) -> bool {
 
         // FluidAudio readiness is its compiled CoreML cache, not the on-disk
         // required_files sentinel; defer to the manifest's cache-aware check.
-        if let Some(m) = model {
-            if m.model_type == "fluidaudio_coreml" {
-                return super::manifest::is_model_downloaded(m);
-            }
+        if let Some(m) = model
+            && m.model_type == "fluidaudio_coreml"
+        {
+            return super::manifest::is_model_downloaded(m);
         }
 
         let required_files: Vec<&str> = match &model {
@@ -507,10 +507,10 @@ async fn download_file_with_progress(
                 retries += 1;
                 if retries > MAX_DOWNLOAD_RETRIES {
                     // Clean up partial file on final failure
-                    if dest_path.exists() {
-                        if let Err(cleanup_err) = tokio::fs::remove_file(dest_path).await {
-                            tracing::warn!("Failed to clean up partial download: {}", cleanup_err);
-                        }
+                    if dest_path.exists()
+                        && let Err(cleanup_err) = tokio::fs::remove_file(dest_path).await
+                    {
+                        tracing::warn!("Failed to clean up partial download: {}", cleanup_err);
                     }
                     return Err(anyhow!(
                         "Download failed after {} attempts: {}",
@@ -643,14 +643,14 @@ async fn download_with_resume(
     file.flush().await?;
 
     // Verify downloaded size matches expected total
-    if let Some(total) = total_size {
-        if *downloaded != total {
-            return Err(anyhow!(
-                "Download incomplete: got {} bytes, expected {} bytes",
-                downloaded,
-                total
-            ));
-        }
+    if let Some(total) = total_size
+        && *downloaded != total
+    {
+        return Err(anyhow!(
+            "Download incomplete: got {} bytes, expected {} bytes",
+            downloaded,
+            total
+        ));
     }
 
     tracing::info!("Download complete: {} bytes", downloaded);

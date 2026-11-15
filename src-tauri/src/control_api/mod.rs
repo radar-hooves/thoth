@@ -1180,7 +1180,7 @@ mod tests {
             api_port: port,
             mcp_enabled: false,
         };
-        let url = format!("http://127.0.0.1:{port}/mcp");
+        let _url = format!("http://127.0.0.1:{port}/mcp");
         let status = || async {
             use tokio::io::{AsyncReadExt, AsyncWriteExt};
             let mut c = tokio::net::TcpStream::connect(("127.0.0.1", port))

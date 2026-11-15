@@ -661,10 +661,10 @@ pub(crate) fn rebuild_tray_menu(app: &AppHandle) {
     ) {
         Ok(menu) => {
             drop(state); // Release lock before menu operations
-            if let Some(tray) = app.tray_by_id("main") {
-                if let Err(e) = tray.set_menu(Some(menu)) {
-                    tracing::warn!("Failed to update tray menu: {}", e);
-                }
+            if let Some(tray) = app.tray_by_id("main")
+                && let Err(e) = tray.set_menu(Some(menu))
+            {
+                tracing::warn!("Failed to update tray menu: {}", e);
             }
         }
         Err(e) => {

@@ -764,15 +764,15 @@ pub fn spoken_numbers_to_digits(text: &str) -> String {
             if q < end && q > p && word_to_multiplier(&toks[q].core).is_some() {
                 q -= 1;
             }
-            if q - p >= 2 {
-                if let Some(digits) = digit_sequence(&cores[p - i..q - i]) {
-                    out.push_str(&toks[p].ws);
-                    out.push_str(&toks[p].prefix);
-                    out.push_str(&digits);
-                    out.push_str(&toks[q - 1].suffix);
-                    p = q;
-                    continue;
-                }
+            if q - p >= 2
+                && let Some(digits) = digit_sequence(&cores[p - i..q - i])
+            {
+                out.push_str(&toks[p].ws);
+                out.push_str(&toks[p].prefix);
+                out.push_str(&digits);
+                out.push_str(&toks[q - 1].suffix);
+                p = q;
+                continue;
             }
             let phrase = parse_phrase(&cores[p - i..]);
             let pronoun_one = phrase.is_some_and(|(len, _)| len == 1)

@@ -214,20 +214,20 @@ pub async fn delete_all_data() -> Result<(), Error> {
             tracing::info!("Deleted Thoth data directory: {}", base.display());
         }
 
-        if let Some(fluid_dir) = fluidaudio_models_dir() {
-            if fluid_dir.exists() {
-                fs::remove_dir_all(&fluid_dir).map_err(|e| {
-                    format!(
-                        "Failed to delete FluidAudio cache at {}: {}",
-                        fluid_dir.display(),
-                        e
-                    )
-                })?;
-                tracing::info!(
-                    "Deleted FluidAudio cache directory: {}",
-                    fluid_dir.display()
-                );
-            }
+        if let Some(fluid_dir) = fluidaudio_models_dir()
+            && fluid_dir.exists()
+        {
+            fs::remove_dir_all(&fluid_dir).map_err(|e| {
+                format!(
+                    "Failed to delete FluidAudio cache at {}: {}",
+                    fluid_dir.display(),
+                    e
+                )
+            })?;
+            tracing::info!(
+                "Deleted FluidAudio cache directory: {}",
+                fluid_dir.display()
+            );
         }
 
         Ok(())

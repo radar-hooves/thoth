@@ -47,10 +47,10 @@ impl From<std::io::Error> for DatabaseError {
 /// lets tests point the database at a throwaway directory, and lets users
 /// relocate their data, without touching `~/.thoth`.
 fn get_thoth_directory() -> Result<PathBuf, DatabaseError> {
-    if let Ok(dir) = std::env::var("THOTH_DATA_DIR") {
-        if !dir.is_empty() {
-            return Ok(PathBuf::from(dir));
-        }
+    if let Ok(dir) = std::env::var("THOTH_DATA_DIR")
+        && !dir.is_empty()
+    {
+        return Ok(PathBuf::from(dir));
     }
 
     let home = dirs::home_dir().ok_or_else(|| {

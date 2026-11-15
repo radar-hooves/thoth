@@ -174,10 +174,8 @@ fn save_manifest_cache(manifest: &ModelManifest) -> Result<()> {
 /// Fetch the model manifest from the remote URL
 pub async fn fetch_manifest(force_refresh: bool) -> Result<ModelManifest> {
     // Try cache first unless forcing refresh
-    if !force_refresh {
-        if let Some(cached) = load_cached_manifest() {
-            return Ok(cached);
-        }
+    if !force_refresh && let Some(cached) = load_cached_manifest() {
+        return Ok(cached);
     }
 
     tracing::info!("Fetching model manifest from {}", MANIFEST_URL);

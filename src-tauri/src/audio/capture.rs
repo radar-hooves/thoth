@@ -276,14 +276,14 @@ impl AudioRecorder {
         // Stop — never corruption and never a dropped tail. Falling back to a
         // full device close here would only make the next recording slow for no
         // correctness gain, so we keep the stream warm.
-        if let Some(stream) = self.stream.as_ref() {
-            if let Err(e) = stream.pause() {
-                tracing::debug!(
-                    "AudioRecorder::disarm: stream.pause() not supported/failed ({}); the armed \
+        if let Some(stream) = self.stream.as_ref()
+            && let Err(e) = stream.pause()
+        {
+            tracing::debug!(
+                "AudioRecorder::disarm: stream.pause() not supported/failed ({}); the armed \
                      flag still guarantees no new samples are forwarded",
-                    e
-                );
-            }
+                e
+            );
         }
 
         // Push the end-of-stream sentinel. The writer drains every queued sample
@@ -302,13 +302,13 @@ impl AudioRecorder {
 
         // Resume the stream so metering keeps flowing and the next arm is instant.
         // The device was only paused, never closed, so this is cheap.
-        if let Some(stream) = self.stream.as_ref() {
-            if let Err(e) = stream.play() {
-                tracing::warn!(
-                    "AudioRecorder::disarm: stream.play() (re-warm) failed: {}",
-                    e
-                );
-            }
+        if let Some(stream) = self.stream.as_ref()
+            && let Err(e) = stream.play()
+        {
+            tracing::warn!(
+                "AudioRecorder::disarm: stream.play() (re-warm) failed: {}",
+                e
+            );
         }
 
         let path = self

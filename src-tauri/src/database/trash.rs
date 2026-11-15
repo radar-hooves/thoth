@@ -345,21 +345,19 @@ pub(crate) fn restore_recordings_with_conn(
         let restored_audio_path: Option<String> = if audio_moved != 0 {
             if let Some(orig) = original_path.as_deref() {
                 let dst = std::path::PathBuf::from(orig);
-                if !dst.exists() {
-                    if let Some(src) = audio_path_in_trash.as_deref().map(std::path::PathBuf::from)
-                    {
-                        if src.exists() {
-                            if let Some(parent) = dst.parent() {
-                                let _ = std::fs::create_dir_all(parent);
-                            }
-                            match std::fs::rename(&src, &dst) {
-                                Ok(()) => {
-                                    tracing::debug!("Restored audio -> {}", dst.display())
-                                }
-                                Err(e) => {
-                                    tracing::warn!("Failed to move audio back for {}: {}", id, e)
-                                }
-                            }
+                if !dst.exists()
+                    && let Some(src) = audio_path_in_trash.as_deref().map(std::path::PathBuf::from)
+                    && src.exists()
+                {
+                    if let Some(parent) = dst.parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                    match std::fs::rename(&src, &dst) {
+                        Ok(()) => {
+                            tracing::debug!("Restored audio -> {}", dst.display())
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to move audio back for {}: {}", id, e)
                         }
                     }
                 }
@@ -471,28 +469,26 @@ pub(crate) fn purge_trash_with_conn(
 
     for (id, audio_path, audio_moved) in &to_purge {
         // Remove the WAV from Trash/ when we physically moved it there.
-        if *audio_moved {
-            if let Some(path_str) = audio_path {
-                let path = std::path::PathBuf::from(path_str);
-                match std::fs::remove_file(&path) {
-                    Ok(()) => tracing::debug!("Purged audio: {}", path.display()),
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                        // File already gone (e.g. crash between a previous
-                        // purge's remove_file and DELETE FROM trash). The DB
-                        // row is the zombie; proceed to delete it so the next
-                        // auto-purge doesn't retry forever.
-                        tracing::warn!("Audio already gone during purge: {}", path.display());
-                    }
-                    Err(e) => {
-                        // Unexpected error: keep the DB row so the file can be
-                        // retried on the next purge rather than being orphaned.
-                        tracing::warn!(
-                            "Failed to purge audio {} (keeping trash row for retry): {}",
-                            path.display(),
-                            e
-                        );
-                        continue;
-                    }
+        if *audio_moved && let Some(path_str) = audio_path {
+            let path = std::path::PathBuf::from(path_str);
+            match std::fs::remove_file(&path) {
+                Ok(()) => tracing::debug!("Purged audio: {}", path.display()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    // File already gone (e.g. crash between a previous
+                    // purge's remove_file and DELETE FROM trash). The DB
+                    // row is the zombie; proceed to delete it so the next
+                    // auto-purge doesn't retry forever.
+                    tracing::warn!("Audio already gone during purge: {}", path.display());
+                }
+                Err(e) => {
+                    // Unexpected error: keep the DB row so the file can be
+                    // retried on the next purge rather than being orphaned.
+                    tracing::warn!(
+                        "Failed to purge audio {} (keeping trash row for retry): {}",
+                        path.display(),
+                        e
+                    );
+                    continue;
                 }
             }
         }
