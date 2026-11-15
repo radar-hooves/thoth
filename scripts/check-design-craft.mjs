@@ -63,15 +63,7 @@ const BASE_URL = process.env.THOTH_URL || 'http://localhost:1422';
 // SvelteKit's routing — easy to edit, easy to see what is and is not covered.
 const LIVE_ROUTES = ['/'];
 
-// THE ONLY LOCAL DIFFERENCE IN THIS FILE, and it affects the non-binding live
-// mode alone — LIVE_VIEWPORTS is read inside the `--live` branch and nowhere
-// else, so the static mode this repo actually gates on is a carbon copy.
-//
-// Thoth is a desktop app with no phone target: tauri.conf.json pins the main
-// window's minWidth to 980, so the factory's 390x844 tests a width the window
-// can never be at, and every finding it reported would be about a state no user
-// can reach. The two widths below are the smallest window Thoth is usable at
-// and a comfortably large one.
+// A desktop app's smallest usable window and a large one; it has no phone width.
 const LIVE_VIEWPORTS = ['980x700', '1400x1000'];
 
 // ---------------------------------------------------------------------------

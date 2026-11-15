@@ -1,2 +1,30 @@
-# Auto detect text files and perform LF normalisation
 * text=auto
+
+*.rs text eol=lf
+Cargo.lock text eol=lf
+*.ts text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.svelte text eol=lf
+*.css text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.nix text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.mp3 binary
+*.flac binary
+*.wav binary
+*.ogg binary

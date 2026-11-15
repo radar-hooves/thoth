@@ -1,0 +1,12 @@
+_commit: v2026.11.56
+_src_path: gh:radar-hooves/app-factory
+bundle_identifier: com.poodle64.thoth
+dark_first: false
+density: comfortable
+description: Privacy-first, offline-capable voice transcription application
+frontend_port: 1422
+linux_cargo_args: --no-default-features --features vulkan
+project_name: thoth
+project_title: Thoth
+skeleton: desktop
+team_name: Thoth
