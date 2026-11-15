@@ -460,12 +460,7 @@ fn build_ai_submenu(
         };
         let suffix = if prompt.is_builtin { "" } else { " (Custom)" };
 
-        // Truncate long names to 40 characters
-        let name = if prompt.name.len() > 40 {
-            format!("{}…", &prompt.name[..39])
-        } else {
-            prompt.name.clone()
-        };
+        let name = menu_label(&prompt.name);
 
         let label = format!("{}{}{}", prefix, name, suffix);
         let item = MenuItemBuilder::with_id(menu_id, &label)
@@ -963,6 +958,17 @@ pub struct TrayStateInfo {
     pub has_last_transcription: bool,
 }
 
+/// A prompt name as a menu item: at most 40 characters, counted as characters,
+/// not bytes. A byte slice inside a multi-byte character panics, and the panic
+/// takes the whole tray down.
+fn menu_label(name: &str) -> String {
+    if name.chars().count() > 40 {
+        format!("{}…", name.chars().take(39).collect::<String>())
+    } else {
+        name.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1045,5 +1051,19 @@ mod tests {
         );
         // The status line and info rows are disabled and must stay inert.
         assert_eq!(menu_action(menu_ids::STATUS), MenuAction::Unknown);
+    }
+}
+
+#[cfg(test)]
+mod label_tests {
+    use super::menu_label;
+
+    #[test]
+    fn a_long_name_is_cut_on_a_character_boundary() {
+        let name = "Résumé ✍️ ".repeat(8);
+        let label = menu_label(&name);
+        assert_eq!(label.chars().count(), 40);
+        assert!(label.ends_with('…'));
+        assert_eq!(menu_label("Short"), "Short");
     }
 }

@@ -196,8 +196,13 @@
     isTesting = true;
     probe = null;
     try {
-      await invoke('plugin:telemetry|telemetry_probe', { endpoint, headersHelper });
-      probe = { ok: true, message: 'Ok' };
+      // The probe reports a refused or unreachable collector as `ok: false`, not
+      // as a thrown error, so the result is what says whether it answered.
+      const result = await invoke<{ ok: boolean; message: string }>(
+        'plugin:telemetry|telemetry_probe',
+        { endpoint, headersHelper },
+      );
+      probe = result.ok ? { ok: true, message: 'Ok' } : result;
     } catch (e) {
       probe = { ok: false, message: e instanceof Error ? e.message : String(e) };
     } finally {

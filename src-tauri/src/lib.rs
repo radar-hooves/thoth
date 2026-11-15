@@ -408,22 +408,24 @@ pub fn run() {
                     app.set_activation_policy(tauri::ActivationPolicy::Accessory);
                 }
 
-                // Centre traffic lights and prevent main window destruction on close.
-                // The main window hosts the pipeline event listeners — if it's destroyed,
-                // global shortcuts stop working. Hide instead of close.
                 if let Some(window) = app.get_webview_window("main") {
                     desktop_shell::traffic_lights::setup(&window);
-
-                    let win = window.clone();
-                    window.on_window_event(move |event| {
-                        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                            api.prevent_close();
-                            let _ = win.hide();
-                        }
-                    });
                 }
 
                 platform::macos::watch_permissions(app.handle().clone());
+            }
+
+            // Closing the main window hides it, on every platform: the tray and a
+            // second launch bring back the same window, which a destroyed one could
+            // not be. Linux's own close button (WindowControls) lands here too.
+            if let Some(window) = app.get_webview_window("main") {
+                let win = window.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = win.hide();
+                    }
+                });
             }
 
             platform::log_permissions();

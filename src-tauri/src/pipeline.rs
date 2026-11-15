@@ -799,7 +799,7 @@ async fn run_transcription_pipeline(
                 );
                 return Err("Transcription model failed to load within 60 seconds".to_string());
             }
-            std::thread::sleep(std::time::Duration::from_millis(100));
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
         tracing::info!("Pipeline: Model loaded, proceeding with transcription");
         tracing::info!(
