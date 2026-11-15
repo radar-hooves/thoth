@@ -164,18 +164,17 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <h2 id="threads">Threads</h2>
 
 <details class="thread" id="holistic-review" open>
-<summary><h3>Holistic review: Thoth and Bragi as one cloth, with the factory</h3><span class="state">Verdict on #208 (15/11): Thoth refactor, Bragi carry on, factory converge. Thoth's fixes and structural clean-up, Bragi's dead-code removal and the factory updater (v2026.11.53) are on main; three lanes are in flight.</span></summary>
-<p class="next" data-id="review-packages" data-track="#208">Land, each read as our own diff first, the foreman lanes still running (<code>agent(action='list')</code>):<br>
-• bragi#257 on branch <code>foreman/wt-d735540a</code>, dispatch <code>20261115T124237Z-2c8a6823</code>;<br>
-• the factory needs #135, #136, #137 and #139, dispatch <code>20261115T124302Z-67aade56</code>; merge them, then tag the next factory release on a green self-test.<br>
-Already on main: Thoth's structural clean-up (<code>5654b65</code>) and factory <code>v2026.11.53</code> (the updater). Then start the next Thoth package below.</p>
+<summary><h3>Holistic review: Thoth and Bragi as one cloth, with the factory</h3><span class="state">Verdict on #208 (15/11): Thoth refactor, Bragi carry on, factory converge. On Thoth main: the fixes, the structural clean-up, one settings write path (<code>0675396</code>) and one shared database connection (<code>f782bf2</code>). Bragi's dead-code removal and the factory updater (v2026.11.53) are on main. Two lanes and one review are in flight.</span></summary>
+<p class="next" data-id="review-packages" data-track="#208">Land, each read as our own diff first:<br>
+• bragi#257, branch <code>foreman/wt-d735540a</code> at <code>d490829</code>, based on Bragi main. A fresh-context code review is reading it; act on its Critical and High findings, fast-forward main, and wait for a green <code>change</code> run;<br>
+• the factory needs #135, #136, #137 and #139, branch <code>foreman/wt-02ecf12c</code>. The keyring correction is accepted. Dispatch <code>20261115T130847Z-d562e3de</code> is adding a release-mode clippy on Linux, because no CI compiled the release-only keyring path. On a green run: fast-forward main, wait for a green Factory self-test, tag v2026.11.54, and close the four issues with evidence.<br>
+Thoth's <code>change</code> runs on <code>0675396</code> and <code>f782bf2</code> must be green.</p>
 <ul class="items">
 <li data-id="review-writeup" data-track="#208">The write-up is <code>docs/research/2026-11-15-holistic-review.md</code>, gitignored and local to huginn's checkout, with the three reads beside it. Keep its findings tables current as packages land.</li>
 <li data-id="settings-design-lane" data-track="#207">A Penpot design lane is drawing Settings before and after (dispatch <code>20261115T124822Z-2a77da54</code>). Its renders go to <code>docs/research/settings-restructure/</code>; put them to him as a <code>read</code> ask when it lands. No code until he approves.</li>
-<li data-id="thoth-next-packages" data-track="#208">Next for Thoth, after the structural clean-up:<br>
-• one settings contract: <code>patch_config</code> over <code>merge_json</code>, camelCase structs, and the guards and bypass setters deleted;<br>
-• pooled SQLite with WAL and a busy timeout, as Bragi has.<br>
-Both labs proposed the first.</li>
+<li data-id="thoth-next-packages" data-track="#208">Next for Thoth:<br>
+• camelCase on the config structs: it deletes the key canonicaliser and about 300 lines of TypeScript mapping, and <code>config.json</code> moves through the version ladder once;<br>
+• converge on factory v2026.11.54 once tagged: <code>write_private</code>, the window module, the IPC-boundary spans.</li>
 <li data-id="bragi-updater-adopt" data-track="radar-hooves/bragi#258">Bragi adopts the factory updater once his public download path is chosen. Mint its own keypair into repo secrets, take the edits in the factory's <code>docs/development/desktop-updater.md</code>, release, and install that first updater build by hand once on each Mac.</li>
 <li data-id="thoth-updater-converge" data-track="#208">Thoth converges on the factory updater. Keep its public key and secrets, delete <code>src/lib/stores/updater.svelte.ts</code> and its own <code>report_update_check</code>, and call the kit.</li>
 <li data-id="apps-become-stamps" data-track="radar-hooves/app-factory#138">Both apps become stamps of the desktop skeleton, so factory changes reach them. Thoth's <code>.canonical-exceptions:73</code> gives the reason "no desktop archetype", which is false today.</li>
