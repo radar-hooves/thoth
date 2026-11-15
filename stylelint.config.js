@@ -57,4 +57,13 @@ export default {
     // Allow mixed keyword case (e.g. hsl values)
     'value-keyword-case': null,
   },
+  overrides: [
+    {
+      // postcss-html hands each inline style="" attribute to stylelint as
+      // top-level declarations, which this rule (stylelint 17) reads as
+      // misplaced. In a <style> block the Svelte compiler rejects them anyway.
+      files: ['**/*.svelte'],
+      rules: { 'no-invalid-position-declaration': null },
+    },
+  ],
 };
