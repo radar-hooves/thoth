@@ -3,7 +3,7 @@
  *
  * These were local copies until the canonical-shape alignment: the package
  * ships all three, and a local copy cannot receive an upstream fix. The barrel
- * keeps `$components/common` as the import path callers already use, so the
+ * keeps `#lib/components/common` as the import path callers already use, so the
  * swap is invisible at every call site.
  */
 export { EmptyState } from '@poodle64/ui/empty-state';

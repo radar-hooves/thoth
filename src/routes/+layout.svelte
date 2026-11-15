@@ -5,8 +5,8 @@
   import { Toaster } from '@poodle64/ui/sonner';
   import { ModeWatcher } from 'mode-watcher';
   import type { Snippet } from 'svelte';
-  import { installTauriMock } from '$lib/dev/tauri-mock';
-  import { thothMockCommands } from '$lib/dev/thoth-mock-data';
+  import { installTauriMock } from '#lib/dev/tauri-mock.js';
+  import { thothMockCommands } from '#lib/dev/thoth-mock-data.js';
 
   // Install the mock transport synchronously, before any child component mounts
   // and before any store calls invoke() or listen(). The DEV guard is evaluated at

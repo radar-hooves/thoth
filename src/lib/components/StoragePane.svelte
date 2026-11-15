@@ -12,8 +12,8 @@
   import { Button } from '@poodle64/ui/button';
   import { Alert, AlertDescription } from '@poodle64/ui/alert';
   import * as AlertDialog from '@poodle64/ui/alert-dialog';
-  import { LoadingState } from '$components/common';
-  import { formatBytes } from '$lib/utils/format';
+  import { LoadingState } from '#lib/components/common/index.js';
+  import { formatBytes } from '#lib/utils/format.js';
 
   interface StorageUsage {
     modelsBytes: number;

@@ -196,7 +196,7 @@
         seenMonths.add(monthKey);
         // Only label if not the very first partial week (to avoid clipping)
         if (weekIndex > 0) {
-          monthLabels.push({ label: MONTH_ABBREVS[sundayMonth], weekIndex });
+          monthLabels.push({ label: MONTH_ABBREVS[sundayMonth]!, weekIndex });
         }
       }
 

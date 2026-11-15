@@ -1,5 +1,5 @@
 <script lang="ts">
-  import History from '$lib/windows/History.svelte';
+  import History from '#lib/windows/History.svelte';
 </script>
 
 <History />

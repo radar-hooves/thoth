@@ -4,7 +4,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { formatDuration } from '$lib/utils/format';
+import { formatDuration } from '#lib/utils/format.js';
 
 /** Transcription record structure matching SQLite backend */
 export interface TranscriptionRecord {

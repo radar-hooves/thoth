@@ -14,13 +14,13 @@
   import { Switch } from '@poodle64/ui/switch';
   import { Badge } from '@poodle64/ui/badge';
   import { Label } from '@poodle64/ui/label';
-  import { LoadingState } from '$components/common';
+  import { LoadingState } from '#lib/components/common/index.js';
   import AlertCircle from '@lucide/svelte/icons/alert-circle';
   import Eye from '@lucide/svelte/icons/eye';
   import EyeOff from '@lucide/svelte/icons/eye-off';
   import { superForm, defaults } from 'sveltekit-superforms';
   import { zod4 } from 'sveltekit-superforms/adapters';
-  import { promptSchema } from '$lib/schemas/prompt';
+  import { promptSchema } from '#lib/schemas/prompt.js';
 
   interface PromptTemplate {
     id: string;

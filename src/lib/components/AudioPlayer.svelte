@@ -75,7 +75,7 @@
       let sum = 0;
       const start = i * blockSize;
       for (let j = start; j < start + blockSize && j < data.length; j++) {
-        sum += Math.abs(data[j]);
+        sum += Math.abs(data[j]!);
       }
       result.push(sum / blockSize);
     }

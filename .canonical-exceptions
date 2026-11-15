@@ -36,7 +36,6 @@ root-inventory:package.json           2026-08-27  # template frontend/package.js
 root-inventory:pnpm-lock.yaml         2026-08-27  # template frontend/pnpm-lock.yaml; same flattening
 root-inventory:pnpm-workspace.yaml    2026-08-27  # template frontend/pnpm-workspace.yaml; same flattening
 root-inventory:tsconfig.json          2026-08-27  # template frontend/tsconfig.json; same flattening
-root-inventory:svelte.config.js       2026-08-27  # template frontend/svelte.config.js; same flattening
 root-inventory:vite.config.ts         2026-08-27  # template frontend/vite.config.ts; same flattening
 root-inventory:vitest.config.ts       2026-08-27  # template frontend/vitest.config.ts; same flattening
 root-inventory:playwright.config.ts   2026-08-27  # template frontend/playwright.config.ts; same flattening
@@ -81,9 +80,7 @@ skeleton:scripts/tauri-release.sh       2026-12-31  # release path: check-releas
 skeleton:scripts/cargo-codesign.sh      2026-12-31  # verify-bundles also runs verify-macos-libraries and the hardened-runtime check; signing path
 skeleton:src/app.html                   2026-12-31  # template carries web-only /elements/placed.js and no dark class; Thoth is dark-only
 skeleton:.github/actionlint.yaml        2026-12-31  # runner labels light, gradle, release, ubuntu-26.04 are used by nix-check.yaml and release.yaml
-skeleton:renovate.json                  2026-12-31  # Thoth's holds (SvelteKit 3, TypeScript 7, superforms, tauri-action, ubuntu)
-skeleton:src/lib/utils.ts               2026-12-31  # vendored shadcn ui components import WithElementRef from $lib/utils
-skeleton:vite.config.ts                 2026-12-31  # template is the SvelteKit 3 shape (kit options in vite config, ignores svelte.config.js); Thoth is on Kit 2, held
-skeleton:tsconfig.json                  2026-12-31  # extends $app/tsconfig (SvelteKit 3); Thoth is on Kit 2, held
+skeleton:renovate.json                  2026-12-31  # Thoth's holds (TypeScript 7, tauri-action, ubuntu)
+skeleton:src/lib/utils.ts               2026-12-31  # vendored shadcn ui components import WithElementRef from #lib/utils
 skeleton:stylelint.config.js            2026-12-31  # template's style rules flag 44 existing findings (40 autofixable); adopting them is a separate pass
 skeleton:.pre-commit-config.yaml        2026-12-31  # default_language_version python3.14: huginn has no usable python3.15 (pip 25 breaks on 3.15's typing), so the hook environment cannot build; restore 3.15 when the host has one

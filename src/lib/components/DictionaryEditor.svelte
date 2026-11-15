@@ -5,8 +5,8 @@
   import { toast } from 'svelte-sonner';
   import { superForm, defaults } from 'sveltekit-superforms';
   import { zod4 } from 'sveltekit-superforms/adapters';
-  import { LoadingState } from '$components/common';
-  import { dictionarySchema } from '$lib/schemas/dictionary';
+  import { LoadingState } from '#lib/components/common/index.js';
+  import { dictionarySchema } from '#lib/schemas/dictionary.js';
   import { Button } from '@poodle64/ui/button';
   import { Input } from '@poodle64/ui/input';
   import { Checkbox } from '@poodle64/ui/checkbox';
