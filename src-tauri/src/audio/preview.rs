@@ -47,94 +47,89 @@ static PREVIEW_STATE: Mutex<Option<MeteringState>> = Mutex::new(None);
 /// Emits `audio-level` events to the frontend with RMS and peak levels.
 #[tauri::command]
 pub async fn start_audio_preview(app: AppHandle, device_id: Option<String>) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced("start_audio_preview", async move {
-        // Stop any existing preview
-        stop_audio_preview_inner();
+    // Stop any existing preview
+    stop_audio_preview_inner();
 
-        // Find the device using stable device IDs
-        let device = get_recording_device(device_id.as_deref())
-            .ok_or_else(|| "No audio input device available".to_string())?;
+    // Find the device using stable device IDs
+    let device = get_recording_device(device_id.as_deref())
+        .ok_or_else(|| "No audio input device available".to_string())?;
 
-        let device_name = get_device_display_name(&device);
-        tracing::info!("Starting audio preview for device: {}", device_name);
+    let device_name = get_device_display_name(&device);
+    tracing::info!("Starting audio preview for device: {}", device_name);
 
-        let config = device.default_input_config().map_err(|e| e.to_string())?;
-        let channels = config.channels() as usize;
+    let config = device.default_input_config().map_err(|e| e.to_string())?;
+    let channels = config.channels() as usize;
 
-        // Shared state for metering
-        let meter = Arc::new(Mutex::new(AudioMeter::new()));
-        let stop_flag = Arc::new(AtomicBool::new(false));
+    // Shared state for metering
+    let meter = Arc::new(Mutex::new(AudioMeter::new()));
+    let stop_flag = Arc::new(AtomicBool::new(false));
 
-        // Channel for audio data
-        let (tx, rx) = crossbeam_channel::bounded::<Vec<f32>>(16);
+    // Channel for audio data
+    let (tx, rx) = crossbeam_channel::bounded::<Vec<f32>>(16);
 
-        // Build the input stream
-        let stream = {
-            let tx = tx.clone();
-            device
-                .build_input_stream(
-                    config.into(),
-                    move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                        // Mix to mono and send to emitter thread
-                        let mono: Vec<f32> = data
-                            .chunks(channels)
-                            .map(|frame| frame.iter().sum::<f32>() / channels as f32)
-                            .collect();
-                        let _ = tx.try_send(mono);
-                    },
-                    |err| {
-                        tracing::error!("Audio preview stream error: {}", err);
-                    },
-                    None,
-                )
-                .map_err(|e| e.to_string())?
-        };
+    // Build the input stream
+    let stream = {
+        let tx = tx.clone();
+        device
+            .build_input_stream(
+                config.into(),
+                move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                    // Mix to mono and send to emitter thread
+                    let mono: Vec<f32> = data
+                        .chunks(channels)
+                        .map(|frame| frame.iter().sum::<f32>() / channels as f32)
+                        .collect();
+                    let _ = tx.try_send(mono);
+                },
+                |err| {
+                    tracing::error!("Audio preview stream error: {}", err);
+                },
+                None,
+            )
+            .map_err(|e| e.to_string())?
+    };
 
-        stream.play().map_err(|e| e.to_string())?;
+    stream.play().map_err(|e| e.to_string())?;
 
-        // Spawn emitter thread to send levels to frontend
-        let emit_stop_flag = stop_flag.clone();
-        let emit_handle = std::thread::spawn(move || {
-            while !emit_stop_flag.load(Ordering::Relaxed) {
-                while let Ok(samples) = rx.try_recv() {
-                    let mut meter = meter.lock();
-                    let level = meter.process(&samples);
+    // Spawn emitter thread to send levels to frontend
+    let emit_stop_flag = stop_flag.clone();
+    let emit_handle = std::thread::spawn(move || {
+        while !emit_stop_flag.load(Ordering::Relaxed) {
+            while let Ok(samples) = rx.try_recv() {
+                let mut meter = meter.lock();
+                let level = meter.process(&samples);
 
-                    let event = AudioLevelEvent {
-                        rms: level.rms,
-                        peak: level.peak,
-                    };
+                let event = AudioLevelEvent {
+                    rms: level.rms,
+                    peak: level.peak,
+                };
 
-                    if let Err(e) = app.emit("audio-level", &event) {
-                        tracing::warn!("Failed to emit audio level: {}", e);
-                    }
+                if let Err(e) = app.emit("audio-level", &event) {
+                    tracing::warn!("Failed to emit audio level: {}", e);
                 }
-
-                // Rate limit to ~30fps
-                std::thread::sleep(std::time::Duration::from_millis(33));
             }
-        });
 
-        // Store state
-        let mut state_guard = PREVIEW_STATE.lock();
-        *state_guard = Some(MeteringState {
-            stream: Some(stream),
-            stop_flag,
-            emit_handle: Some(emit_handle),
-        });
+            // Rate limit to ~30fps
+            std::thread::sleep(std::time::Duration::from_millis(33));
+        }
+    });
 
-        tracing::info!("Audio preview started");
-        Ok(())
-    })
-    .await
+    // Store state
+    let mut state_guard = PREVIEW_STATE.lock();
+    *state_guard = Some(MeteringState {
+        stream: Some(stream),
+        stop_flag,
+        emit_handle: Some(emit_handle),
+    });
+
+    tracing::info!("Audio preview started");
+    Ok(())
 }
 
 /// Stop audio preview
 #[tauri::command]
 pub fn stop_audio_preview() {
-    tauri_plugin_telemetry::traced_sync_value("stop_audio_preview", || {
-        stop_audio_preview_inner();
-    })
+    stop_audio_preview_inner();
 }
 
 /// Internal stop function (doesn't require Tauri command context)

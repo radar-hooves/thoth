@@ -185,13 +185,8 @@ fn write_password(password: Option<&str>) -> Result<(), String> {
 
 fn write_file_secret(path: &std::path::Path, password: Option<&str>) -> Result<(), String> {
     match password {
-        Some(pw) => {
-            let dir = crate::config::data_dir();
-            fs::create_dir_all(&dir)
-                .map_err(|e| format!("Failed to create the config directory: {e}"))?;
-            crate::config::write_private_file(path, pw.as_bytes())
-                .map_err(|e| format!("Failed to write the password store: {e}"))
-        }
+        Some(pw) => desktop_shell::secrets::write_private(path, pw.as_bytes())
+            .map_err(|e| format!("Failed to write the password store: {e}")),
         None => match fs::remove_file(path) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -335,24 +330,20 @@ pub fn spawn_publish_loop() {
 /// The publishing state the Settings pane shows. Never the password itself.
 #[tauri::command]
 pub fn get_publish_status() -> PublishStatus {
-    tauri_plugin_telemetry::traced_sync_value("get_publish_status", || {
-        let inner = status().read().clone();
-        PublishStatus {
-            has_password: read_password().is_some(),
-            last_publish_at: inner.last_publish_at,
-            last_error: inner.last_error,
-        }
-    })
+    let inner = status().read().clone();
+    PublishStatus {
+        has_password: read_password().is_some(),
+        last_publish_at: inner.last_publish_at,
+        last_error: inner.last_error,
+    }
 }
 
 /// Store or clear (`None` or empty string) the WebDAV password. Write-only:
 /// no command ever returns it.
 #[tauri::command]
 pub fn set_publish_password(password: Option<String>) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced_sync("set_publish_password", || {
-        let password = password.filter(|pw| !pw.is_empty());
-        write_password(password.as_deref()).map_err(Error::from)
-    })
+    let password = password.filter(|pw| !pw.is_empty());
+    write_password(password.as_deref()).map_err(Error::from)
 }
 
 /// Publish now and report the outcome. The outcome (including any failure)

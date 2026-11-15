@@ -112,73 +112,71 @@ pub struct DetectedGpu {
 /// Get GPU information for the current system
 #[tauri::command]
 pub fn get_gpu_info() -> Result<SystemGpuInfo, Error> {
-    tauri_plugin_telemetry::traced_sync("get_gpu_info", || {
-        #[cfg(target_os = "linux")]
-        {
-            let detection = linux::detect_gpus();
-            Ok(SystemGpuInfo {
-                compiled_backend: detection.compiled_backend.to_string(),
-                gpu_available: detection.recommended_backend != linux::GpuBackend::Cpu,
-                gpu_name: detection.gpus.first().map(|g| g.name.clone()),
-                vram_mb: detection.gpus.first().and_then(|g| g.vram_mb),
-                detected_gpus: detection
-                    .gpus
-                    .iter()
-                    .map(|g| DetectedGpu {
-                        backend: g.backend.to_string(),
-                        name: g.name.clone(),
-                        vram_mb: g.vram_mb,
-                    })
-                    .collect(),
-                permissions: permissions(),
-            })
-        }
+    #[cfg(target_os = "linux")]
+    {
+        let detection = linux::detect_gpus();
+        Ok(SystemGpuInfo {
+            compiled_backend: detection.compiled_backend.to_string(),
+            gpu_available: detection.recommended_backend != linux::GpuBackend::Cpu,
+            gpu_name: detection.gpus.first().map(|g| g.name.clone()),
+            vram_mb: detection.gpus.first().and_then(|g| g.vram_mb),
+            detected_gpus: detection
+                .gpus
+                .iter()
+                .map(|g| DetectedGpu {
+                    backend: g.backend.to_string(),
+                    name: g.name.clone(),
+                    vram_mb: g.vram_mb,
+                })
+                .collect(),
+            permissions: permissions(),
+        })
+    }
 
-        #[cfg(target_os = "macos")]
-        {
-            let gpu_name = get_macos_gpu_name();
-            Ok(SystemGpuInfo {
-                compiled_backend: "Metal".to_string(),
-                gpu_available: true,
-                gpu_name: gpu_name.clone(),
+    #[cfg(target_os = "macos")]
+    {
+        let gpu_name = get_macos_gpu_name();
+        Ok(SystemGpuInfo {
+            compiled_backend: "Metal".to_string(),
+            gpu_available: true,
+            gpu_name: gpu_name.clone(),
+            vram_mb: None,
+            detected_gpus: vec![DetectedGpu {
+                backend: "Metal".to_string(),
+                name: gpu_name.unwrap_or_else(|| "Apple GPU".to_string()),
                 vram_mb: None,
-                detected_gpus: vec![DetectedGpu {
-                    backend: "Metal".to_string(),
-                    name: gpu_name.unwrap_or_else(|| "Apple GPU".to_string()),
-                    vram_mb: None,
-                }],
-                permissions: permissions(),
-            })
-        }
+            }],
+            permissions: permissions(),
+        })
+    }
 
-        #[cfg(target_os = "windows")]
-        {
-            Ok(SystemGpuInfo {
-                compiled_backend: if cfg!(feature = "cuda") {
-                    "CUDA".to_string()
-                } else {
-                    "CPU".to_string()
-                },
-                gpu_available: cfg!(feature = "cuda"),
-                gpu_name: None,
-                vram_mb: None,
-                detected_gpus: vec![],
-                permissions: permissions(),
-            })
-        }
+    #[cfg(target_os = "windows")]
+    {
+        Ok(SystemGpuInfo {
+            compiled_backend: if cfg!(feature = "cuda") {
+                "CUDA".to_string()
+            } else {
+                "CPU".to_string()
+            },
+            gpu_available: cfg!(feature = "cuda"),
+            gpu_name: None,
+            vram_mb: None,
+            detected_gpus: vec![],
+            permissions: permissions(),
+        })
+    }
 
-        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-        {
-            Ok(SystemGpuInfo {
-                compiled_backend: "CPU".to_string(),
-                gpu_available: false,
-                gpu_name: None,
-                vram_mb: None,
-                detected_gpus: vec![],
-                permissions: permissions(),
-            })
-        }
-    })
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        Ok(SystemGpuInfo {
+            compiled_backend: "CPU".to_string(),
+            gpu_available: false,
+            gpu_name: None,
+            vram_mb: None,
+            detected_gpus: vec![],
+            permissions: permissions(),
+        })
+    }
 }
 
 /// Get macOS GPU name via system_profiler
@@ -312,29 +310,27 @@ pub fn check_accessibility() -> bool {
 
 #[tauri::command]
 pub fn get_permissions() -> Permissions {
-    tauri_plugin_telemetry::traced_sync_value("get_permissions", permissions)
+    permissions()
 }
 
 /// Ask for every missing permission, one system dialog after another. Each
 /// grant arrives as a `permission-changed` event from the macOS watcher.
 #[tauri::command]
 pub fn request_permissions(app: tauri::AppHandle) {
-    tauri_plugin_telemetry::traced_sync_value("request_permissions", || {
-        #[cfg(target_os = "macos")]
-        {
-            macos::request_permissions(app);
-        }
-        #[cfg(target_os = "linux")]
-        {
-            let _ = app;
-            // PulseAudio/PipeWire grant capture access without a system dialogue.
-            linux::request_microphone_permission();
-        }
-        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-        {
-            let _ = app;
-        }
-    })
+    #[cfg(target_os = "macos")]
+    {
+        macos::request_permissions(app);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = app;
+        // PulseAudio/PipeWire grant capture access without a system dialogue.
+        linux::request_microphone_permission();
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        let _ = app;
+    }
 }
 
 /// Caret (text cursor) position on screen

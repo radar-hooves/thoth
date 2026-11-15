@@ -238,11 +238,9 @@ pub fn get_recording_device(device_id: Option<&str>) -> Option<cpal::Device> {
 /// Tauri command to list audio devices
 #[tauri::command]
 pub fn list_audio_devices() -> Vec<AudioDevice> {
-    tauri_plugin_telemetry::traced_sync_value("list_audio_devices", || {
-        let devices = list_input_devices();
-        tracing::debug!("Found {} audio input devices", devices.len());
-        devices
-    })
+    let devices = list_input_devices();
+    tracing::debug!("Found {} audio input devices", devices.len());
+    devices
 }
 
 #[cfg(test)]

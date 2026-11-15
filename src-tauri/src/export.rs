@@ -370,10 +370,7 @@ pub async fn export_to_json(
     path: String,
     search_params: Option<SearchParams>,
 ) -> Result<u32, Error> {
-    tauri_plugin_telemetry::traced("export_to_json", async move {
-        export_records(&ids, Path::new(&path), search_params, export_json).map_err(Into::into)
-    })
-    .await
+    export_records(&ids, Path::new(&path), search_params, export_json).map_err(Into::into)
 }
 
 /// Exports transcription records to a CSV file.
@@ -383,10 +380,7 @@ pub async fn export_to_csv(
     path: String,
     search_params: Option<SearchParams>,
 ) -> Result<u32, Error> {
-    tauri_plugin_telemetry::traced("export_to_csv", async move {
-        export_records(&ids, Path::new(&path), search_params, export_csv).map_err(Into::into)
-    })
-    .await
+    export_records(&ids, Path::new(&path), search_params, export_csv).map_err(Into::into)
 }
 
 /// Exports transcription records to a plain text file.
@@ -396,10 +390,7 @@ pub async fn export_to_txt(
     path: String,
     search_params: Option<SearchParams>,
 ) -> Result<u32, Error> {
-    tauri_plugin_telemetry::traced("export_to_txt", async move {
-        export_records(&ids, Path::new(&path), search_params, export_txt).map_err(Into::into)
-    })
-    .await
+    export_records(&ids, Path::new(&path), search_params, export_txt).map_err(Into::into)
 }
 
 #[cfg(test)]

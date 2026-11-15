@@ -951,9 +951,7 @@ fn handle_select_prompt(app: &AppHandle, prompt_id: String) {
 /// Refresh the tray menu (e.g. after permissions change)
 #[tauri::command]
 pub fn refresh_tray_menu(app: AppHandle) {
-    tauri_plugin_telemetry::traced_sync_value("refresh_tray_menu", || {
-        rebuild_tray_menu(&app);
-    })
+    rebuild_tray_menu(&app);
 }
 
 /// Tray state info for frontend

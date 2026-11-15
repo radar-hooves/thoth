@@ -73,18 +73,15 @@ fn register_single_shortcut(
 async fn reregister_shortcuts(
     app: tauri::AppHandle,
 ) -> Result<Vec<shortcuts::ShortcutConflict>, Error> {
-    tauri_plugin_telemetry::traced("reregister_shortcuts", async move {
-        // Unregister everything
-        shortcuts::unregister_all_shortcuts(app.clone())?;
+    // Unregister everything
+    shortcuts::unregister_all_shortcuts(app.clone())?;
 
-        // Re-register from config
-        let cfg = config::get_config().map_err(|e| format!("Failed to load config: {}", e))?;
-        let failed = register_shortcuts_from_config(&app, &cfg);
+    // Re-register from config
+    let cfg = config::get_config().map_err(|e| format!("Failed to load config: {}", e))?;
+    let failed = register_shortcuts_from_config(&app, &cfg);
 
-        tracing::info!("Re-registered all shortcuts from config");
-        Ok(failed)
-    })
-    .await
+    tracing::info!("Re-registered all shortcuts from config");
+    Ok(failed)
 }
 
 /// Register shortcuts from saved configuration, returning the ones the system
@@ -476,147 +473,148 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            // Commands
-            commands::show_window,
-            commands::open_url,
-            commands::set_show_in_dock,
-            commands::get_show_in_dock,
-            commands::set_audio_device,
-            commands::report_update_check,
-            // Platform
-            platform::get_permissions,
-            platform::request_permissions,
-            platform::get_gpu_info,
-            // Audio
-            audio::device::list_audio_devices,
-            audio::preview::start_audio_preview,
-            audio::preview::stop_audio_preview,
-            audio::start_recording,
-            audio::stop_recording,
-            audio::is_recording,
-            // Transcription
-            transcription::init_transcription,
-            transcription::transcribe_file,
-            transcription::is_transcription_ready,
-            transcription::get_transcription_backend,
-            transcription::get_model_directory,
-            transcription::get_whisper_model_directory,
-            transcription::is_whisper_model_downloaded,
-            transcription::filter_transcription,
-            transcription::set_selected_model_id,
-            transcription::init_fluidaudio_transcription,
-            transcription::download::check_model_downloaded,
-            transcription::download::get_download_progress,
-            transcription::download::download_model,
-            transcription::download::delete_model,
-            transcription::download::reset_download_state,
-            transcription::manifest::fetch_model_manifest,
-            transcription::manifest::get_manifest_update_time,
-            // Enhancement
-            enhancement::check_ollama_available,
-            enhancement::list_ollama_models,
-            enhancement::check_openai_compat_available,
-            enhancement::list_openai_compat_models,
-            enhancement::enhance_text,
-            // Prompt Templates
-            enhancement::prompts::get_all_prompts,
-            enhancement::prompts::save_custom_prompt_cmd,
-            enhancement::prompts::delete_custom_prompt_cmd,
-            // Database
-            database::init_database,
-            database::transcription::get_transcription_by_id,
-            database::transcription::list_all_transcriptions,
-            database::transcription::delete_transcription_by_id,
-            database::transcription::delete_all_transcriptions_cmd,
-            database::transcription::get_transcription_stats_cmd,
-            database::insights::get_insights,
-            database::insights::get_cruft_candidates,
-            // Trash / quarantine
-            database::trash::quarantine_recordings,
-            database::trash::restore_recordings,
-            database::trash::purge_trash,
-            database::trash::list_trash,
-            // Export
-            export::export_to_json,
-            export::export_to_csv,
-            export::export_to_txt,
-            // Config
-            changelog::whats_new,
-            changelog::mark_whats_new_seen,
-            config::ipc::get_config,
-            config::ipc::get_default_config,
-            config::ipc::patch_config,
-            config::set_enhancement_api_key,
-            config::ipc::reset_config,
-            config::get_config_path_cmd,
-            // Shortcuts
-            shortcuts::list_registered_shortcuts,
-            shortcuts::get_default_shortcuts,
-            reregister_shortcuts,
-            // Dictionary
-            dictionary::get_dictionary_entries,
-            dictionary::add_dictionary_entry,
-            dictionary::update_dictionary_entry,
-            dictionary::remove_dictionary_entry,
-            dictionary::import_dictionary,
-            dictionary::export_dictionary,
-            dictionary::apply_dictionary_to_text,
-            // Canonical terms
-            canonical::get_canonical_terms,
-            canonical::add_canonical_term,
-            canonical::update_canonical_term,
-            canonical::remove_canonical_term,
-            // Text insertion
-            text_insert::insert_text,
-            text_insert::insert_text_by_typing,
-            text_insert::insert_text_by_paste,
-            // Clipboard
-            // Sound feedback
-            sound::play_recording_start_sound,
-            sound::play_recording_stop_sound,
-            sound::play_transcription_complete_sound,
-            sound::play_error_sound,
-            sound::are_sounds_enabled,
-            sound::set_sounds_enabled,
-            sound::get_sound_volume,
-            sound::set_sound_volume,
-            // Pipeline (full recording -> transcription -> output flow)
-            pipeline::pipeline_start_recording,
-            pipeline::pipeline_stop_and_process,
-            pipeline::pipeline_toggle_recording,
-            pipeline::pipeline_transcribe_file,
-            pipeline::pipeline_retranscribe,
-            pipeline::pipeline_cancel,
-            pipeline::get_pipeline_state,
-            // Recording indicator
-            recording_indicator::show_recording_indicator,
-            recording_indicator::hide_recording_indicator,
-            // Tray
-            tray::refresh_tray_menu,
-            // Storage management
-            storage::get_storage_usage,
-            storage::delete_all_recordings,
-            storage::delete_fluidaudio_cache,
-            storage::delete_all_data,
-            // Keyboard service (shortcut capture + modifier monitoring)
-            keyboard_service::enter_capture_mode,
-            keyboard_service::exit_capture_mode,
-            keyboard_service::report_key_event,
-            // Control API
-            control_api::get_integrations_status,
-            control_api::set_api_enabled,
-            control_api::set_mcp_enabled,
-            control_api::get_api_token,
-            control_api::rotate_api_token,
-            // Word-list publishing
-            publish::get_publish_status,
-            publish::set_publish_password,
-            publish::publish_now,
-            external_dictionary::get_external_dictionary_status,
-            external_dictionary::set_external_dictionary_password,
-            external_dictionary::sync_external_dictionary_now,
-        ])
+        .invoke_handler(tauri_plugin_telemetry::invoke_handler(
+            tauri::generate_handler![
+                // Commands
+                commands::show_window,
+                commands::open_url,
+                commands::set_show_in_dock,
+                commands::get_show_in_dock,
+                commands::set_audio_device,
+                // Platform
+                platform::get_permissions,
+                platform::request_permissions,
+                platform::get_gpu_info,
+                // Audio
+                audio::device::list_audio_devices,
+                audio::preview::start_audio_preview,
+                audio::preview::stop_audio_preview,
+                audio::start_recording,
+                audio::stop_recording,
+                audio::is_recording,
+                // Transcription
+                transcription::init_transcription,
+                transcription::transcribe_file,
+                transcription::is_transcription_ready,
+                transcription::get_transcription_backend,
+                transcription::get_model_directory,
+                transcription::get_whisper_model_directory,
+                transcription::is_whisper_model_downloaded,
+                transcription::filter_transcription,
+                transcription::set_selected_model_id,
+                transcription::init_fluidaudio_transcription,
+                transcription::download::check_model_downloaded,
+                transcription::download::get_download_progress,
+                transcription::download::download_model,
+                transcription::download::delete_model,
+                transcription::download::reset_download_state,
+                transcription::manifest::fetch_model_manifest,
+                transcription::manifest::get_manifest_update_time,
+                // Enhancement
+                enhancement::check_ollama_available,
+                enhancement::list_ollama_models,
+                enhancement::check_openai_compat_available,
+                enhancement::list_openai_compat_models,
+                enhancement::enhance_text,
+                // Prompt Templates
+                enhancement::prompts::get_all_prompts,
+                enhancement::prompts::save_custom_prompt_cmd,
+                enhancement::prompts::delete_custom_prompt_cmd,
+                // Database
+                database::init_database,
+                database::transcription::get_transcription_by_id,
+                database::transcription::list_all_transcriptions,
+                database::transcription::delete_transcription_by_id,
+                database::transcription::delete_all_transcriptions_cmd,
+                database::transcription::get_transcription_stats_cmd,
+                database::insights::get_insights,
+                database::insights::get_cruft_candidates,
+                // Trash / quarantine
+                database::trash::quarantine_recordings,
+                database::trash::restore_recordings,
+                database::trash::purge_trash,
+                database::trash::list_trash,
+                // Export
+                export::export_to_json,
+                export::export_to_csv,
+                export::export_to_txt,
+                // Config
+                changelog::whats_new,
+                changelog::mark_whats_new_seen,
+                config::ipc::get_config,
+                config::ipc::get_default_config,
+                config::ipc::patch_config,
+                config::set_enhancement_api_key,
+                config::ipc::reset_config,
+                config::get_config_path_cmd,
+                // Shortcuts
+                shortcuts::list_registered_shortcuts,
+                shortcuts::get_default_shortcuts,
+                reregister_shortcuts,
+                // Dictionary
+                dictionary::get_dictionary_entries,
+                dictionary::add_dictionary_entry,
+                dictionary::update_dictionary_entry,
+                dictionary::remove_dictionary_entry,
+                dictionary::import_dictionary,
+                dictionary::export_dictionary,
+                dictionary::apply_dictionary_to_text,
+                // Canonical terms
+                canonical::get_canonical_terms,
+                canonical::add_canonical_term,
+                canonical::update_canonical_term,
+                canonical::remove_canonical_term,
+                // Text insertion
+                text_insert::insert_text,
+                text_insert::insert_text_by_typing,
+                text_insert::insert_text_by_paste,
+                // Clipboard
+                // Sound feedback
+                sound::play_recording_start_sound,
+                sound::play_recording_stop_sound,
+                sound::play_transcription_complete_sound,
+                sound::play_error_sound,
+                sound::are_sounds_enabled,
+                sound::set_sounds_enabled,
+                sound::get_sound_volume,
+                sound::set_sound_volume,
+                // Pipeline (full recording -> transcription -> output flow)
+                pipeline::pipeline_start_recording,
+                pipeline::pipeline_stop_and_process,
+                pipeline::pipeline_toggle_recording,
+                pipeline::pipeline_transcribe_file,
+                pipeline::pipeline_retranscribe,
+                pipeline::pipeline_cancel,
+                pipeline::get_pipeline_state,
+                // Recording indicator
+                recording_indicator::show_recording_indicator,
+                recording_indicator::hide_recording_indicator,
+                // Tray
+                tray::refresh_tray_menu,
+                // Storage management
+                storage::get_storage_usage,
+                storage::delete_all_recordings,
+                storage::delete_fluidaudio_cache,
+                storage::delete_all_data,
+                // Keyboard service (shortcut capture + modifier monitoring)
+                keyboard_service::enter_capture_mode,
+                keyboard_service::exit_capture_mode,
+                keyboard_service::report_key_event,
+                // Control API
+                control_api::get_integrations_status,
+                control_api::set_api_enabled,
+                control_api::set_mcp_enabled,
+                control_api::get_api_token,
+                control_api::rotate_api_token,
+                // Word-list publishing
+                publish::get_publish_status,
+                publish::set_publish_password,
+                publish::publish_now,
+                external_dictionary::get_external_dictionary_status,
+                external_dictionary::set_external_dictionary_password,
+                external_dictionary::sync_external_dictionary_now,
+            ],
+        ))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app, _event| {

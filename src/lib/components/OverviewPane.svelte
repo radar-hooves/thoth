@@ -14,7 +14,7 @@
   import { configStore } from '../stores/config.svelte';
   import { settingsStore } from '../stores/settings.svelte';
   import { formatDuration, formatTotalDuration } from '../utils/format';
-  import { getUpdaterState, checkForUpdate } from '../stores/updater.svelte';
+  import { getUpdaterState, checkForUpdate } from '@poodle64/ui/updater';
   import { Button } from '@poodle64/ui/button';
   import { Switch } from '@poodle64/ui/switch';
   import { Badge } from '@poodle64/ui/badge';

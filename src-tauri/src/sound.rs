@@ -382,63 +382,46 @@ fn play_macos_sound(path: &'static str, volume: f32) {
 /// Play a sound for recording start
 #[tauri::command]
 pub fn play_recording_start_sound() {
-    tauri_plugin_telemetry::traced_sync_value("play_recording_start_sound", || {
-        play_sound(SoundEvent::RecordingStart);
-    })
+    play_sound(SoundEvent::RecordingStart);
 }
 
 /// Play a sound for recording stop
 #[tauri::command]
 pub fn play_recording_stop_sound() {
-    tauri_plugin_telemetry::traced_sync_value("play_recording_stop_sound", || {
-        play_sound(SoundEvent::RecordingStop);
-    })
+    play_sound(SoundEvent::RecordingStop);
 }
 
 /// Play a sound for transcription complete
 #[tauri::command]
 pub fn play_transcription_complete_sound() {
-    tauri_plugin_telemetry::traced_sync_value("play_transcription_complete_sound", || {
-        play_sound(SoundEvent::TranscriptionComplete);
-    })
+    play_sound(SoundEvent::TranscriptionComplete);
 }
 
 /// Play a sound for error
 #[tauri::command]
 pub fn play_error_sound() {
-    tauri_plugin_telemetry::traced_sync_value("play_error_sound", || {
-        play_sound(SoundEvent::Error);
-    })
+    play_sound(SoundEvent::Error);
 }
 
 /// Check if sounds are enabled
 #[tauri::command]
 pub async fn are_sounds_enabled() -> Result<bool, Error> {
-    tauri_plugin_telemetry::traced("are_sounds_enabled", async move {
-        let cfg = config::get_config()?;
-        Ok(cfg.audio.play_sounds)
-    })
-    .await
+    let cfg = config::get_config()?;
+    Ok(cfg.audio.play_sounds)
 }
 
 /// Set sounds enabled state
 #[tauri::command]
 pub async fn set_sounds_enabled(enabled: bool) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced("set_sounds_enabled", async move {
-        config::patch_config(serde_json::json!({ "audio": { "play_sounds": enabled } }))?;
-        tracing::info!("Sounds enabled: {}", enabled);
-        Ok(())
-    })
-    .await
+    config::patch_config(serde_json::json!({ "audio": { "play_sounds": enabled } }))?;
+    tracing::info!("Sounds enabled: {}", enabled);
+    Ok(())
 }
 
 /// Get the recording cue volume (0.0 to 1.0).
 #[tauri::command]
 pub async fn get_sound_volume() -> Result<f32, Error> {
-    tauri_plugin_telemetry::traced("get_sound_volume", async move {
-        Ok(clamp_volume(config::get_config()?.audio.sound_volume))
-    })
-    .await
+    Ok(clamp_volume(config::get_config()?.audio.sound_volume))
 }
 
 /// Set the recording cue volume.
@@ -448,13 +431,10 @@ pub async fn get_sound_volume() -> Result<f32, Error> {
 /// playback site.
 #[tauri::command]
 pub async fn set_sound_volume(volume: f32) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced("set_sound_volume", async move {
-        let volume = clamp_volume(volume);
-        config::patch_config(serde_json::json!({ "audio": { "sound_volume": volume } }))?;
-        tracing::info!("Sound volume: {:.2}", volume);
-        Ok(())
-    })
-    .await
+    let volume = clamp_volume(volume);
+    config::patch_config(serde_json::json!({ "audio": { "sound_volume": volume } }))?;
+    tracing::info!("Sound volume: {:.2}", volume);
+    Ok(())
 }
 
 #[cfg(test)]

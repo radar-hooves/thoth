@@ -305,8 +305,8 @@
               # v2026.9.34: traced_sync_value added, no crate version bump — the
               # commit id still moves, so the hash does too.
               "telemetry-0.7.0" = "sha256-Sw4dv8BQL+JbHNHHBotuVUc4/Sc0/z9pc0QSxD3nJLw=";
-              "tauri-plugin-telemetry-0.1.0" = "sha256-Sw4dv8BQL+JbHNHHBotuVUc4/Sc0/z9pc0QSxD3nJLw=";
-              "desktop-shell-0.2.0" = "sha256-Sw4dv8BQL+JbHNHHBotuVUc4/Sc0/z9pc0QSxD3nJLw=";
+              "tauri-plugin-telemetry-0.3.0" = "sha256-Sw4dv8BQL+JbHNHHBotuVUc4/Sc0/z9pc0QSxD3nJLw=";
+              "desktop-shell-0.3.0" = "sha256-Sw4dv8BQL+JbHNHHBotuVUc4/Sc0/z9pc0QSxD3nJLw=";
             };
           };
 

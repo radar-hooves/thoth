@@ -91,63 +91,55 @@ pub(crate) fn replace_entries(entries: Vec<DictionaryEntry>) -> Result<(), Error
 /// Get all dictionary entries
 #[tauri::command]
 pub fn get_dictionary_entries() -> Result<Vec<DictionaryEntry>, Error> {
-    tauri_plugin_telemetry::traced_sync("get_dictionary_entries", || {
-        let dictionary = get_dictionary().read();
-        Ok(dictionary.entries.clone())
-    })
+    let dictionary = get_dictionary().read();
+    Ok(dictionary.entries.clone())
 }
 
 /// Add a new dictionary entry
 #[tauri::command]
 pub fn add_dictionary_entry(entry: DictionaryEntry) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced_sync("add_dictionary_entry", || {
-        // Validate entry
-        if entry.from.trim().is_empty() {
-            return Err("The 'from' field cannot be empty".to_string().into());
-        }
-        if entry.to.trim().is_empty() {
-            return Err("The 'to' field cannot be empty".to_string().into());
-        }
+    // Validate entry
+    if entry.from.trim().is_empty() {
+        return Err("The 'from' field cannot be empty".to_string().into());
+    }
+    if entry.to.trim().is_empty() {
+        return Err("The 'to' field cannot be empty".to_string().into());
+    }
 
-        let mut dictionary = get_dictionary().write();
+    let mut dictionary = get_dictionary().write();
 
-        // Check for duplicates
-        let from_lower = entry.from.to_lowercase();
-        if dictionary
-            .entries
-            .iter()
-            .any(|e| e.from.to_lowercase() == from_lower)
-        {
-            return Err(format!("An entry for '{}' already exists", entry.from).into());
-        }
+    // Check for duplicates
+    let from_lower = entry.from.to_lowercase();
+    if dictionary
+        .entries
+        .iter()
+        .any(|e| e.from.to_lowercase() == from_lower)
+    {
+        return Err(format!("An entry for '{}' already exists", entry.from).into());
+    }
 
-        dictionary.entries.push(entry);
-        save_dictionary(&dictionary)?;
+    dictionary.entries.push(entry);
+    save_dictionary(&dictionary)?;
 
-        tracing::info!(
-            "Added dictionary entry, total entries: {}",
-            dictionary.entries.len()
-        );
-        Ok(())
-    })
+    tracing::info!(
+        "Added dictionary entry, total entries: {}",
+        dictionary.entries.len()
+    );
+    Ok(())
 }
 
 /// Update an existing dictionary entry
 #[tauri::command]
 pub fn update_dictionary_entry(index: usize, entry: DictionaryEntry) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced_sync("update_dictionary_entry", || {
-        let mut dictionary = get_dictionary().write();
-        update_entry_locked(&mut dictionary, index, entry)
-    })
+    let mut dictionary = get_dictionary().write();
+    update_entry_locked(&mut dictionary, index, entry)
 }
 
 /// Remove a dictionary entry by index
 #[tauri::command]
 pub fn remove_dictionary_entry(index: usize) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced_sync("remove_dictionary_entry", || {
-        let mut dictionary = get_dictionary().write();
-        remove_entry_locked(&mut dictionary, index)
-    })
+    let mut dictionary = get_dictionary().write();
+    remove_entry_locked(&mut dictionary, index)
 }
 
 /// Update the single entry whose `from` text is `from_key`, returning the index
@@ -344,62 +336,58 @@ fn type_name(value: &serde_json::Value) -> &'static str {
 /// `from`; replace swaps the whole dictionary.
 #[tauri::command]
 pub fn import_dictionary(json_content: String, merge: bool) -> Result<usize, Error> {
-    tauri_plugin_telemetry::traced_sync("import_dictionary", || {
-        let imported = parse_import_entries(&json_content).map_err(Error::from)?;
+    let imported = parse_import_entries(&json_content).map_err(Error::from)?;
 
-        let mut dictionary = get_dictionary().write();
-        let import_count;
+    let mut dictionary = get_dictionary().write();
+    let import_count;
 
-        if merge {
-            // Build a set of existing 'from' values for deduplication
-            let existing: HashMap<String, usize> = dictionary
-                .entries
-                .iter()
-                .enumerate()
-                .map(|(i, e)| (e.from.to_lowercase(), i))
-                .collect();
+    if merge {
+        // Build a set of existing 'from' values for deduplication
+        let existing: HashMap<String, usize> = dictionary
+            .entries
+            .iter()
+            .enumerate()
+            .map(|(i, e)| (e.from.to_lowercase(), i))
+            .collect();
 
-            let mut new_entries = Vec::new();
-            for entry in imported {
-                if entry.from.trim().is_empty() || entry.to.trim().is_empty() {
-                    continue;
-                }
-                if !existing.contains_key(&entry.from.to_lowercase()) {
-                    new_entries.push(entry);
-                }
+        let mut new_entries = Vec::new();
+        for entry in imported {
+            if entry.from.trim().is_empty() || entry.to.trim().is_empty() {
+                continue;
             }
-            import_count = new_entries.len();
-            dictionary.entries.extend(new_entries);
-        } else {
-            // Replace entire dictionary
-            let valid_entries: Vec<_> = imported
-                .into_iter()
-                .filter(|e| !e.from.trim().is_empty() && !e.to.trim().is_empty())
-                .collect();
-            import_count = valid_entries.len();
-            dictionary.entries = valid_entries;
+            if !existing.contains_key(&entry.from.to_lowercase()) {
+                new_entries.push(entry);
+            }
         }
+        import_count = new_entries.len();
+        dictionary.entries.extend(new_entries);
+    } else {
+        // Replace entire dictionary
+        let valid_entries: Vec<_> = imported
+            .into_iter()
+            .filter(|e| !e.from.trim().is_empty() && !e.to.trim().is_empty())
+            .collect();
+        import_count = valid_entries.len();
+        dictionary.entries = valid_entries;
+    }
 
-        save_dictionary(&dictionary)?;
+    save_dictionary(&dictionary)?;
 
-        tracing::info!(
-            "Imported {} dictionary entries (merge={})",
-            import_count,
-            merge
-        );
-        Ok(import_count)
-    })
+    tracing::info!(
+        "Imported {} dictionary entries (merge={})",
+        import_count,
+        merge
+    );
+    Ok(import_count)
 }
 
 /// Export dictionary entries as JSON
 #[tauri::command]
 pub fn export_dictionary() -> Result<String, Error> {
-    tauri_plugin_telemetry::traced_sync("export_dictionary", || {
-        let dictionary = get_dictionary().read();
-        serde_json::to_string_pretty(&*dictionary)
-            .map_err(|e| format!("Failed to serialise: {}", e))
-            .map_err(Into::into)
-    })
+    let dictionary = get_dictionary().read();
+    serde_json::to_string_pretty(&*dictionary)
+        .map_err(|e| format!("Failed to serialise: {}", e))
+        .map_err(Into::into)
 }
 
 /// Apply dictionary replacements to text
@@ -465,9 +453,7 @@ fn whole_word_replace_all(re: &Regex, text: &str, to: &str) -> String {
 /// Tauri command to apply dictionary replacements
 #[tauri::command]
 pub fn apply_dictionary_to_text(text: String) -> String {
-    tauri_plugin_telemetry::traced_sync_value("apply_dictionary_to_text", || {
-        apply_dictionary(&text)
-    })
+    apply_dictionary(&text)
 }
 
 /// Get vocabulary words for AI enhancement context
