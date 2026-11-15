@@ -36,7 +36,7 @@ jobs:
           deadline=$((SECONDS + 1800))
           while :; do
             s=$(gh run list -R "$GITHUB_REPOSITORY" --workflow change.yaml --branch main --commit "$GITHUB_SHA" \
-              --json status,conclusion --jq '[.[] | select(.status == "completed") | .conclusion] | if any(. == "success") then "ok" else "wait" end') || s=wait
+              --json status,conclusion --jq '[.[] | select(.status == "completed") | .conclusion] | if any(. == "success") then "ok" else "wait" end') || s="wait"
             [ "$s" = ok ] && exit 0
             [ "$SECONDS" -lt "$deadline" ] || { echo "::error::no green change run on main for $GITHUB_SHA"; exit 1; }
             sleep 30
@@ -104,7 +104,7 @@ jobs:
         if: matrix.platform != 'huginn'
         shell: bash
         run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+          echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
 
       - name: Setup pnpm cache
         if: matrix.platform != 'huginn'

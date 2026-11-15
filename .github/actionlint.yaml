@@ -1,0 +1,4 @@
+# The household self-hosted runner labels, so actionlint accepts runs-on: [self-hosted, household],
+# plus a vendor-hosted image newer than actionlint's own list (nix-check.yaml, by-exception).
+self-hosted-runner:
+  labels: [household, macos, light, gradle, release, ubuntu-26.04]

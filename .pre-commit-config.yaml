@@ -12,6 +12,14 @@ repos:
   #                              Security Scanning                                #
   # ---------------------------------------------------------------------------- #
 
+  # An orphaned empty `env:` key makes GitHub reject the whole workflow before
+  # any job starts: no logs, no check-run. actionlint reads it as a syntax error.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+        name: 'ci - Lint GitHub Actions workflows'
+
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0
     hooks:
@@ -90,6 +98,13 @@ repos:
       - id: cargo-fmt
         name: rust - cargo fmt
         entry: cargo fmt --manifest-path src-tauri/Cargo.toml --all
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: 'rust - cargo clippy'
+        entry: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
         language: system
         types: [rust]
         pass_filenames: false
