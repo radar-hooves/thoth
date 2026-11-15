@@ -10,4 +10,4 @@ Wired in `src/routes/+layout.svelte`, guarded by `import.meta.env.DEV && !('__TA
 
 ## Driving it
 
-`pnpm run dev`, then open `http://localhost:1422/{,history,recording-indicator}` with the Playwright MCP. A command-map entry's key must match the real `invoke()` string the frontend actually calls — casing varies per command (config is snake_case, history rows camelCase) — so if a mocked call goes unanswered, check the calling store, not this doc.
+`pnpm run dev`, then open `http://localhost:1422/{,history,recording-indicator}` with the Playwright MCP. A command-map entry's key must match the real `invoke()` string the frontend actually calls — casing varies per command (the config commands and history rows are camelCase) — so if a mocked call goes unanswered, check the calling store, not this doc.

@@ -2,7 +2,7 @@
  * Thoth-specific Tauri command mock map for browser-only dev mode.
  *
  * Casing notes (verified against store source files):
- * - get_config returns snake_case (ConfigRaw in config.svelte.ts)
+ * - get_config, get_default_config, patch_config and reset_config return camelCase (Config in config.svelte.ts)
  * - list_all_transcriptions returns camelCase (TranscriptionRecordRaw in history.svelte.ts)
  * - list_audio_devices returns snake_case id/name/is_default (AudioDevice in settings.svelte.ts)
  * - get_dictionary_entries returns DictionaryEntry with camelCase caseSensitive
@@ -23,48 +23,62 @@ import type { CommandMap } from './tauri-mock';
 
 const MOCK_CONFIG = {
   version: 1,
-  audio: { device_id: null, sample_rate: 16000, play_sounds: true, sound_volume: 1 },
+  audio: { deviceId: null, sampleRate: 16000, playSounds: true, soundVolume: 1, warmStream: true },
   transcription: {
-    auto_copy: false,
-    auto_paste: true,
-    add_leading_space: false,
-    append_trailing_space: false,
-    auto_submit: 'off' as const,
-    remove_fillers: true,
-    australian_spelling: true,
-    spoken_numbers_to_digits: false,
-    voice_formatting_commands: true,
-    vocabulary_bias: true,
-    typing_tool: 'auto' as const,
-    model_idle_unload_secs: null,
+    modelId: null,
+    autoCopy: false,
+    autoPaste: true,
+    addLeadingSpace: false,
+    appendTrailingSpace: false,
+    autoSubmit: 'off' as const,
+    removeFillers: true,
+    australianSpelling: true,
+    spokenNumbersToDigits: false,
+    normaliseWhitespace: true,
+    cleanupPunctuation: true,
+    sentenceCase: false,
+    voiceFormattingCommands: true,
+    vocabularyBias: true,
+    typingTool: 'auto' as const,
+    modelIdleUnloadSecs: null,
   },
   shortcuts: {
-    toggle_recording: 'F13',
-    toggle_recording_alt: 'CommandOrControl+Shift+Space',
-    copy_last: 'F14',
-    recording_mode: 'toggle' as const,
-    hands_free_silence_secs: 2.0,
+    toggleRecording: 'F13',
+    toggleRecordingAlt: 'CommandOrControl+Shift+Space',
+    copyLast: 'F14',
+    toggleEnhancement: null,
+    recordingMode: 'toggle' as const,
+    handsFreeSilenceSecs: 2.0,
   },
   enhancement: {
     enabled: false,
     model: 'llama3.2',
-    prompt_id: 'fix-grammar',
-    ollama_url: 'http://localhost:11434',
+    promptId: 'fix-grammar',
+    ollamaUrl: 'http://localhost:11434',
+    backend: 'ollama',
+    openaiCompatUrl: 'http://localhost:1234',
+    apiKey: null,
   },
   general: {
-    launch_at_login: false,
-    show_in_menu_bar: true,
-    show_in_dock: false,
-    check_for_updates: true,
-    show_recording_indicator: true,
-    indicator_style: 'cursor-dot' as const,
+    launchAtLogin: false,
+    showInMenuBar: true,
+    showInDock: false,
+    checkForUpdates: true,
+    showRecordingIndicator: true,
+    indicatorStyle: 'cursor-dot' as const,
+    windowDecorations: true,
+    lastRunVersion: null,
+    whatsNewSeenVersion: null,
   },
-  recorder: { position: 'top-right' as const, offset_x: -20, offset_y: 20, auto_hide_delay: 3000 },
+  recorder: { position: 'top-right' as const, offsetX: -20, offsetY: 20, autoHideDelay: 3000 },
   integrations: {
-    api_enabled: false,
-    api_port: 8765,
-    mcp_enabled: false,
+    apiEnabled: false,
+    apiPort: 8765,
+    mcpEnabled: false,
   },
+  telemetry: { endpoint: '', headersHelper: '' },
+  publish: { enabled: false, url: '', username: '' },
+  externalDictionary: { enabled: false, url: '', username: '', device: '', credentialHelper: '' },
 };
 
 const MOCK_MODELS = [

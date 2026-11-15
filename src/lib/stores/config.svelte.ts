@@ -243,253 +243,6 @@ export interface Config {
   externalDictionary: ExternalDictionaryConfig;
 }
 
-/** Raw config from backend (snake_case fields) */
-interface ConfigRaw {
-  version: number;
-  audio: {
-    device_id: string | null;
-    sample_rate: number;
-    play_sounds: boolean;
-    sound_volume: number;
-  };
-  transcription: {
-    auto_copy: boolean;
-    auto_paste: boolean;
-    add_leading_space: boolean;
-    append_trailing_space: boolean;
-    auto_submit: AutoSubmit;
-    remove_fillers: boolean;
-    australian_spelling: boolean;
-    spoken_numbers_to_digits: boolean;
-    normalise_whitespace: boolean;
-    cleanup_punctuation: boolean;
-    sentence_case: boolean;
-    voice_formatting_commands: boolean;
-    vocabulary_bias: boolean;
-    typing_tool: TypingTool;
-    model_idle_unload_secs: number | null;
-  };
-  shortcuts: {
-    toggle_recording: string;
-    toggle_recording_alt: string | null;
-    copy_last: string | null;
-    toggle_enhancement: string | null;
-    recording_mode: RecordingMode;
-    hands_free_silence_secs: number;
-  };
-  enhancement: {
-    enabled: boolean;
-    model: string;
-    prompt_id: string;
-    ollama_url: string;
-    backend: string;
-    openai_compat_url: string;
-    api_key: string | null;
-  };
-  general: {
-    launch_at_login: boolean;
-    show_in_menu_bar: boolean;
-    show_in_dock: boolean;
-    check_for_updates: boolean;
-    show_recording_indicator: boolean;
-    indicator_style: IndicatorStyle;
-    window_decorations: boolean;
-  };
-  recorder: {
-    position: RecorderPosition;
-    offset_x: number;
-    offset_y: number;
-    auto_hide_delay: number;
-  };
-  integrations?: {
-    api_enabled: boolean;
-    api_port: number;
-    mcp_enabled: boolean;
-  };
-  telemetry?: {
-    endpoint: string;
-    headers_helper: string;
-  };
-  publish?: {
-    enabled: boolean;
-    url: string;
-    username: string;
-  };
-  external_dictionary?: {
-    enabled: boolean;
-    url: string;
-    username: string;
-    device: string;
-    credential_helper: string;
-  };
-}
-
-/** Convert raw backend config to frontend format (snake_case to camelCase) */
-function parseConfig(raw: ConfigRaw): Config {
-  return {
-    version: raw.version,
-    audio: {
-      deviceId: raw.audio.device_id,
-      sampleRate: raw.audio.sample_rate,
-      playSounds: raw.audio.play_sounds,
-      soundVolume: raw.audio.sound_volume ?? 1,
-    },
-    transcription: {
-      autoCopy: raw.transcription.auto_copy,
-      autoPaste: raw.transcription.auto_paste,
-      addLeadingSpace: raw.transcription.add_leading_space,
-      appendTrailingSpace: raw.transcription.append_trailing_space ?? false,
-      autoSubmit: raw.transcription.auto_submit ?? 'off',
-      removeFillers: raw.transcription.remove_fillers,
-      australianSpelling: raw.transcription.australian_spelling,
-      spokenNumbersToDigits: raw.transcription.spoken_numbers_to_digits,
-      normaliseWhitespace: raw.transcription.normalise_whitespace ?? true,
-      cleanupPunctuation: raw.transcription.cleanup_punctuation ?? true,
-      sentenceCase: raw.transcription.sentence_case ?? false,
-      voiceFormattingCommands: raw.transcription.voice_formatting_commands ?? true,
-      vocabularyBias: raw.transcription.vocabulary_bias ?? true,
-      typingTool: raw.transcription.typing_tool ?? 'auto',
-      modelIdleUnloadSecs: raw.transcription.model_idle_unload_secs ?? null,
-    },
-    shortcuts: {
-      toggleRecording: raw.shortcuts.toggle_recording,
-      toggleRecordingAlt: raw.shortcuts.toggle_recording_alt,
-      copyLast: raw.shortcuts.copy_last,
-      toggleEnhancement: raw.shortcuts.toggle_enhancement,
-      recordingMode: raw.shortcuts.recording_mode,
-      handsFreeSilenceSecs: raw.shortcuts.hands_free_silence_secs,
-    },
-    enhancement: {
-      enabled: raw.enhancement.enabled,
-      model: raw.enhancement.model,
-      promptId: raw.enhancement.prompt_id,
-      ollamaUrl: raw.enhancement.ollama_url,
-      backend: raw.enhancement.backend,
-      openaiCompatUrl: raw.enhancement.openai_compat_url,
-      apiKey: raw.enhancement.api_key,
-    },
-    general: {
-      launchAtLogin: raw.general.launch_at_login,
-      showInMenuBar: raw.general.show_in_menu_bar,
-      showInDock: raw.general.show_in_dock,
-      checkForUpdates: raw.general.check_for_updates,
-      showRecordingIndicator: raw.general.show_recording_indicator,
-      indicatorStyle: raw.general.indicator_style,
-      windowDecorations: raw.general.window_decorations ?? true,
-    },
-    recorder: {
-      position: raw.recorder.position,
-      offsetX: raw.recorder.offset_x,
-      offsetY: raw.recorder.offset_y,
-      autoHideDelay: raw.recorder.auto_hide_delay,
-    },
-    integrations: {
-      apiEnabled: raw.integrations?.api_enabled ?? false,
-      apiPort: raw.integrations?.api_port ?? 8765,
-      mcpEnabled: raw.integrations?.mcp_enabled ?? false,
-    },
-    telemetry: {
-      endpoint: raw.telemetry?.endpoint ?? '',
-      headersHelper: raw.telemetry?.headers_helper ?? '',
-    },
-    publish: {
-      enabled: raw.publish?.enabled ?? false,
-      url: raw.publish?.url ?? '',
-      username: raw.publish?.username ?? '',
-    },
-    externalDictionary: {
-      enabled: raw.external_dictionary?.enabled ?? false,
-      url: raw.external_dictionary?.url ?? '',
-      username: raw.external_dictionary?.username ?? '',
-      device: raw.external_dictionary?.device ?? '',
-      credentialHelper: raw.external_dictionary?.credential_helper ?? '',
-    },
-  };
-}
-
-/** Convert frontend config to backend format (camelCase to snake_case) */
-function serialiseConfig(config: Config): ConfigRaw {
-  return {
-    version: config.version,
-    audio: {
-      device_id: config.audio.deviceId,
-      sample_rate: config.audio.sampleRate,
-      play_sounds: config.audio.playSounds,
-      sound_volume: config.audio.soundVolume,
-    },
-    transcription: {
-      auto_copy: config.transcription.autoCopy,
-      auto_paste: config.transcription.autoPaste,
-      add_leading_space: config.transcription.addLeadingSpace,
-      append_trailing_space: config.transcription.appendTrailingSpace,
-      auto_submit: config.transcription.autoSubmit,
-      remove_fillers: config.transcription.removeFillers,
-      australian_spelling: config.transcription.australianSpelling,
-      spoken_numbers_to_digits: config.transcription.spokenNumbersToDigits,
-      normalise_whitespace: config.transcription.normaliseWhitespace,
-      cleanup_punctuation: config.transcription.cleanupPunctuation,
-      sentence_case: config.transcription.sentenceCase,
-      voice_formatting_commands: config.transcription.voiceFormattingCommands,
-      vocabulary_bias: config.transcription.vocabularyBias,
-      typing_tool: config.transcription.typingTool,
-      model_idle_unload_secs: config.transcription.modelIdleUnloadSecs,
-    },
-    shortcuts: {
-      toggle_recording: config.shortcuts.toggleRecording,
-      toggle_recording_alt: config.shortcuts.toggleRecordingAlt,
-      copy_last: config.shortcuts.copyLast,
-      toggle_enhancement: config.shortcuts.toggleEnhancement,
-      recording_mode: config.shortcuts.recordingMode,
-      hands_free_silence_secs: config.shortcuts.handsFreeSilenceSecs,
-    },
-    enhancement: {
-      enabled: config.enhancement.enabled,
-      model: config.enhancement.model,
-      prompt_id: config.enhancement.promptId,
-      ollama_url: config.enhancement.ollamaUrl,
-      backend: config.enhancement.backend,
-      openai_compat_url: config.enhancement.openaiCompatUrl,
-      api_key: config.enhancement.apiKey,
-    },
-    general: {
-      launch_at_login: config.general.launchAtLogin,
-      show_in_menu_bar: config.general.showInMenuBar,
-      show_in_dock: config.general.showInDock,
-      check_for_updates: config.general.checkForUpdates,
-      show_recording_indicator: config.general.showRecordingIndicator,
-      indicator_style: config.general.indicatorStyle,
-      window_decorations: config.general.windowDecorations,
-    },
-    recorder: {
-      position: config.recorder.position,
-      offset_x: config.recorder.offsetX,
-      offset_y: config.recorder.offsetY,
-      auto_hide_delay: config.recorder.autoHideDelay,
-    },
-    integrations: {
-      api_enabled: config.integrations.apiEnabled,
-      api_port: config.integrations.apiPort,
-      mcp_enabled: config.integrations.mcpEnabled,
-    },
-    telemetry: {
-      endpoint: config.telemetry.endpoint,
-      headers_helper: config.telemetry.headersHelper,
-    },
-    publish: {
-      enabled: config.publish.enabled,
-      url: config.publish.url,
-      username: config.publish.username,
-    },
-    external_dictionary: {
-      enabled: config.externalDictionary.enabled,
-      url: config.externalDictionary.url,
-      username: config.externalDictionary.username,
-      device: config.externalDictionary.device,
-      credential_helper: config.externalDictionary.credentialHelper,
-    },
-  };
-}
-
 /** Default configuration values */
 function getDefaultConfig(): Config {
   return {
@@ -598,10 +351,9 @@ function createConfigStore() {
   let isSaving = $state<boolean>(false);
   let error = $state<string | null>(null);
   let isInitialised = $state<boolean>(false);
-  // The last config loaded or sent, normalised through parse and serialise so
-  // fields an older backend omits compare equal. In the wire shape: save() sends only what
-  // differs from it, so a field this window never touched is never overwritten.
-  let snapshot: ConfigRaw | null = null;
+  // A deep copy of what was last loaded or sent: save() sends only what differs
+  // from it, so a field this window never touched is never overwritten.
+  let snapshot: Config | null = null;
 
   /**
    * Load configuration from the backend
@@ -612,9 +364,9 @@ function createConfigStore() {
     const hadLoadedConfig = isInitialised;
 
     try {
-      const rawConfig = await invoke<ConfigRaw>('get_config');
-      config = parseConfig(rawConfig);
-      snapshot = serialiseConfig(config);
+      const loaded = await invoke<Config>('get_config');
+      config = loaded;
+      snapshot = structuredClone(loaded);
       isInitialised = true;
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to load configuration';
@@ -626,7 +378,7 @@ function createConfigStore() {
       // state, so show the backend defaults but keep saves disabled.
       if (!hadLoadedConfig) {
         try {
-          config = parseConfig(await invoke<ConfigRaw>('get_default_config'));
+          config = await invoke<Config>('get_default_config');
         } catch (defaultsError) {
           console.error('Failed to load default config:', defaultsError);
         }
@@ -643,7 +395,7 @@ function createConfigStore() {
    * way the frontend should obtain defaults. Do not reintroduce a hardcoded copy.
    */
   async function loadDefaults(): Promise<Config> {
-    return parseConfig(await invoke<ConfigRaw>('get_default_config'));
+    return invoke<Config>('get_default_config');
   }
 
   /**
@@ -666,8 +418,8 @@ function createConfigStore() {
       // The snapshot advances to what this window sent, never to the backend's
       // copy: a change made elsewhere that this window never saw (MCP, HTTP)
       // must not read as this window's edit on the next save.
-      const next = serialiseConfig(config);
-      const patch = buildPatch(snapshot, next, ['enhancement.api_key']);
+      const next = $state.snapshot(config) as Config;
+      const patch = buildPatch(snapshot, next, ['enhancement.apiKey']);
       if (patch) {
         await invoke('patch_config', { patch });
       }
@@ -690,9 +442,9 @@ function createConfigStore() {
     error = null;
 
     try {
-      const rawConfig = await invoke<ConfigRaw>('reset_config');
-      config = parseConfig(rawConfig);
-      snapshot = serialiseConfig(config);
+      const reset = await invoke<Config>('reset_config');
+      config = reset;
+      snapshot = structuredClone(reset);
       return true;
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to reset configuration';
@@ -807,7 +559,7 @@ function createConfigStore() {
       if (snapshot) {
         snapshot.telemetry = {
           endpoint: status.savedEndpoint,
-          headers_helper: status.savedHeadersHelper,
+          headersHelper: status.savedHeadersHelper,
         };
       }
       return status;

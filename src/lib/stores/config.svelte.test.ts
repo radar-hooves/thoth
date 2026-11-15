@@ -4,71 +4,71 @@ const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke }));
 
-const RAW_CONFIG = {
+const BACKEND_CONFIG = {
   version: 1,
   audio: {
-    device_id: 'microphone-a',
-    sample_rate: 16000,
-    play_sounds: true,
-    sound_volume: 1,
+    deviceId: 'microphone-a',
+    sampleRate: 16000,
+    playSounds: true,
+    soundVolume: 1,
   },
   transcription: {
-    auto_copy: false,
-    auto_paste: true,
-    add_leading_space: false,
-    append_trailing_space: false,
-    auto_submit: 'off',
-    remove_fillers: true,
-    australian_spelling: false,
-    spoken_numbers_to_digits: false,
-    normalise_whitespace: true,
-    cleanup_punctuation: true,
-    sentence_case: false,
-    voice_formatting_commands: true,
-    vocabulary_bias: true,
-    typing_tool: 'auto',
-    model_idle_unload_secs: null,
+    autoCopy: false,
+    autoPaste: true,
+    addLeadingSpace: false,
+    appendTrailingSpace: false,
+    autoSubmit: 'off',
+    removeFillers: true,
+    australianSpelling: false,
+    spokenNumbersToDigits: false,
+    normaliseWhitespace: true,
+    cleanupPunctuation: true,
+    sentenceCase: false,
+    voiceFormattingCommands: true,
+    vocabularyBias: true,
+    typingTool: 'auto',
+    modelIdleUnloadSecs: null,
   },
   shortcuts: {
-    toggle_recording: 'F13',
-    toggle_recording_alt: null,
-    copy_last: null,
-    toggle_enhancement: null,
-    recording_mode: 'toggle',
-    hands_free_silence_secs: 0,
+    toggleRecording: 'F13',
+    toggleRecordingAlt: null,
+    copyLast: null,
+    toggleEnhancement: null,
+    recordingMode: 'toggle',
+    handsFreeSilenceSecs: 0,
   },
   enhancement: {
     enabled: false,
     model: 'llama3.2',
-    prompt_id: 'fix-grammar',
-    ollama_url: 'http://localhost:11434',
+    promptId: 'fix-grammar',
+    ollamaUrl: 'http://localhost:11434',
     backend: 'ollama',
-    openai_compat_url: 'http://localhost:1234',
-    api_key: null,
+    openaiCompatUrl: 'http://localhost:1234',
+    apiKey: null,
   },
   general: {
-    launch_at_login: false,
-    show_in_menu_bar: true,
-    show_in_dock: true,
-    check_for_updates: true,
-    show_recording_indicator: true,
-    indicator_style: 'cursor-dot',
-    window_decorations: true,
+    launchAtLogin: false,
+    showInMenuBar: true,
+    showInDock: true,
+    checkForUpdates: true,
+    showRecordingIndicator: true,
+    indicatorStyle: 'cursor-dot',
+    windowDecorations: true,
   },
   recorder: {
     position: 'top-right',
-    offset_x: -20,
-    offset_y: 20,
-    auto_hide_delay: 3000,
+    offsetX: -20,
+    offsetY: 20,
+    autoHideDelay: 3000,
   },
   integrations: {
-    api_enabled: false,
-    api_port: 8765,
-    mcp_enabled: false,
+    apiEnabled: false,
+    apiPort: 8765,
+    mcpEnabled: false,
   },
   telemetry: {
     endpoint: '',
-    headers_helper: '',
+    headersHelper: '',
   },
 };
 
@@ -83,7 +83,7 @@ describe('configStore.load', () => {
   });
 
   it('retains the last verified configuration when a refresh fails', async () => {
-    invoke.mockResolvedValueOnce(RAW_CONFIG);
+    invoke.mockResolvedValueOnce(BACKEND_CONFIG);
     const { configStore } = await import('./config.svelte');
 
     await configStore.load();
@@ -102,7 +102,7 @@ describe('configStore.load', () => {
 
   it('uses backend defaults only when no configuration has loaded', async () => {
     invoke.mockRejectedValueOnce(new Error('temporary IPC failure'));
-    invoke.mockResolvedValueOnce(RAW_CONFIG);
+    invoke.mockResolvedValueOnce(BACKEND_CONFIG);
     const { configStore } = await import('./config.svelte');
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -122,20 +122,20 @@ describe('configStore.save', () => {
   });
 
   it('sends only the changed leaf, then nothing until the next edit', async () => {
-    invoke.mockResolvedValueOnce(RAW_CONFIG);
+    invoke.mockResolvedValueOnce(BACKEND_CONFIG);
     const { configStore } = await import('./config.svelte');
     await configStore.load();
 
     configStore.updateGeneral('showInDock', !configStore.general.showInDock);
     // The backend's copy carries a change made over MCP that this window never saw.
     invoke.mockResolvedValueOnce({
-      ...RAW_CONFIG,
-      general: { ...RAW_CONFIG.general, show_in_dock: !RAW_CONFIG.general.show_in_dock },
-      audio: { ...RAW_CONFIG.audio, play_sounds: !RAW_CONFIG.audio.play_sounds },
+      ...BACKEND_CONFIG,
+      general: { ...BACKEND_CONFIG.general, showInDock: !BACKEND_CONFIG.general.showInDock },
+      audio: { ...BACKEND_CONFIG.audio, playSounds: !BACKEND_CONFIG.audio.playSounds },
     });
     expect(await configStore.save()).toBe(true);
     expect(invoke).toHaveBeenLastCalledWith('patch_config', {
-      patch: { general: { show_in_dock: !RAW_CONFIG.general.show_in_dock } },
+      patch: { general: { showInDock: !BACKEND_CONFIG.general.showInDock } },
     });
 
     // Nothing edited since: nothing is sent, so the MCP change is not written back.
@@ -144,7 +144,7 @@ describe('configStore.save', () => {
   });
 
   it('never sends the API key', async () => {
-    invoke.mockResolvedValueOnce(RAW_CONFIG);
+    invoke.mockResolvedValueOnce(BACKEND_CONFIG);
     const { configStore } = await import('./config.svelte');
     await configStore.load();
 

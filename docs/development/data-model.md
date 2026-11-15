@@ -295,6 +295,8 @@ Example: `thoth_recording_20250214_143022.wav`
 | `reset_config`        | Reset to default configuration |
 | `get_config_path_cmd` | Get config file path           |
 
+The tables above name the fields as `config.json` stores them (snake_case). `get_config`, `get_default_config`, `patch_config` and `reset_config` return the same document with camelCase keys (`device_id` is `deviceId`); `patch_config` accepts either spelling. MCP `setting` and HTTP `/settings` stay snake_case.
+
 ### Dictionary Commands
 
 | Command                    | Description                |

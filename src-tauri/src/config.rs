@@ -14,6 +14,8 @@ use crate::TELEMETRY_TARGET;
 use crate::enhancement;
 use crate::error::Error;
 
+pub mod ipc;
+
 /// Current config schema version
 const CURRENT_VERSION: u32 = 1;
 
@@ -657,6 +659,43 @@ fn canonicalise_patch_keys(value: serde_json::Value) -> serde_json::Value {
     }
 }
 
+/// Recursively convert every object key in `value` from snake_case to camelCase.
+///
+/// The webview's wire shape: the file and every Rust caller stay snake_case, and
+/// only what the four commands in [`ipc`] return is camelised. The config holds
+/// no user-keyed maps, so every key is a field name and the inverse is exact:
+/// `canonicalise_patch_keys(camelise_keys(v)) == v`.
+fn camelise_keys(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => serde_json::Value::Object(
+            map.into_iter()
+                .map(|(k, v)| (snake_to_camel(&k), camelise_keys(v)))
+                .collect(),
+        ),
+        serde_json::Value::Array(arr) => {
+            serde_json::Value::Array(arr.into_iter().map(camelise_keys).collect())
+        }
+        other => other,
+    }
+}
+
+/// Convert a single snake_case identifier to camelCase.
+fn snake_to_camel(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut upper_next = false;
+    for ch in s.chars() {
+        if ch == '_' {
+            upper_next = true;
+        } else if upper_next {
+            out.push(ch.to_ascii_uppercase());
+            upper_next = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
 /// Convert a single camelCase identifier to snake_case.
 ///
 /// Inserts an underscore before each uppercase ASCII letter and lowercases it.
@@ -724,6 +763,15 @@ fn load_from_disk() -> Result<Config, String> {
     let config: Config =
         serde_json::from_str(&contents).map_err(|e| format!("Failed to parse config: {}", e))?;
 
+    if config.version > CURRENT_VERSION {
+        tracing::warn!(
+            "Config file is version {} but this build understands up to {}; \
+             it is loaded read-only and will not be overwritten",
+            config.version,
+            CURRENT_VERSION
+        );
+    }
+
     // Migrate if needed, and persist the result here — this is the one path that
     // knows the config came off this disk. `migrate_config` itself writes
     // nothing: it is called from tests with a synthetic config, and a write
@@ -784,6 +832,20 @@ fn try_save_to_disk(config: &Config) -> Result<(), String> {
     ensure_config_dir()?;
 
     let path = get_config_path();
+    // A newer build wrote this file in a shape this one cannot fully read: the
+    // fields it did not recognise are defaults in memory, so saving would erase
+    // them from the file. Read the version off the disk, not the cache, because
+    // `patch_config` stamps `CURRENT_VERSION` onto what it saves.
+    if let Some(on_disk) = fs::read_to_string(&path)
+        .ok()
+        .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
+        .and_then(|v| v.get("version")?.as_u64())
+        && on_disk > u64::from(CURRENT_VERSION)
+    {
+        return Err(format!(
+            "Config file is version {on_disk}, newer than this build's version {CURRENT_VERSION}; refusing to overwrite it"
+        ));
+    }
     let contents = serde_json::to_string_pretty(config)
         .map_err(|e| format!("Failed to serialise config: {}", e))?;
 
@@ -871,7 +933,6 @@ fn get_config_instance() -> &'static RwLock<Config> {
 ///
 /// Returns the current configuration state. The config is cached in memory
 /// and loaded from disk on first access.
-#[tauri::command]
 pub fn get_config() -> Result<Config, Error> {
     tauri_plugin_telemetry::traced_sync("get_config", || Ok(get_config_instance().read().clone()))
 }
@@ -885,7 +946,6 @@ pub fn get_config() -> Result<Config, Error> {
 /// `.claude/CLAUDE.md`.
 ///
 /// This reads nothing from disk and mutates nothing — it is `Config::default()`.
-#[tauri::command]
 pub fn get_default_config() -> Config {
     tauri_plugin_telemetry::traced_sync_value("get_default_config", Config::default)
 }
@@ -897,7 +957,6 @@ pub fn get_default_config() -> Config {
 /// whose copy lags a change made elsewhere (tray, shortcut, HTTP, MCP) cannot
 /// overwrite what it never named. Disk is written before memory; the lock is
 /// held throughout so two patches cannot lose each other's update.
-#[tauri::command]
 pub fn patch_config(patch: serde_json::Value) -> Result<Config, Error> {
     tauri_plugin_telemetry::traced_sync("patch_config", || {
         let mut cached = get_config_instance().write();
@@ -968,7 +1027,6 @@ pub fn record_whats_new_seen(version: &str) -> Result<(), Error> {
 /// Reset configuration to defaults
 ///
 /// Resets all settings to their default values and persists to disk.
-#[tauri::command]
 pub async fn reset_config() -> Result<Config, Error> {
     tauri_plugin_telemetry::traced("reset_config", async move {
         let default_config = Config::default();
@@ -1965,5 +2023,166 @@ mod tests {
             !camel_to_snake("Foo").starts_with('_'),
             "leading underscore must be stripped"
         );
+    }
+
+    fn non_default_config() -> Config {
+        Config {
+            version: CURRENT_VERSION,
+            audio: AudioConfig {
+                device_id: Some("mic-7".into()),
+                sample_rate: 48000,
+                play_sounds: false,
+                sound_volume: 0.25,
+                warm_stream: false,
+            },
+            transcription: TranscriptionConfig {
+                model_id: Some("ggml-small".into()),
+                auto_copy: true,
+                auto_paste: false,
+                add_leading_space: true,
+                append_trailing_space: true,
+                auto_submit: AutoSubmit::CmdEnter,
+                remove_fillers: false,
+                australian_spelling: false,
+                spoken_numbers_to_digits: true,
+                normalise_whitespace: false,
+                cleanup_punctuation: false,
+                sentence_case: true,
+                voice_formatting_commands: false,
+                vocabulary_bias: false,
+                typing_tool: TypingTool::Dotool,
+                model_idle_unload_secs: Some(120),
+            },
+            shortcuts: ShortcutConfig {
+                toggle_recording: "F9".into(),
+                toggle_recording_alt: Some("F10".into()),
+                copy_last: Some("F11".into()),
+                toggle_enhancement: Some("F12".into()),
+                recording_mode: RecordingMode::TapOrHold,
+                hands_free_silence_secs: 4.5,
+            },
+            enhancement: EnhancementConfig {
+                enabled: true,
+                model: "qwen".into(),
+                prompt_id: "custom".into(),
+                ollama_url: "http://ollama:1".into(),
+                backend: "openai_compat".into(),
+                openai_compat_url: "http://compat:2".into(),
+                api_key: Some("k".into()),
+            },
+            general: GeneralConfig {
+                launch_at_login: true,
+                show_in_menu_bar: false,
+                show_in_dock: true,
+                check_for_updates: false,
+                show_recording_indicator: false,
+                indicator_style: IndicatorStyle::Pill,
+                window_decorations: false,
+                last_run_version: Some("1.2.3".into()),
+                whats_new_seen_version: Some("1.2.2".into()),
+            },
+            recorder: RecorderConfig {
+                position: RecorderPosition::BottomLeft,
+                offset_x: 7,
+                offset_y: -9,
+                auto_hide_delay: 1234,
+            },
+            integrations: IntegrationsConfig {
+                api_enabled: false,
+                api_port: 9999,
+                mcp_enabled: false,
+            },
+            telemetry: TelemetryConfig {
+                endpoint: "https://otlp.test".into(),
+                headers_helper: "helper".into(),
+            },
+            publish: PublishConfig {
+                enabled: true,
+                url: "https://dav.test/list".into(),
+                username: "u".into(),
+            },
+            external_dictionary: ExternalDictionaryConfig {
+                enabled: true,
+                url: "https://wh.test".into(),
+                username: "dev".into(),
+                device: "box".into(),
+                credential_helper: "print-pw".into(),
+            },
+        }
+    }
+
+    #[test]
+    fn camelising_a_full_non_default_config_then_canonicalising_restores_it() {
+        let cfg = non_default_config();
+        let original = serde_json::to_value(&cfg).unwrap();
+        let wire = camelise_keys(original.clone());
+        assert!(wire["externalDictionary"]["credentialHelper"].is_string());
+        assert!(wire["audio"]["deviceId"].is_string());
+        assert_eq!(canonicalise_patch_keys(wire), original);
+        let back: Config = serde_json::from_value(original.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&back).unwrap(), original);
+    }
+
+    #[test]
+    fn enum_values_keep_their_spelling_when_keys_are_camelised() {
+        let wire = camelise_keys(serde_json::to_value(non_default_config()).unwrap());
+        assert_eq!(wire["shortcuts"]["recordingMode"], "tap_or_hold");
+        assert_eq!(wire["transcription"]["autoSubmit"], "cmd_enter");
+    }
+
+    /// The keys the webview receives are the names its `Config` type uses. The
+    /// four fields below are on the wire but not modelled in the TypeScript
+    /// type; nothing in the webview reads them.
+    #[test]
+    fn camelised_default_keys_match_the_typescript_config_type() {
+        const UNMODELLED: [&str; 4] = [
+            "warmStream",
+            "modelId",
+            "lastRunVersion",
+            "whatsNewSeenVersion",
+        ];
+        let ts_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../src/lib/stores/config.svelte.ts");
+        let source = std::fs::read_to_string(&ts_path).unwrap();
+        let wire = camelise_keys(serde_json::to_value(Config::default()).unwrap());
+        let mut missing = Vec::new();
+        for (section, value) in wire.as_object().unwrap() {
+            let fields: Vec<&String> = match value.as_object() {
+                Some(o) => o.keys().collect(),
+                None => vec![],
+            };
+            for key in std::iter::once(section).chain(fields) {
+                if UNMODELLED.contains(&key.as_str()) {
+                    continue;
+                }
+                if !source.contains(&format!("{key}: ")) && !source.contains(&format!("{key}?: ")) {
+                    missing.push(key.clone());
+                }
+            }
+        }
+        assert!(missing.is_empty(), "not in the TS Config type: {missing:?}");
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn a_config_file_newer_than_this_build_is_never_written() {
+        let _guard = CONFIG_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _dir = with_temp_data_dir();
+        let path = get_config_path();
+        let newer = format!(
+            r#"{{"version": {}, "audio": {{"deviceId": "from-a-newer-build"}}}}"#,
+            CURRENT_VERSION + 1
+        );
+        fs::write(&path, &newer).unwrap();
+
+        let loaded = load_from_disk().expect("a newer file still loads");
+        assert_eq!(loaded.version, CURRENT_VERSION + 1);
+        *get_config_instance().write() = loaded;
+
+        let err = patch_config(serde_json::json!({ "audio": { "play_sounds": false } }))
+            .expect_err("a patch must not overwrite a newer file");
+        assert!(err.to_string().contains(&(CURRENT_VERSION + 1).to_string()));
+        assert!(save_to_disk(&Config::default()).is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), newer);
     }
 }

@@ -544,11 +544,11 @@ pub fn run() {
             // Config
             changelog::whats_new,
             changelog::mark_whats_new_seen,
-            config::get_config,
-            config::get_default_config,
-            config::patch_config,
+            config::ipc::get_config,
+            config::ipc::get_default_config,
+            config::ipc::patch_config,
             config::set_enhancement_api_key,
-            config::reset_config,
+            config::ipc::reset_config,
             config::get_config_path_cmd,
             // Shortcuts
             shortcuts::list_registered_shortcuts,
