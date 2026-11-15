@@ -151,11 +151,6 @@ impl OutputFilter {
         Self { options }
     }
 
-    /// Create a new output filter with default options
-    pub fn with_defaults() -> Self {
-        Self::default()
-    }
-
     /// Filter the given text according to the configured options
     pub fn filter(&self, text: &str) -> String {
         let mut result = text.to_string();
@@ -1153,7 +1148,6 @@ mod tests {
 
     #[test]
     fn test_filter_defaults() {
-        let _filter = OutputFilter::with_defaults();
         let options = FilterOptions::default();
 
         assert!(options.remove_fillers);

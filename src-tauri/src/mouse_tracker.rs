@@ -560,12 +560,6 @@ pub fn stop_tracking() {
     }
 }
 
-/// Shut down the mouse tracker. Called on app exit.
-pub fn shutdown() {
-    stop_tracking();
-    // Thread will exit within one poll interval (16ms)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

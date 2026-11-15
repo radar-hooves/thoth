@@ -6,9 +6,8 @@
 //!   • `list`  → `database::list_transcriptions(...)`  (primary assertion; this
 //!               is the function `mcp_server/mod.rs` calls for the `list` action)
 //!   • `stats` → `database::transcription::get_transcription_stats_cmd()`
-//!   • cross-path: `export::search_history(...)` must agree with the above
 //!
-//! and assert that `list` returns seeded records and that all three counts
+//! and assert that `list` returns seeded records and that both counts
 //! agree (the consistency the issue asked us to guard).
 //!
 //! The whole database layer talks to a process-global connection path, so the
@@ -18,7 +17,6 @@
 
 use tempfile::TempDir;
 use thoth_lib::database::{self, Transcription};
-use thoth_lib::export;
 
 #[test]
 fn list_returns_seeded_records_and_matches_stats() {
@@ -51,20 +49,9 @@ fn list_returns_seeded_records_and_matches_stats() {
         .expect("get_transcription_stats_cmd (stats) should succeed");
     assert_eq!(stats.total_count, SEEDED, "stats total_count mismatch");
 
-    // Cross-path assertion — `search_history` (alternate public path) must agree.
-    let searched = export::search_history(None, None, None, None, Some(100), Some(0))
-        .expect("search_history should succeed");
     assert_eq!(
-        searched.records.len(),
-        SEEDED,
-        "search_history records mismatch"
-    );
-    assert_eq!(
-        searched.total_count as usize, SEEDED,
-        "search_history total_count mismatch"
-    );
-    assert_eq!(
-        stats.total_count, searched.total_count as usize,
+        stats.total_count,
+        listed.len(),
         "list and stats counts disagree"
     );
 

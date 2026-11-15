@@ -146,7 +146,6 @@ fn init_whisper_transcription_unlocked(model_path: String) -> Result<(), Error> 
 }
 
 /// Initialise the transcription service with whisper backend (primary).
-#[tauri::command]
 pub fn init_whisper_transcription(model_path: String) -> Result<(), Error> {
     tauri_plugin_telemetry::traced_sync("init_whisper_transcription", || {
         let _serialised = WARMUP_LOCK.lock();
@@ -172,16 +171,6 @@ fn init_parakeet_transcription_unlocked(_model_dir: String) -> Result<(), Error>
     Err("Parakeet backend not available in this build"
         .to_string()
         .into())
-}
-
-/// Initialise the transcription service with parakeet backend (fallback).
-#[tauri::command]
-pub async fn init_parakeet_transcription(model_dir: String) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced("init_parakeet_transcription", async move {
-        let _serialised = WARMUP_LOCK.lock();
-        init_parakeet_transcription_unlocked(model_dir)
-    })
-    .await
 }
 
 fn init_fluidaudio_transcription_unlocked() -> Result<(), Error> {

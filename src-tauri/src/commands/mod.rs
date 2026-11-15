@@ -6,14 +6,6 @@ use crate::TELEMETRY_TARGET;
 use crate::error::Error;
 use tauri::{AppHandle, Manager};
 
-/// Greet command for testing
-#[tauri::command]
-pub fn greet(name: &str) -> String {
-    tauri_plugin_telemetry::traced_sync_value("greet", || {
-        format!("Hello, {}! Welcome to Thoth.", name)
-    })
-}
-
 /// Show a window by label
 #[tauri::command]
 pub async fn show_window(app: AppHandle, label: &str) -> Result<(), Error> {

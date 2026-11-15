@@ -31,7 +31,6 @@
     "@tauri-apps/plugin-clipboard-manager": "2.3.2",
     "@tauri-apps/plugin-dialog": "2.7.2",
     "@tauri-apps/plugin-fs": "2.5.1",
-    "@tauri-apps/plugin-positioner": "2.3.3",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.14.1",
     "bits-ui": "^2.18.1",

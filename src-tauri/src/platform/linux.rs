@@ -326,21 +326,6 @@ fn determine_recommended_backend(gpus: &[GpuInfo], compiled: GpuBackend) -> GpuB
     }
 }
 
-/// Check if CUDA is available on this system
-pub fn is_cuda_available() -> bool {
-    detect_nvidia_gpu().is_some()
-}
-
-/// Check if HIP/ROCm is available on this system
-pub fn is_hip_available() -> bool {
-    detect_amd_gpu().is_some()
-}
-
-/// Check if Vulkan is available on this system
-pub fn is_vulkan_available() -> bool {
-    detect_vulkan_support().is_some()
-}
-
 /// Microphone availability status.
 ///
 /// Linux has no per-app microphone permission; this reports whether a capture
@@ -374,14 +359,6 @@ pub fn check_accessibility_permission() -> bool {
     // like macOS. X11 allows key grabbing by default.
     // For Wayland, the XDG Desktop Portal handles this.
     true
-}
-
-/// Open accessibility settings
-///
-/// On Linux, no accessibility settings need to be opened.
-/// This is kept for API compatibility with macOS.
-pub fn open_accessibility_settings() {
-    tracing::debug!("No accessibility settings needed on Linux");
 }
 
 /// Check microphone availability.
@@ -457,38 +434,6 @@ pub fn request_microphone_permission() {
     tracing::info!("Linux does not require explicit microphone permission");
     // Linux doesn't have a permission dialog system like macOS
     // Access is managed by PulseAudio/PipeWire which typically allows by default
-}
-
-/// Open system sound settings
-///
-/// Opens the desktop environment's sound settings panel.
-pub fn open_microphone_settings() {
-    // Try common desktop environment sound settings
-    let commands = [
-        // GNOME
-        ("gnome-control-center", vec!["sound"]),
-        // KDE
-        ("systemsettings", vec!["kcm_pulseaudio"]),
-        // Generic freedesktop
-        ("xdg-open", vec!["settings://sound"]),
-        // pavucontrol (PulseAudio volume control)
-        ("pavucontrol", vec![]),
-    ];
-
-    for (cmd, args) in commands {
-        let result = if args.is_empty() {
-            Command::new(cmd).spawn()
-        } else {
-            Command::new(cmd).args(&args).spawn()
-        };
-
-        if result.is_ok() {
-            tracing::info!("Opened sound settings via {}", cmd);
-            return;
-        }
-    }
-
-    tracing::warn!("Could not open sound settings - no supported settings app found");
 }
 
 /// Position of the text caret (insertion point) on screen

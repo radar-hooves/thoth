@@ -85,7 +85,6 @@ pub struct OllamaClient {
     base_url: String,
     client: reqwest_middleware::ClientWithMiddleware,
     timeout: Duration,
-    default_model: Option<String>,
 }
 
 impl Default for OllamaClient {
@@ -97,12 +96,12 @@ impl Default for OllamaClient {
 impl OllamaClient {
     /// Create a new Ollama client with default settings
     pub fn new() -> Self {
-        Self::with_config(DEFAULT_OLLAMA_BASE_URL, REQUEST_TIMEOUT_SECS, None)
+        Self::with_config(DEFAULT_OLLAMA_BASE_URL, REQUEST_TIMEOUT_SECS)
     }
 
     /// Create a new Ollama client with a custom base URL
     pub fn with_base_url(base_url: String) -> Self {
-        Self::with_config(&base_url, REQUEST_TIMEOUT_SECS, None)
+        Self::with_config(&base_url, REQUEST_TIMEOUT_SECS)
     }
 
     /// Create a new Ollama client with full configuration
@@ -111,8 +110,7 @@ impl OllamaClient {
     ///
     /// * `base_url` - The Ollama server base URL (e.g., "http://localhost:11434")
     /// * `timeout_secs` - Request timeout in seconds
-    /// * `default_model` - Optional default model to use if not specified per-request
-    pub fn with_config(base_url: &str, timeout_secs: u64, default_model: Option<String>) -> Self {
+    pub fn with_config(base_url: &str, timeout_secs: u64) -> Self {
         let timeout = Duration::from_secs(timeout_secs);
         crate::ensure_crypto_provider();
 
@@ -122,13 +120,7 @@ impl OllamaClient {
             // client-level timeout, so every request below sets its own.
             client: crate::http_client(),
             timeout,
-            default_model,
         }
-    }
-
-    /// Set the default model for this client
-    pub fn set_default_model(&mut self, model: impl Into<String>) {
-        self.default_model = Some(model.into());
     }
 
     /// Get the configured timeout
@@ -276,20 +268,6 @@ impl OllamaClient {
         let full_prompt = prompt_template.replace("{text}", text);
         self.generate(model, &full_prompt).await
     }
-
-    /// Enhance text with a system prompt
-    ///
-    /// This wraps the text in a TRANSCRIPT tag and uses the system prompt for context.
-    pub async fn enhance_with_system(
-        &self,
-        text: &str,
-        model: &str,
-        system_prompt: &str,
-    ) -> Result<String> {
-        let prompt = format!("<TRANSCRIPT>\n{}\n</TRANSCRIPT>", text);
-        self.generate_with_system(model, &prompt, Some(system_prompt), Some(0.3))
-            .await
-    }
 }
 
 #[cfg(test)]
@@ -312,11 +290,9 @@ mod tests {
 
     #[test]
     fn test_client_with_config() {
-        let client =
-            OllamaClient::with_config("http://example.com:11434", 60, Some("llama3.2".to_string()));
+        let client = OllamaClient::with_config("http://example.com:11434", 60);
         assert_eq!(client.base_url, "http://example.com:11434");
         assert_eq!(client.timeout.as_secs(), 60);
-        assert_eq!(client.default_model, Some("llama3.2".to_string()));
     }
 
     #[test]
@@ -391,17 +367,8 @@ mod tests {
     }
 
     #[test]
-    fn test_set_default_model() {
-        let mut client = OllamaClient::new();
-        assert!(client.default_model.is_none());
-
-        client.set_default_model("llama3.2");
-        assert_eq!(client.default_model, Some("llama3.2".to_string()));
-    }
-
-    #[test]
     fn test_timeout_getter() {
-        let client = OllamaClient::with_config("http://localhost:11434", 45, None);
+        let client = OllamaClient::with_config("http://localhost:11434", 45);
         assert_eq!(client.timeout().as_secs(), 45);
     }
 }

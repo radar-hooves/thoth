@@ -230,12 +230,6 @@ const MOCK_TRANSCRIPTION_STATS = {
   enhancementModels: [{ name: 'llama3.2', count: 1 }],
 };
 
-const MOCK_CLIPBOARD_SETTINGS = {
-  enabled: false,
-  maxHistory: 20,
-  persistAcrossRestarts: false,
-};
-
 // ---------------------------------------------------------------------------
 // Insights mock data
 // ---------------------------------------------------------------------------
@@ -409,7 +403,6 @@ export const thothMockCommands: CommandMap = {
   //    real command answers only when the running version's notes are unseen.
   whats_new: () => null,
   mark_whats_new_seen: () => undefined,
-  changelog_releases: () => [],
 
   // -- Sounds (called during soundStore.load()) --
   are_sounds_enabled: () => true,
@@ -499,23 +492,12 @@ export const thothMockCommands: CommandMap = {
   get_show_in_dock: () => false,
   reset_config: () => MOCK_CONFIG,
 
-  // -- Clipboard store --
-  get_clipboard_settings: () => MOCK_CLIPBOARD_SETTINGS,
-  get_clipboard_history: () => [],
-
-  // -- Prompt resolution (pipeline) --
-  get_prompt_by_id: (args) => {
-    const id = (args as { promptId?: string } | undefined)?.promptId;
-    return MOCK_PROMPTS.find((p) => p.id === id) ?? null;
-  },
-
   // -- No-ops: write commands (set_*, delete_*, play_*, etc.) --
   set_config: () => undefined,
   set_audio_device: () => undefined,
   set_sounds_enabled: () => undefined,
   set_selected_model_id: () => undefined,
   set_show_in_dock: () => undefined,
-  set_clipboard_settings: () => undefined,
   set_shortcut_config: () => undefined,
   register_shortcut: () => undefined,
   unregister_shortcut: () => undefined,
@@ -544,16 +526,9 @@ export const thothMockCommands: CommandMap = {
   init_fluidaudio_transcription: () => undefined,
   delete_transcription_by_id: () => undefined,
   delete_all_transcriptions_cmd: () => undefined,
-  copy_transcription: () => true,
-  paste_transcription: () => undefined,
   insert_text: () => undefined,
   insert_text_by_paste: () => undefined,
   insert_text_by_typing: () => undefined,
-  copy_to_clipboard: () => undefined,
-  copy_from_history: () => undefined,
-  remove_clipboard_history_entry: () => false,
-  restore_clipboard: () => false,
-  clear_clipboard_history: () => undefined,
   play_recording_start_sound: () => undefined,
   play_recording_stop_sound: () => undefined,
   play_transcription_complete_sound: () => undefined,
@@ -573,8 +548,6 @@ export const thothMockCommands: CommandMap = {
   show_recording_indicator: () => undefined,
   hide_recording_indicator: () => undefined,
   show_window: () => undefined,
-  hide_recorder: () => undefined,
-  position_recorder_window: () => undefined,
   refresh_tray_menu: () => undefined,
   open_url: () => undefined,
   delete_all_data: () => undefined,
@@ -600,6 +573,5 @@ export const thothMockCommands: CommandMap = {
   get_api_token: () => 'thoth-dev-0000-1111-2222-3333-444455556666',
   set_api_enabled: () => undefined,
   set_mcp_enabled: () => undefined,
-  set_api_port: () => undefined,
   rotate_api_token: () => 'thoth-dev-rotated-aaaa-bbbb-cccc-ddddeeeeffff',
 };

@@ -51,13 +51,6 @@ impl WhisperHeader {
         self.n_vocab >= 51865
     }
 
-    /// How many languages the vocabulary carries.
-    ///
-    /// whisper.cpp: `n_vocab - 51765 - (is_multilingual ? 1 : 0)`.
-    pub fn num_languages(&self) -> i32 {
-        self.n_vocab - 51765 - i32::from(self.is_multilingual())
-    }
-
     /// The model size, named as whisper.cpp names it.
     ///
     /// Derived from the encoder depth, not the filename: a file renamed by
@@ -73,29 +66,6 @@ impl WhisperHeader {
             32 if self.n_vocab == 51866 => "large-v3",
             32 => "large",
             _ => "unknown",
-        }
-    }
-
-    /// The tensor format, as a name a person can read.
-    ///
-    /// Values from `ggml.h`'s `enum ggml_ftype`. An unlisted one is reported
-    /// rather than guessed at.
-    pub fn quantisation(&self) -> String {
-        match self.ftype {
-            0 => "f32".to_string(),
-            1 => "f16".to_string(),
-            2 => "q4_0".to_string(),
-            3 => "q4_1".to_string(),
-            4 => "q4_1_some_f16".to_string(),
-            7 => "q8_0".to_string(),
-            8 => "q5_0".to_string(),
-            9 => "q5_1".to_string(),
-            10 => "q2_k".to_string(),
-            11 => "q3_k".to_string(),
-            12 => "q4_k".to_string(),
-            13 => "q5_k".to_string(),
-            14 => "q6_k".to_string(),
-            other => format!("ftype {other}"),
         }
     }
 
@@ -239,7 +209,7 @@ mod tests {
             "small.en stops one token short of multilingual, at 51864"
         );
         assert_eq!(header.languages(), vec!["en"]);
-        assert_eq!(header.quantisation(), "f16");
+        assert_eq!(header.ftype, 1);
     }
 
     /// One token more and it is a different model. This boundary is the whole
@@ -255,24 +225,6 @@ mod tests {
             parse(&header_bytes(51865, 12, 80, 1))
                 .unwrap()
                 .is_multilingual()
-        );
-    }
-
-    #[test]
-    fn languages_are_counted_the_way_whisper_counts_them() {
-        // 51865 - 51765 - 1 = 99, whisper's multilingual language count.
-        assert_eq!(
-            parse(&header_bytes(51865, 32, 80, 1))
-                .unwrap()
-                .num_languages(),
-            99
-        );
-        // English-only carries the same arithmetic without the extra token.
-        assert_eq!(
-            parse(&header_bytes(51864, 12, 80, 1))
-                .unwrap()
-                .num_languages(),
-            99
         );
     }
 
@@ -299,31 +251,6 @@ mod tests {
         assert_eq!(
             parse(&header_bytes(51865, 7, 80, 1)).unwrap().variant(),
             "unknown"
-        );
-    }
-
-    /// `ftype` carries a version factor that must be divided out, or every
-    /// quantised model reads as an unknown format.
-    #[test]
-    fn the_quantisation_version_is_divided_out_of_ftype() {
-        // Version 2, format q5_0 (8).
-        assert_eq!(
-            parse(&header_bytes(51865, 32, 80, 2008))
-                .unwrap()
-                .quantisation(),
-            "q5_0"
-        );
-        assert_eq!(
-            parse(&header_bytes(51865, 32, 80, 1))
-                .unwrap()
-                .quantisation(),
-            "f16"
-        );
-        assert_eq!(
-            parse(&header_bytes(51865, 32, 80, 99))
-                .unwrap()
-                .quantisation(),
-            "ftype 99"
         );
     }
 

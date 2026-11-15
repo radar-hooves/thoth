@@ -45,11 +45,6 @@ impl AudioRingBuffer {
         }
     }
 
-    /// Returns the total capacity of the buffer
-    pub fn capacity(&self) -> usize {
-        BUFFER_SIZE
-    }
-
     /// Returns the number of samples available for reading
     pub fn available(&self) -> usize {
         let write = self.write_pos.load(Ordering::Acquire);
@@ -140,16 +135,6 @@ impl AudioRingBuffer {
         to_read
     }
 
-    /// Read all available samples into a new Vec
-    ///
-    /// Note: This allocates! Only use from non-real-time threads.
-    pub fn read_all(&self) -> Vec<f32> {
-        let available = self.available();
-        let mut output = vec![0.0; available];
-        self.read(&mut output);
-        output
-    }
-
     /// Clear the buffer
     pub fn clear(&self) {
         self.read_pos
@@ -166,7 +151,6 @@ mod tests {
     #[test]
     fn test_new_buffer() {
         let buffer = AudioRingBuffer::new();
-        assert_eq!(buffer.capacity(), BUFFER_SIZE);
         assert_eq!(buffer.available(), 0);
     }
 
@@ -225,8 +209,7 @@ mod tests {
         assert_eq!(written2, 200);
 
         // Read everything
-        let all = buffer.read_all();
-        assert!(!all.is_empty());
+        assert_eq!(buffer.available(), fill_size - (fill_size - 50) + 200);
     }
 
     #[test]

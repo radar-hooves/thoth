@@ -464,7 +464,6 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             // Commands
-            commands::greet,
             commands::show_window,
             commands::open_url,
             commands::set_show_in_dock,
@@ -484,8 +483,6 @@ pub fn run() {
             audio::is_recording,
             // Transcription
             transcription::init_transcription,
-            transcription::init_whisper_transcription,
-            transcription::init_parakeet_transcription,
             transcription::transcribe_file,
             transcription::is_transcription_ready,
             transcription::get_transcription_backend,
@@ -508,25 +505,16 @@ pub fn run() {
             enhancement::check_openai_compat_available,
             enhancement::list_openai_compat_models,
             enhancement::enhance_text,
-            enhancement::context::get_clipboard_context,
-            enhancement::context::build_enhancement_context,
             // Prompt Templates
             enhancement::prompts::get_all_prompts,
-            enhancement::prompts::get_builtin_prompts_cmd,
-            enhancement::prompts::get_custom_prompts_cmd,
             enhancement::prompts::save_custom_prompt_cmd,
             enhancement::prompts::delete_custom_prompt_cmd,
-            enhancement::prompts::get_prompt_by_id,
             // Database
             database::init_database,
-            database::transcription::save_transcription,
             database::transcription::get_transcription_by_id,
             database::transcription::list_all_transcriptions,
             database::transcription::delete_transcription_by_id,
             database::transcription::delete_all_transcriptions_cmd,
-            database::transcription::reconcile_orphaned_recordings_cmd,
-            database::transcription::search_transcriptions_text,
-            database::transcription::count_transcriptions_filtered,
             database::transcription::get_transcription_stats_cmd,
             database::insights::get_insights,
             database::insights::get_cruft_candidates,
@@ -536,14 +524,12 @@ pub fn run() {
             database::trash::purge_trash,
             database::trash::list_trash,
             // Export
-            export::search_history,
             export::export_to_json,
             export::export_to_csv,
             export::export_to_txt,
             // Config
             changelog::whats_new,
             changelog::mark_whats_new_seen,
-            changelog::changelog_releases,
             config::get_config,
             config::get_default_config,
             config::set_config,
@@ -580,17 +566,6 @@ pub fn run() {
             text_insert::insert_text_by_typing,
             text_insert::insert_text_by_paste,
             // Clipboard
-            clipboard::copy_to_clipboard,
-            clipboard::copy_transcription,
-            clipboard::get_clipboard_settings,
-            clipboard::set_clipboard_settings,
-            clipboard::get_clipboard_history,
-            clipboard::clear_clipboard_history,
-            clipboard::remove_clipboard_history_entry,
-            clipboard::copy_from_history,
-            clipboard::restore_clipboard,
-            clipboard::get_restore_delay,
-            clipboard::paste_transcription,
             // Sound feedback
             sound::play_recording_start_sound,
             sound::play_recording_stop_sound,
@@ -612,7 +587,6 @@ pub fn run() {
             recording_indicator::show_recording_indicator,
             recording_indicator::hide_recording_indicator,
             // Tray
-            tray::get_tray_state_cmd,
             tray::refresh_tray_menu,
             // Storage management
             storage::get_storage_usage,
@@ -629,7 +603,6 @@ pub fn run() {
             control_api::set_mcp_enabled,
             control_api::get_api_token,
             control_api::rotate_api_token,
-            control_api::set_api_port,
             // Word-list publishing
             publish::get_publish_status,
             publish::set_publish_password,

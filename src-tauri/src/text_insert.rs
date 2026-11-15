@@ -288,9 +288,6 @@ impl TextInsertService {
             self.paste_linux()?;
         }
 
-        // Note: Clipboard restoration is handled by the clipboard module
-        // via paste_transcription -> restore_clipboard flow with configurable delay
-
         Ok(())
     }
 

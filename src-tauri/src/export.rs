@@ -371,39 +371,6 @@ fn export_txt(records: &[TranscriptionRecord], path: &Path) -> Result<(), String
 // Tauri Commands
 // =============================================================================
 
-/// Searches transcription history with full-text search and date filtering.
-///
-/// # Arguments
-/// * `query` - Optional search text (searches in text and raw_text fields)
-/// * `from_date` - Optional Unix timestamp for start of date range
-/// * `to_date` - Optional Unix timestamp for end of date range
-/// * `enhanced_only` - If true, only return enhanced transcriptions
-/// * `limit` - Maximum number of records to return (default: 100)
-/// * `offset` - Number of records to skip for pagination (default: 0)
-#[tauri::command]
-pub fn search_history(
-    query: Option<String>,
-    from_date: Option<i64>,
-    to_date: Option<i64>,
-    enhanced_only: Option<bool>,
-    limit: Option<u32>,
-    offset: Option<u32>,
-) -> Result<SearchResult, Error> {
-    tauri_plugin_telemetry::traced_sync("search_history", || {
-        let params = SearchParams {
-            query,
-            from_date,
-            to_date,
-            enhanced_only,
-            limit,
-            offset,
-        };
-
-        tracing::debug!("Searching history with params: {:?}", params);
-        search_transcriptions_db(&params).map_err(Into::into)
-    })
-}
-
 /// Generic export function that handles record fetching and calls the format-specific exporter.
 fn export_records<F>(
     ids: &[String],

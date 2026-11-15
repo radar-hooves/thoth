@@ -198,13 +198,6 @@ pub async fn mark_whats_new_seen(version: String) -> Result<(), crate::error::Er
     .await
 }
 
-/// Every release in the changelog, newest first — the "what changed" list the
-/// About dialog can offer beyond the one release the modal shows.
-#[tauri::command]
-pub fn changelog_releases() -> Vec<ReleaseNotes> {
-    tauri_plugin_telemetry::traced_sync_value("changelog_releases", releases)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1061,10 +1061,7 @@ async fn process_audio(
 
         if config.auto_copy {
             tracing::debug!("Pipeline: Copying to clipboard...");
-            if let Err(e) =
-                clipboard::copy_transcription(app.clone(), output_text.clone(), output.is_enhanced)
-                    .await
-            {
+            if let Err(e) = clipboard::copy_transcription(app, &output_text) {
                 tracing::warn!("Pipeline: Failed to copy to clipboard: {}", e);
             } else {
                 tracing::debug!("Pipeline: Copied to clipboard successfully");
@@ -1155,7 +1152,7 @@ async fn process_audio(
                  transcription on the clipboard so it can be pasted manually"
             );
         } else if let Some(original) = saved_clipboard {
-            let restore_delay = clipboard::get_restore_delay();
+            let restore_delay = clipboard::RESTORE_DELAY_MS;
             tracing::debug!("Pipeline: Restoring clipboard in {}ms", restore_delay);
             tokio::time::sleep(tokio::time::Duration::from_millis(restore_delay)).await;
             let what = original.describe();

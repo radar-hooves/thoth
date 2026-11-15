@@ -149,7 +149,6 @@ The frontend is built with Svelte 5 and SvelteKit in `src/`:
 | `AIEnhancementSettings.svelte` | Ollama model and prompt configuration      |
 | `AudioDeviceSelector.svelte`   | Input device selection dropdown            |
 | `AudioPlayer.svelte`           | WAV audio playback with waveform display   |
-| `AudioVisualizer.svelte`       | Real-time audio level display              |
 | `DateRangePicker.svelte`       | Date range selection for history filtering |
 | `DictionaryEditor.svelte`      | Custom vocabulary and replacement editor   |
 | `ExportDialog.svelte`          | Export format selection dialogue           |

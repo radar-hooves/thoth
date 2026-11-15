@@ -699,7 +699,7 @@ mod tests {
         // Skip if no usable audio input. Probing default_input_device() is not
         // enough: a headless ALSA host (CI) still reports a "default" device
         // that then fails to open with "cannot find card '0'". So we treat a
-        // failed start_default as "no usable audio" and skip, rather than
+        // failed start as "no usable audio" and skip, rather than
         // asserting — this test only exercises real behaviour where capture
         // hardware actually exists.
         let dir = tempdir().unwrap();
@@ -708,7 +708,11 @@ mod tests {
         let mut recorder = AudioRecorder::new();
 
         assert!(!recorder.is_warm());
-        if recorder.start_default(&output_path).is_err() {
+        let Some(device) = cpal::default_host().default_input_device() else {
+            println!("No usable audio input device, skipping test");
+            return;
+        };
+        if recorder.start(&device, &output_path).is_err() {
             println!("No usable audio input device, skipping test");
             return;
         }

@@ -150,11 +150,6 @@ pub fn delete_custom_prompt(path: &PathBuf, prompt_id: &str) -> Result<(), Strin
     Ok(())
 }
 
-/// Apply a prompt template to text
-pub fn apply_prompt(template: &PromptTemplate, text: &str) -> String {
-    template.template.replace("{text}", text)
-}
-
 // ============================================================================
 // Tauri Commands
 // ============================================================================
@@ -168,21 +163,6 @@ pub fn get_all_prompts() -> Vec<PromptTemplate> {
         let custom_prompts = load_custom_prompts(&custom_path);
         prompts.extend(custom_prompts);
         prompts
-    })
-}
-
-/// Get only built-in prompt templates
-#[tauri::command]
-pub fn get_builtin_prompts_cmd() -> Vec<PromptTemplate> {
-    tauri_plugin_telemetry::traced_sync_value("get_builtin_prompts_cmd", get_builtin_prompts)
-}
-
-/// Get only custom prompt templates
-#[tauri::command]
-pub fn get_custom_prompts_cmd() -> Vec<PromptTemplate> {
-    tauri_plugin_telemetry::traced_sync_value("get_custom_prompts_cmd", || {
-        let custom_path = get_custom_prompts_path();
-        load_custom_prompts(&custom_path)
     })
 }
 
@@ -231,15 +211,6 @@ pub async fn delete_custom_prompt_cmd(prompt_id: String) -> Result<(), Error> {
         delete_custom_prompt(&custom_path, &prompt_id).map_err(Into::into)
     })
     .await
-}
-
-/// Get a prompt by ID
-#[tauri::command]
-pub fn get_prompt_by_id(prompt_id: String) -> Option<PromptTemplate> {
-    tauri_plugin_telemetry::traced_sync_value("get_prompt_by_id", || {
-        let all_prompts = get_all_prompts();
-        all_prompts.into_iter().find(|p| p.id == prompt_id)
-    })
 }
 
 #[cfg(test)]
@@ -324,72 +295,6 @@ mod tests {
     // =========================================================================
     // Apply prompt tests
     // =========================================================================
-
-    #[test]
-    fn test_apply_prompt() {
-        let template = PromptTemplate {
-            id: "test".to_string(),
-            name: "Test".to_string(),
-            template: "Process this: {text}".to_string(),
-            is_builtin: false,
-        };
-
-        let result = apply_prompt(&template, "hello world");
-        assert_eq!(result, "Process this: hello world");
-    }
-
-    #[test]
-    fn test_apply_prompt_empty_text() {
-        let template = PromptTemplate {
-            id: "test".to_string(),
-            name: "Test".to_string(),
-            template: "Process this: {text}".to_string(),
-            is_builtin: false,
-        };
-
-        let result = apply_prompt(&template, "");
-        assert_eq!(result, "Process this: ");
-    }
-
-    #[test]
-    fn test_apply_prompt_with_newlines() {
-        let template = PromptTemplate {
-            id: "test".to_string(),
-            name: "Test".to_string(),
-            template: "Fix this:\n{text}\nEnd.".to_string(),
-            is_builtin: false,
-        };
-
-        let result = apply_prompt(&template, "line1\nline2");
-        assert_eq!(result, "Fix this:\nline1\nline2\nEnd.");
-    }
-
-    #[test]
-    fn test_apply_prompt_preserves_special_chars() {
-        let template = PromptTemplate {
-            id: "test".to_string(),
-            name: "Test".to_string(),
-            template: "Input: {text}".to_string(),
-            is_builtin: false,
-        };
-
-        let result = apply_prompt(&template, "Hello \"world\" <test> & more");
-        assert_eq!(result, "Input: Hello \"world\" <test> & more");
-    }
-
-    #[test]
-    fn test_apply_prompt_only_replaces_placeholder() {
-        let template = PromptTemplate {
-            id: "test".to_string(),
-            name: "Test".to_string(),
-            template: "{text} is the {text}".to_string(),
-            is_builtin: false,
-        };
-
-        let result = apply_prompt(&template, "input");
-        // Note: replace replaces ALL occurrences
-        assert_eq!(result, "input is the input");
-    }
 
     // =========================================================================
     // PromptTemplate struct tests

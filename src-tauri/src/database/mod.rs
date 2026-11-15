@@ -63,12 +63,6 @@ fn get_thoth_directory() -> Result<PathBuf, DatabaseError> {
     Ok(home.join(".thoth"))
 }
 
-/// Returns the path to the database file (~/.thoth/thoth.db).
-pub fn get_database_path() -> Result<PathBuf, DatabaseError> {
-    let thoth_dir = get_thoth_directory()?;
-    Ok(thoth_dir.join("thoth.db"))
-}
-
 /// Ensures the database directory exists and returns the database path.
 fn ensure_database_directory() -> Result<PathBuf, DatabaseError> {
     let thoth_dir = get_thoth_directory()?;
@@ -162,22 +156,9 @@ pub use transcription::{
 
 // Re-export transcription Tauri commands
 pub use transcription::{
-    count_transcriptions_filtered, delete_transcription_by_id, get_transcription_by_id,
-    get_transcription_stats_cmd, list_all_transcriptions, reconcile_orphaned_recordings_cmd,
-    save_transcription, search_transcriptions_text,
+    delete_transcription_by_id, get_transcription_by_id, get_transcription_stats_cmd,
+    list_all_transcriptions,
 };
 
 // Re-export trash Tauri commands
 pub use trash::{list_trash, purge_trash, quarantine_recordings, restore_recordings};
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_database_path_format() {
-        let path = get_database_path().unwrap();
-        assert!(path.to_string_lossy().contains(".thoth"));
-        assert!(path.to_string_lossy().ends_with("thoth.db"));
-    }
-}

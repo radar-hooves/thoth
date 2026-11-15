@@ -937,25 +937,6 @@ pub async fn rotate_api_token(app: tauri::AppHandle) -> Result<String, Error> {
     .await
 }
 
-/// Change the API port. Restarts the server on the new port if it was running.
-#[tauri::command]
-pub async fn set_api_port(app: tauri::AppHandle, port: u16) -> Result<(), Error> {
-    tauri_plugin_telemetry::traced("set_api_port", async move {
-        let _ = app;
-        let mut cfg = crate::config::get_config()?;
-        cfg.integrations.api_port = port;
-        let was_running = is_running().await;
-        let mcp = cfg.integrations.mcp_enabled;
-        crate::config::set_config(cfg)?;
-
-        if was_running {
-            start(port, token_store::get_or_create_token(), mcp).await?;
-        }
-        Ok(())
-    })
-    .await
-}
-
 #[cfg(test)]
 mod tests {
 
