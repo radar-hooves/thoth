@@ -131,7 +131,7 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <header class="masthead">
 <p class="eyebrow">Thoth</p>
 <h1>Open work</h1>
-<p class="updated">Updated <time datetime="2026-11-15">15/11/2026</time></p>
+<p class="updated">Updated <time datetime="2026-11-16">16/11/2026</time></p>
 </header>
 
 <section class="operator" aria-labelledby="for-the-operator">
@@ -152,6 +152,10 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <h4>Build or drop five features the docs promise but no screen ever reached?</h4>
 <p>Thoth's product docs describe three: clipboard history, the clipboard as context for AI enhancement, and typing the text instead of pasting it. Bragi stores a ReplayGain setting it never applies, and has a stop-with-fade it never triggers. The unreachable code for Thoth's first two was removed today, since nothing could call it. Typing insertion is hard-coded off. Bragi's two are kept until you say. Building any of them adds a control to Settings, designed in Penpot first. Dropping one removes its lines from the docs.</p>
 </article>
+<article class="ask" data-id="settings-design-review" data-kind="decide" data-track="#207">
+<h4>Approve the Settings redesign, and say where Insights should live</h4>
+<p>The before and after are drawn in Penpot (Thoth › Settings restructure, pages Before and After), with renders and a one-page map of where every pane goes in <code>docs/research/settings-restructure/</code>; the map is <code>after-00-where-everything-went.png</code>. Ten panes become nine sections on the factory's Settings layout, the one Bragi uses: Recording first, then Models, AI Enhancement, Dictionary, a new Text section (output filtering and how text is inserted), General, Storage, Advanced (API, MCP, telemetry, the word list) and About. History, Insights and Transcribe leave Settings. Transcribe becomes "Transcribe File…" in the menu bar, and Overview's status line moves into the menu bar's first line. The one open choice is where Insights goes: a second view inside the History window (recommended: one window instead of two) or a window of its own. No code is written until you approve.</p>
+</article>
 <article class="ask" data-id="reopen-shows-window" data-kind="read" data-track="#206">
 <h4>Opening Thoth from Spotlight should bring its window back</h4>
 <p>The menu bar icon is back on huginn (local build installed 15/11 16:00, same certificate, no permission prompts). The other half of the fix is that opening Thoth while it runs now shows the window; no session can hide the window to test it. Close the window, open Thoth from Spotlight: the window should appear.</p>
@@ -164,19 +168,16 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <h2 id="threads">Threads</h2>
 
 <details class="thread" id="holistic-review" open>
-<summary><h3>Holistic review: Thoth and Bragi as one cloth, with the factory</h3><span class="state">Verdict on #208 (15/11): Thoth refactor, Bragi carry on, factory converge. On Thoth main: the fixes, the structural clean-up, one settings write path (<code>0675396</code>) and one shared database connection (<code>f782bf2</code>). Bragi's dead-code removal and the factory updater (v2026.11.53) are on main. Two lanes and one review are in flight.</span></summary>
-<p class="next" data-id="review-packages" data-track="#208">Land, each read as our own diff first:<br>
-• bragi#257, branch <code>foreman/wt-d735540a</code> at <code>d490829</code>, based on Bragi main. A fresh-context code review is reading it; act on its Critical and High findings, fast-forward main, and wait for a green <code>change</code> run;<br>
-• the factory needs #135, #136, #137 and #139, branch <code>foreman/wt-02ecf12c</code>. The keyring correction is accepted. Dispatch <code>20261115T130847Z-d562e3de</code> is adding a release-mode clippy on Linux, because no CI compiled the release-only keyring path. On a green run: fast-forward main, wait for a green Factory self-test, tag v2026.11.54, and close the four issues with evidence.<br>
-Thoth's <code>change</code> runs on <code>0675396</code> and <code>f782bf2</code> must be green.</p>
+<summary><h3>Holistic review: Thoth and Bragi as one cloth, with the factory</h3><span class="state">Verdict on #208 (15/11): Thoth refactor, Bragi carry on, factory converge. On Thoth main: the fixes, the structural clean-up, one settings write path, one shared database connection, and camelCase at the IPC boundary with a guard against overwriting a newer config (<code>184c8c2</code>). Bragi's dead-code removal (#256) and plumbing (#257) are on main. Factory v2026.11.54 is tagged (#135, #136, #137, #139 closed). Both apps are adopting it.</span></summary>
+<p class="next" data-id="review-packages" data-track="#208 #209 radar-hooves/bragi#259">Land the two adoption lanes, each read as our own diff first:<br>
+• Thoth #209, branch <code>foreman/wt-4e6db3bf</code>, dispatch <code>20261115T141559Z-b31cab99</code>;<br>
+• Bragi #259, branch <code>foreman/wt-f4803363</code>, dispatch <code>20261115T141550Z-9b6979b9</code>.<br>
+Then fast-forward each main on its green <code>change</code> run. Thoth's main CI went red three times on 15/11 to 16/11, every time from a runner: titan-1 could not fetch CUDA, titan-2 could not start Vitest workers, and atlas-4 was shut down mid-run. A <code>change</code> run with <code>roll=all</code> was dispatched (43721876471); confirm it green.</p>
 <ul class="items">
 <li data-id="review-writeup" data-track="#208">The write-up is <code>docs/research/2026-11-15-holistic-review.md</code>, gitignored and local to huginn's checkout, with the three reads beside it. Keep its findings tables current as packages land.</li>
-<li data-id="settings-design-lane" data-track="#207">A Penpot design lane is drawing Settings before and after (dispatch <code>20261115T124822Z-2a77da54</code>). Its renders go to <code>docs/research/settings-restructure/</code>; put them to him as a <code>read</code> ask when it lands. No code until he approves.</li>
-<li data-id="thoth-next-packages" data-track="#208">Next for Thoth:<br>
-• camelCase on the config structs: it deletes the key canonicaliser and about 300 lines of TypeScript mapping, and <code>config.json</code> moves through the version ladder once;<br>
-• converge on factory v2026.11.54 once tagged: <code>write_private</code>, the window module, the IPC-boundary spans.</li>
+<li data-id="settings-design-lane" data-track="#207">The Settings design is delivered and put to him above. Build it on <code>SettingsShell</code> once he approves, from the Penpot After page.</li>
 <li data-id="bragi-updater-adopt" data-track="radar-hooves/bragi#258">Bragi adopts the factory updater once his public download path is chosen. Mint its own keypair into repo secrets, take the edits in the factory's <code>docs/development/desktop-updater.md</code>, release, and install that first updater build by hand once on each Mac.</li>
-<li data-id="thoth-updater-converge" data-track="#208">Thoth converges on the factory updater. Keep its public key and secrets, delete <code>src/lib/stores/updater.svelte.ts</code> and its own <code>report_update_check</code>, and call the kit.</li>
+<li data-id="thoth-updater-converge" data-track="#209">Thoth converges on the factory updater inside the #209 lane: it keeps its public key and secrets, deletes <code>src/lib/stores/updater.svelte.ts</code> and its own <code>report_update_check</code>, and calls the kit.</li>
 <li data-id="apps-become-stamps" data-track="radar-hooves/app-factory#138">Both apps become stamps of the desktop skeleton, so factory changes reach them. Thoth's <code>.canonical-exceptions:73</code> gives the reason "no desktop archetype", which is false today.</li>
 <li data-id="public-pipeline" data-track="radar-hooves/master-project#460">Thoth carries a 4,600-line copy of master's change pipeline because Thoth is public. Master's answer decides whether the copy can go.</li>
 <li data-id="release-2026-11-7" data-track="#208">His ruling of 15/11, recorded on #208: publish only once the review is worked through. Then, on a green <code>change</code> run at the head of main: run <code>scripts/bump-version.sh</code> if the month moved, update the CHANGELOG, tag, and push the tag.</li>
@@ -188,7 +189,7 @@ Thoth's <code>change</code> runs on <code>0675396</code> and <code>f782bf2</code
 <details class="thread" id="macos-permissions">
 <summary><h3>macOS permissions and the record key</h3><span class="state">On main and drive-tested on huginn 15/11: two permissions kept across reinstalls, the record key instant on rapid taps. Ships with the release above.</span></summary>
 <ul class="items">
-<li data-id="settings-restructure-penpot" data-track="#207">The 08/10 UX audit's pane restructure (History, Insights, Transcribe out of Settings; Overview's switches into General; Integrations behind Advanced), onto the factory's <code>SettingsShell</code> as Bragi is, designed in Penpot and shown to him before and after any code.</li>
+<li data-id="settings-restructure-penpot" data-track="#207">The 08/10 UX audit's pane restructure onto <code>SettingsShell</code> is drawn and waits on his approval (the Settings ask above).</li>
 <li data-id="nix-check-keep" data-untracked="decision recorded here for master's handoff item">Master asked Thoth's session to keep or delete <code>nix-check.yaml</code>: keep. It refreshes the <code>pnpmDeps</code> hash on pull requests, which the change pipeline does not.</li>
 <li data-id="pre-27-capture" data-untracked="no pre-27 Mac in the fleet to test on">On macOS before 27, recording a shortcut with an ordinary letter asks for Input Monitoring just in time (<code>ensure_listen_access</code>). Unexercised: every household Mac read so far runs 27.</li>
 </ul>
