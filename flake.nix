@@ -299,14 +299,11 @@
             lockFile = ./src-tauri/Cargo.lock;
             outputHashes = {
               "fluidaudio-rs-0.10.0" = "sha256-z7c8tibtfevefrYAwh3hJM/sr/OWnbSrxjDS4Tda8+k=";
-              # kits/rust moved again, off the private full-stack-app-template onto the public
-              # radar-hooves/app-factory (master-project#233); every commit id in it is new, so
-              # both hashes need a fresh discovery regardless of the previous ones.
-              # v2026.9.34: traced_sync_value added, no crate version bump — the
-              # commit id still moves, so the hash does too.
-              "telemetry-0.7.0" = "sha256-Sw4dv8BQL+JbHNHHBotuVUc4/Sc0/z9pc0QSxD3nJLw=";
-              "tauri-plugin-telemetry-0.3.0" = "sha256-Sw4dv8BQL+JbHNHHBotuVUc4/Sc0/z9pc0QSxD3nJLw=";
-              "desktop-shell-0.3.0" = "sha256-Sw4dv8BQL+JbHNHHBotuVUc4/Sc0/z9pc0QSxD3nJLw=";
+              # The three app-factory crates share one hash, the pinned tag's source tree:
+              # nix flake prefetch "git+https://github.com/radar-hooves/app-factory?ref=refs/tags/<tag>"
+              "telemetry-0.7.0" = "sha256-tP9IXJsf9L7T7dpF20qSnabRJ4C39YWSRWeVSZvdmT0=";
+              "tauri-plugin-telemetry-0.3.0" = "sha256-tP9IXJsf9L7T7dpF20qSnabRJ4C39YWSRWeVSZvdmT0=";
+              "desktop-shell-0.3.0" = "sha256-tP9IXJsf9L7T7dpF20qSnabRJ4C39YWSRWeVSZvdmT0=";
             };
           };
 
