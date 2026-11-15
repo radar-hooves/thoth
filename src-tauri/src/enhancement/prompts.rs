@@ -347,6 +347,7 @@ mod tests {
     // =========================================================================
 
     #[test]
+    #[serial_test::serial]
     fn test_custom_prompts_path_format() {
         let path = get_custom_prompts_path();
         let path_str = path.to_string_lossy();

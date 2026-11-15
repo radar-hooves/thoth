@@ -716,6 +716,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_model_directory() {
         let dir = get_model_directory("parakeet-tdt-0.6b-v3-int8");
         assert!(dir.to_string_lossy().contains(".thoth"));

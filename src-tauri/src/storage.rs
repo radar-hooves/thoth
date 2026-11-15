@@ -231,6 +231,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[serial_test::serial]
     fn test_thoth_dir_path() {
         let dir = thoth_dir();
         assert!(dir.to_string_lossy().contains(".thoth"));

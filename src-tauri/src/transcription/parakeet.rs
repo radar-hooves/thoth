@@ -207,6 +207,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[serial_test::serial]
     fn test_get_model_directory() {
         let dir = get_model_directory();
         assert!(dir.ends_with("parakeet"));
