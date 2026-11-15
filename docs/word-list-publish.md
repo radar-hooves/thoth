@@ -26,7 +26,7 @@ The rest of this page is the document format, shared by both homes.
 
 ## WebDAV publishing
 
-- **Edits in Thoth reach the file within a few seconds**, whatever made them — the dictionary editor, an import, the MCP `dictionary`/`canonical` tools. A burst of edits becomes one write.
+- **Edits in Thoth reach the file within a few seconds**, whatever made them — the dictionary editor, an import, the MCP `dictionary`/`canonical` tools (which refuse their writes while the external dictionary is on: wordhoard's own MCP `dictionary` tool is then the list). A burst of edits becomes one write.
 - **Publish now** writes the file immediately.
 - **Thoth is the single writer.** Publishing is one-way: the file is never read back, and a change made in the file itself is overwritten by the next publish. If a second writer ever appears, two-way sync can be added then — with a merge policy and its own format version.
 
@@ -64,7 +64,7 @@ The file is plain HTTP with basic auth — no locking protocol, no WebDAV-specif
 
 1. `GET` the URL with basic auth, parse the JSON, apply the entries and terms to your own text path.
 2. Read on your own cadence and cache as you like; the file changes only when the lists change.
-3. Treat the file as read-only: Thoth overwrites it on the next save and does not merge. If you need to change a correction, change it in Thoth (the app, or its MCP `dictionary`/`canonical` tools).
+3. Treat the file as read-only: Thoth overwrites it on the next save and does not merge. If you need to change a correction, change it in Thoth's app; an agent uses Thoth's MCP `dictionary`/`canonical` tools, or wordhoard's own MCP `dictionary` tool when Thoth's external dictionary is on.
 
 ## Settings reference
 

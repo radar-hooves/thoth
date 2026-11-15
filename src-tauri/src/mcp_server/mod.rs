@@ -160,6 +160,28 @@ fn core_err(msg: String) -> McpError {
     McpError::internal_error(msg, None)
 }
 
+/// With the external dictionary on, wordhoard's own MCP `dictionary` tool is the
+/// one door onto the household word list, and it signs each write with the agent
+/// that made it (#205). Thoth's `dictionary` tool, and `canonical`'s writes, would
+/// be a second, unsigned door, so they refuse; `canonical` `list` and `suggest`
+/// only read, and `suggest` reads the transcription history only Thoth holds.
+fn external_dictionary_refusal(external: bool, tool: &str, action: &str) -> Option<String> {
+    let writes = tool == "dictionary" || matches!(action, "add" | "update" | "remove");
+    (external && writes).then(|| {
+        format!(
+            "Thoth's `{tool}` {action} is off while the external dictionary is on: the household \
+             word list is wordhoard's, so use wordhoard's MCP `dictionary` tool"
+        )
+    })
+}
+
+fn refuse_when_external(tool: &str, action: &str) -> Result<(), McpError> {
+    match external_dictionary_refusal(crate::external_dictionary::is_enabled(), tool, action) {
+        Some(msg) => Err(McpError::invalid_request(msg, None)),
+        None => Ok(()),
+    }
+}
+
 /// Compact acknowledgement for a mutating dictionary/canonical action. Confirms
 /// success and reports the affected `index` and the resulting collection size,
 /// WITHOUT echoing the whole list back. Returning the full ~150-entry list on
@@ -196,12 +218,13 @@ impl ThothMcp {
     }
 
     #[tool(
-        description = "Manage Thoth's personal dictionary (find/replace entries applied to transcriptions). Use this to view or change spelling corrections and word replacements. Action: list | add | update | delete | import | export. add requires from + to (+ optional caseSensitive). update/delete identify the entry EITHER by from (its own text — preferred, refuses if it is not unique) OR by index; update also requires to. import requires json — exactly what `export` returns, e.g. {\"entries\":[{\"from\":\"x\",\"to\":\"y\",\"caseSensitive\":false}]}; a bare array of those entry objects also works (+ optional merge, default true: dedupe by `from`; false replaces the whole dictionary). Returns: the entry list, each row carrying its index (list), a compact ack {ok, action, index, count} (add/update/delete), a count (import), or a JSON string (export)."
+        description = "Manage Thoth's personal dictionary (find/replace entries applied to transcriptions). Use this to view or change spelling corrections and word replacements. Action: list | add | update | delete | import | export. add requires from + to (+ optional caseSensitive). update/delete identify the entry EITHER by from (its own text — preferred, refuses if it is not unique) OR by index; update also requires to. import requires json — exactly what `export` returns, e.g. {\"entries\":[{\"from\":\"x\",\"to\":\"y\",\"caseSensitive\":false}]}; a bare array of those entry objects also works (+ optional merge, default true: dedupe by `from`; false replaces the whole dictionary). Returns: the entry list, each row carrying its index (list), a compact ack {ok, action, index, count} (add/update/delete), a count (import), or a JSON string (export). Off while Thoth's external dictionary is on: wordhoard's own `dictionary` tool is then the list."
     )]
     async fn dictionary(
         &self,
         Parameters(p): Parameters<DictionaryParams>,
     ) -> Result<CallToolResult, McpError> {
+        refuse_when_external("dictionary", &p.action)?;
         match p.action.as_str() {
             "list" => {
                 let entries = crate::dictionary::get_dictionary_entries()
@@ -320,12 +343,13 @@ impl ThothMcp {
     }
 
     #[tool(
-        description = "Manage Thoth's canonical-term registry (phonetic/fuzzy snapping of acoustic variants to a registered spelling). Register a term ONCE and all acoustic/spelling variants auto-snap to it. Action: list | add | update | remove | suggest. add/update require term; update/remove also require index (from `list`). NOTE: update REPLACES the whole term — omit `aliases` and the term keeps none, omit `policy` and it resets to aliasOnly; read the current term with `list` first and send back everything you want kept. policy: aliasOnly (default, exact aliases only), phonetic (AND gate: Double-Metaphone key match AND edit-distance >= 0.55), conservative (same AND gate, higher 0.85 threshold for terms that collide with common words). `suggest` reads the transcription history and reports spellings that look like a registered term but were NOT snapped to it — the mis-hearings still escaping, ranked by how often they occur, each with the term's own frequency and a line of context. It is ADVISORY and changes nothing: judge each row (an ordinary English word will read as one in its context) and register the real ones with `update`. Returns: the term list (list), a compact ack {ok, action, index, count} (add/update/remove), or the candidate list (suggest)."
+        description = "Manage Thoth's canonical-term registry (phonetic/fuzzy snapping of acoustic variants to a registered spelling). Register a term ONCE and all acoustic/spelling variants auto-snap to it. Action: list | add | update | remove | suggest. add/update require term; update/remove also require index (from `list`). NOTE: update REPLACES the whole term — omit `aliases` and the term keeps none, omit `policy` and it resets to aliasOnly; read the current term with `list` first and send back everything you want kept. policy: aliasOnly (default, exact aliases only), phonetic (AND gate: Double-Metaphone key match AND edit-distance >= 0.55), conservative (same AND gate, higher 0.85 threshold for terms that collide with common words). `suggest` reads the transcription history and reports spellings that look like a registered term but were NOT snapped to it — the mis-hearings still escaping, ranked by how often they occur, each with the term's own frequency and a line of context. It is ADVISORY and changes nothing: judge each row (an ordinary English word will read as one in its context) and register the real ones with `update`. Returns: the term list (list), a compact ack {ok, action, index, count} (add/update/remove), or the candidate list (suggest). add/update/remove are off while Thoth's external dictionary is on: wordhoard's own `dictionary` tool is then the list."
     )]
     async fn canonical(
         &self,
         Parameters(p): Parameters<CanonicalParams>,
     ) -> Result<CallToolResult, McpError> {
+        refuse_when_external("canonical", &p.action)?;
         match p.action.as_str() {
             "list" => {
                 let terms =
@@ -625,4 +649,31 @@ pub fn build_service() -> StreamableHttpService<ThothMcp, LocalSessionManager> {
         LocalSessionManager::default().into(),
         StreamableHttpServerConfig::default(),
     )
+}
+
+#[cfg(test)]
+mod external_dictionary_tests {
+    use super::external_dictionary_refusal as refusal;
+
+    #[test]
+    fn with_the_service_on_only_reads_of_canonical_pass() {
+        for action in ["list", "add", "update", "delete", "import", "export"] {
+            assert!(
+                refusal(true, "dictionary", action).is_some(),
+                "dictionary {action}"
+            );
+        }
+        for action in ["add", "update", "remove"] {
+            let msg = refusal(true, "canonical", action).expect(action);
+            assert!(msg.contains("wordhoard's MCP `dictionary` tool"), "{msg}");
+        }
+        assert_eq!(refusal(true, "canonical", "list"), None);
+        assert_eq!(refusal(true, "canonical", "suggest"), None);
+    }
+
+    #[test]
+    fn with_the_service_off_nothing_refuses() {
+        assert_eq!(refusal(false, "dictionary", "add"), None);
+        assert_eq!(refusal(false, "canonical", "remove"), None);
+    }
 }
