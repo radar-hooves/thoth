@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **The record key never misses a press.** A quick second tap stops the recording it just started, however fast; before, the key ignored everything for half a second after a press, and the settings window applied its own cooldown on top. Presses no longer pass through that window either, so recording starts the moment the key goes down even while the window is closed.
+- **Re-transcribing from History, and a hands-free recording that ends on silence, use your settings.** Both fell back to built-in defaults: US spelling and no enhancement, whatever Settings said.
 - **Deleting a recording from the Trash asks first.** Permanent delete in Insights fired on one click, beside a reversible action that asked.
 - **Failures you could not see now say so.** A failed microphone test, API-key save or model load after download shows a message; Storage's delete actions confirm what they did; Integrations' telemetry fields stay locked until they have loaded.
 - The AI Enhancement backend text no longer says "no cloud required" beside an OpenAI-compatible server that can point anywhere.

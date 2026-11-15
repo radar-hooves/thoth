@@ -95,36 +95,9 @@ pub struct PipelineConfig {
     pub auto_submit: crate::config::AutoSubmit,
 }
 
-impl Default for PipelineConfig {
-    fn default() -> Self {
-        Self {
-            apply_dictionary: true,
-            apply_filtering: true,
-            remove_fillers: true,
-            australian_spelling: false,
-            spoken_numbers_to_digits: false,
-            normalise_whitespace: true,
-            cleanup_punctuation: true,
-            sentence_case: false,
-            voice_formatting_commands: true,
-            enhancement_enabled: false,
-            enhancement_model: "llama3.2".to_string(),
-            enhancement_prompt: DEFAULT_ENHANCEMENT_PROMPT.to_string(),
-            enhancement_prompt_id: None,
-            auto_copy: false,
-            auto_paste: true,
-            insertion_method: "paste".to_string(),
-            append_trailing_space: false,
-            auto_submit: crate::config::AutoSubmit::Off,
-        }
-    }
-}
-
-/// Build the effective [`PipelineConfig`] from the saved settings, mirroring the
-/// frontend's `getDefaultConfig()`. Used by entry points that trigger a recording
-/// without a frontend-supplied config (e.g. the bundled MCP server) so the result
-/// honours the user's filter, spelling and enhancement settings exactly as the
-/// global hotkey does (`PipelineConfig::default()` hardcodes different values).
+/// The [`PipelineConfig`] the user's saved settings describe: the one definition,
+/// used by every path that records or transcribes (the record key, the window's
+/// buttons, a hands-free auto-stop, a re-transcription, the MCP server and API).
 pub(crate) fn effective_pipeline_config() -> Result<PipelineConfig, Error> {
     let cfg = crate::config::get_config()?;
     let t = &cfg.transcription;
@@ -158,6 +131,11 @@ pub(crate) fn effective_pipeline_config() -> Result<PipelineConfig, Error> {
         append_trailing_space: t.append_trailing_space,
         auto_submit: t.auto_submit,
     })
+}
+
+/// The config a caller passed, or the user's saved settings when it passed none.
+fn config_or_settings(config: Option<PipelineConfig>) -> Result<PipelineConfig, Error> {
+    config.map_or_else(effective_pipeline_config, Ok)
 }
 
 /// Default enhancement prompt
@@ -521,7 +499,7 @@ pub async fn pipeline_stop_and_process(
     config: Option<PipelineConfig>,
 ) -> Result<(), Error> {
     tracing::info!("Pipeline: stop_and_process called");
-    let config = config.unwrap_or_default();
+    let config = config_or_settings(config)?;
 
     // Stop recording metering
     crate::audio::stop_recording_metering();
@@ -1392,7 +1370,7 @@ pub async fn pipeline_transcribe_file(
         IMPORT_CANCELLED.store(false, Ordering::SeqCst);
 
         // Build config with auto_copy and auto_paste disabled (manual copy from UI)
-        let mut config = config.unwrap_or_default();
+        let mut config = config_or_settings(config)?;
         config.auto_copy = false;
         config.auto_paste = false;
 
@@ -1510,7 +1488,7 @@ pub async fn pipeline_retranscribe(
         }
 
         // Build config with output disabled (retranscribe from history, not at cursor)
-        let mut config = config.unwrap_or_default();
+        let mut config = config_or_settings(config)?;
         config.auto_copy = false;
         config.auto_paste = false;
 
@@ -1570,12 +1548,9 @@ pub async fn pipeline_retranscribe(
 /// stops.  The frontend must NOT decide start vs stop independently; it calls
 /// this command and updates its display from the returned `ToggleOutcome`.
 ///
-/// Sound is decided here too:
-/// - Start path: indicator + BING have already been played by the shortcut
-///   handler the instant the key was pressed (instant, before IPC round-trip).
-///   We do NOT play them again here.
-/// - Stop path: BONG is played here, immediately before capture disarms, so it
-///   is always matched to the decided action.
+/// The stop cue plays here, immediately before capture disarms, so it always
+/// matches the decided action. The record key's start cue is played by
+/// [`hotkey_toggle`] just before it calls this.
 #[tauri::command]
 pub async fn pipeline_toggle_recording(
     app: AppHandle,
@@ -1602,14 +1577,51 @@ pub async fn pipeline_toggle_recording(
             Ok(ToggleOutcome::Stopped)
         } else {
             // --- START ---
-            // BING and indicator are played by the shortcut handler on keypress
-            // (keyboard_service.rs / manager.rs / tray.rs) so they fire before the
-            // IPC round-trip.  pipeline_start_recording does not duplicate them.
             let path = pipeline_start_recording(app)?;
             Ok(ToggleOutcome::Started { path })
         }
     })
     .await
+}
+
+/// The record key's one path, for every hotkey source (global shortcut, bare
+/// modifier, tray). Presses queue and are acted on in order, in Rust: none is
+/// debounced against the last or dropped, and none waits on the settings
+/// window, whose webview macOS throttles while it is hidden. A second tap that
+/// lands while the first is still opening the microphone stops the recording
+/// the moment it has started.
+pub(crate) fn hotkey_toggle(intent: ToggleIntent) {
+    static QUEUE: std::sync::OnceLock<tokio::sync::mpsc::UnboundedSender<ToggleIntent>> =
+        std::sync::OnceLock::new();
+    let queue = QUEUE.get_or_init(|| {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<ToggleIntent>();
+        tauri::async_runtime::spawn(async move {
+            while let Some(intent) = rx.recv().await {
+                let Some(app) = crate::app_handle::get() else {
+                    continue;
+                };
+                // The start cue is decided here, against the state this press
+                // actually meets, so a quick second tap never chimes "start"
+                // for what is a stop.
+                if intent == ToggleIntent::Toggle {
+                    crate::recording_indicator::maybe_play_start_indicator(&app);
+                }
+                let result = match effective_pipeline_config() {
+                    Ok(config) => {
+                        pipeline_toggle_recording(app.clone(), Some(config), Some(intent)).await
+                    }
+                    Err(e) => Err(e),
+                };
+                if let Err(e) = result {
+                    tracing::error!(error = %e, "Record key failed");
+                    let _ = crate::recording_indicator::hide_recording_indicator(app.clone());
+                    emit_progress(&app, PipelineState::Failed, &e.to_string());
+                }
+            }
+        });
+        tx
+    });
+    let _ = queue.send(intent);
 }
 
 /// What the caller wants, when it knows something `is_recording()` does not.
@@ -1677,27 +1689,6 @@ fn emit_recording_state(app: &AppHandle) {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_pipeline_config_default() {
-        let config = PipelineConfig::default();
-        assert!(config.apply_dictionary);
-        assert!(config.apply_filtering);
-        assert!(config.remove_fillers);
-        assert!(!config.australian_spelling);
-        assert!(!config.spoken_numbers_to_digits);
-        assert!(!config.enhancement_enabled);
-        assert!(!config.auto_copy);
-        assert!(config.auto_paste);
-    }
-
-    // Which stages the post-ASR text pipeline applies.
-    //
-    // These exist because live dictation and MCP file transcription used to
-    // run different stages, silently (#118). Both now call
-    // `apply_text_post_processing`, so these tests pin the shared contract:
-    // any future change that adds, drops or reorders a stage for one caller
-    // changes it for both, and fails here rather than surprising a caller.
-
     /// Config with every text stage off, as a baseline to switch on one at a time.
     fn bare_config() -> PipelineConfig {
         PipelineConfig {
@@ -1710,7 +1701,15 @@ mod tests {
             cleanup_punctuation: false,
             sentence_case: false,
             voice_formatting_commands: false,
-            ..PipelineConfig::default()
+            enhancement_enabled: false,
+            enhancement_model: String::new(),
+            enhancement_prompt: String::new(),
+            enhancement_prompt_id: None,
+            auto_copy: false,
+            auto_paste: false,
+            insertion_method: "paste".to_string(),
+            append_trailing_space: false,
+            auto_submit: crate::config::AutoSubmit::Off,
         }
     }
 

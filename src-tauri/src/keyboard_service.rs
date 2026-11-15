@@ -22,7 +22,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
 // ---------------------------------------------------------------------------
@@ -31,12 +31,6 @@ use tauri::{AppHandle, Emitter};
 
 /// Poll interval for keyboard state (ms)
 const POLL_INTERVAL_MS: u64 = 20;
-
-/// Cooldown between shortcut triggers to prevent double-firing (ms)
-const TRIGGER_COOLDOWN_MS: u64 = 500;
-
-/// Threshold for "brief press" vs "hold" in toggle mode (ms)
-const BRIEF_PRESS_THRESHOLD_MS: u64 = 500;
 
 // ---------------------------------------------------------------------------
 // Mode state machine
@@ -145,13 +139,10 @@ struct ModifierShortcut {
     description: String,
 }
 
-/// State for tracking key press timing (monitoring mode)
+/// Whether a modifier shortcut's key is held (monitoring mode)
 #[derive(Debug, Default)]
 struct KeyState {
     is_pressed: bool,
-    press_time: Option<Instant>,
-    last_trigger: Option<Instant>,
-    hands_free_mode: bool,
 }
 
 /// Registry of modifier shortcuts
@@ -314,13 +305,6 @@ pub fn start_monitoring(app: AppHandle) {
 
     MODE.store(KeyboardMode::Monitoring as u8, Ordering::Release);
     ensure_thread_running(app);
-}
-
-/// Stop the service entirely (for app shutdown)
-pub fn stop_service() {
-    MODE.store(KeyboardMode::Idle as u8, Ordering::Release);
-    // Thread will exit on next iteration when it sees Idle
-    tracing::info!("Keyboard service stopping");
 }
 
 /// Restart monitoring after shortcut registration changes.
@@ -574,146 +558,40 @@ fn polling_loop(app: AppHandle) {
 // Monitoring mode processing (ported from modifier_monitor.rs)
 // ---------------------------------------------------------------------------
 
-/// Process keys in monitoring mode: detect modifier shortcut presses/releases
+/// Process keys in monitoring mode: report each modifier shortcut's press and
+/// release edge to the shortcut dispatcher, the one place that decides what a
+/// shortcut does (debounce, lock screen, recording mode, start or stop). No
+/// cooldown here: every edge counts, however quickly it follows the last.
 fn process_monitoring(app: &AppHandle, keys: &HashSet<Keycode>) {
-    let shortcuts: Vec<ModifierShortcut> = {
-        let registry = get_registry().read();
-        registry.shortcuts.values().cloned().collect()
-    };
-
-    for shortcut in shortcuts {
-        let keycode = shortcut.modifier.to_keycode();
-        let is_pressed = keys.contains(&keycode);
-
-        // Get current state
-        let (was_pressed, press_time, last_trigger, hands_free) = {
-            let registry = get_registry().read();
-            let key_state = registry.key_states.get(&shortcut.modifier);
-            (
-                key_state.map(|s| s.is_pressed).unwrap_or(false),
-                key_state.and_then(|s| s.press_time),
-                key_state.and_then(|s| s.last_trigger),
-                key_state.map(|s| s.hands_free_mode).unwrap_or(false),
-            )
-        };
-
-        // Check cooldown
-        if let Some(last) = last_trigger {
-            if last.elapsed().as_millis() < TRIGGER_COOLDOWN_MS as u128 {
-                continue;
-            }
-        }
-
-        if is_pressed && !was_pressed {
-            // Key just pressed
-            {
-                let mut registry = get_registry().write();
-                if let Some(key_state) = registry.key_states.get_mut(&shortcut.modifier) {
-                    key_state.is_pressed = true;
-                    key_state.press_time = Some(Instant::now());
-                }
-            }
-
-            if hands_free {
-                // In hands-free mode, pressing again stops recording
-                {
-                    let mut registry = get_registry().write();
-                    if let Some(key_state) = registry.key_states.get_mut(&shortcut.modifier) {
-                        key_state.hands_free_mode = false;
-                        key_state.last_trigger = Some(Instant::now());
-                    }
-                }
-                emit_shortcut_event(app, &shortcut.id, "pressed");
-            } else {
-                // Start recording on press
-                {
-                    let mut registry = get_registry().write();
-                    if let Some(key_state) = registry.key_states.get_mut(&shortcut.modifier) {
-                        key_state.last_trigger = Some(Instant::now());
-                    }
-                }
-                emit_shortcut_event(app, &shortcut.id, "pressed");
-            }
-        } else if !is_pressed && was_pressed {
-            // Key just released
-            let press_duration = press_time.map(|t| t.elapsed().as_millis()).unwrap_or(0);
-            // A modifier binding reaches this path instead of the global-shortcut
-            // dispatcher, so hold-to-record (#111) has to be honoured here too or
-            // the setting is inert for anyone whose recording key is a bare
-            // modifier — silently, which is the failure the earlier push-to-talk
-            // attempt was deleted for.
-            let hold_to_record = crate::shortcuts::manager::release_acts(
-                crate::config::get_config()
-                    .map(|c| c.shortcuts.recording_mode)
-                    .unwrap_or_default(),
-                &shortcut.id,
-            );
-
-            {
-                let mut registry = get_registry().write();
-                if let Some(key_state) = registry.key_states.get_mut(&shortcut.modifier) {
-                    key_state.is_pressed = false;
-                    key_state.press_time = None;
-
-                    if hold_to_record {
-                        // The user asked for hold-to-record, so the release
-                        // ends the recording however brief the hold was. The
-                        // tap-vs-hold heuristic below is what this path does
-                        // when no mode has been chosen; it is not a second
-                        // opinion on one that has.
-                        key_state.hands_free_mode = false;
-                        key_state.last_trigger = Some(Instant::now());
-                    } else if press_duration < BRIEF_PRESS_THRESHOLD_MS as u128 {
-                        // Brief press: enter hands-free mode (don't stop yet)
-                        key_state.hands_free_mode = true;
-                        tracing::debug!(
-                            "Brief press detected ({}ms), entering hands-free mode",
-                            press_duration
-                        );
-                    } else {
-                        // Long press: stop recording
-                        key_state.hands_free_mode = false;
-                        key_state.last_trigger = Some(Instant::now());
-                    }
-                }
-            }
-
-            if hold_to_record || press_duration >= BRIEF_PRESS_THRESHOLD_MS as u128 {
-                emit_shortcut_event(app, &shortcut.id, "released");
-            }
-        }
-    }
-}
-
-/// Emit a shortcut event to the frontend
-fn emit_shortcut_event(app: &AppHandle, id: &str, state: &str) {
-    tracing::info!("Modifier shortcut {}: {}", state, id);
-
-    if state == "pressed" {
-        if id.contains("toggle_recording") {
-            crate::recording_indicator::maybe_play_start_indicator(app);
-        }
-
-        if let Err(e) = app.emit("shortcut-triggered", id.to_string()) {
-            tracing::error!("Failed to emit shortcut-triggered: {}", e);
-        }
-        return;
-    }
-
-    // A release only reaches the frontend in hold-to-record mode, on the same
-    // stop-only channel the global-shortcut path uses (#111). Before this it
-    // reached nothing at all: the long-press branch above computed "stop
-    // recording" and then emitted an event this function dropped on the floor,
-    // so a held modifier key started a recording that only a second press
-    // could end.
-    if crate::shortcuts::manager::release_acts(
-        crate::config::get_config()
-            .map(|c| c.shortcuts.recording_mode)
-            .unwrap_or_default(),
-        id,
-    ) && let Err(e) = app.emit("shortcut-released", id.to_string())
+    let mut edges = Vec::new();
     {
-        tracing::error!("Failed to emit shortcut-released: {}", e);
+        let mut registry = get_registry().write();
+        let shortcuts: Vec<(String, ModifierKey)> = registry
+            .shortcuts
+            .values()
+            .map(|s| (s.id.clone(), s.modifier))
+            .collect();
+        for (id, modifier) in shortcuts {
+            let is_pressed = keys.contains(&modifier.to_keycode());
+            let state = registry.key_states.entry(modifier).or_default();
+            if is_pressed != state.is_pressed {
+                state.is_pressed = is_pressed;
+                edges.push((id, is_pressed));
+            }
+        }
+    }
+    for (id, pressed) in edges {
+        tracing::info!(
+            "Modifier shortcut {}: {}",
+            if pressed { "pressed" } else { "released" },
+            id
+        );
+        let edge = if pressed {
+            crate::shortcuts::manager::Edge::Press
+        } else {
+            crate::shortcuts::manager::Edge::Release
+        };
+        crate::shortcuts::manager::dispatch_shortcut_action(app, &id, edge);
     }
 }
 
@@ -892,9 +770,6 @@ fn clear_all_key_states() {
     let mut registry = get_registry().write();
     for state in registry.key_states.values_mut() {
         state.is_pressed = false;
-        state.press_time = None;
-        state.last_trigger = None;
-        state.hands_free_mode = false;
     }
 }
 
@@ -911,17 +786,14 @@ fn preseed_monitoring_state(keys: &HashSet<Keycode>) {
     let mut registry = get_registry().write();
     for shortcut in &shortcuts {
         let keycode = shortcut.modifier.to_keycode();
-        if keys.contains(&keycode) {
-            if let Some(key_state) = registry.key_states.get_mut(&shortcut.modifier) {
-                key_state.is_pressed = true;
-                key_state.press_time = Some(Instant::now());
-                // Set a recent trigger time to also enforce cooldown
-                key_state.last_trigger = Some(Instant::now());
-                tracing::debug!(
-                    "Pre-seeded monitoring state for {:?} (key held during capture→monitoring transition)",
-                    shortcut.modifier
-                );
-            }
+        if keys.contains(&keycode)
+            && let Some(key_state) = registry.key_states.get_mut(&shortcut.modifier)
+        {
+            key_state.is_pressed = true;
+            tracing::debug!(
+                "Pre-seeded monitoring state for {:?} (key held during capture→monitoring transition)",
+                shortcut.modifier
+            );
         }
     }
 }
@@ -1014,12 +886,12 @@ fn format_keys(keys: &HashSet<Keycode>) -> (String, Vec<String>, bool) {
 
         // Add non-modifier keys
         for key in keys {
-            if !is_modifier(key) {
-                if let Some(name) = keycode_to_accelerator(key) {
-                    parts.push(name);
-                    key_names.push(keycode_to_display(key));
-                    has_main_key = true;
-                }
+            if !is_modifier(key)
+                && let Some(name) = keycode_to_accelerator(key)
+            {
+                parts.push(name);
+                key_names.push(keycode_to_display(key));
+                has_main_key = true;
             }
         }
     }

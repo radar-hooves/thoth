@@ -543,8 +543,7 @@ fn position_pill_generic<R: Runtime>(indicator: &tauri::WebviewWindow<R>) -> Res
 /// the tone even though recording began. The stop tone never had this gate,
 /// which is why it was always reliable.
 ///
-/// Extracted from the identical guard blocks in shortcuts/manager.rs,
-/// keyboard_service.rs, and tray.rs so the logic lives in one place.
+/// Called by the record key's queue (`pipeline::hotkey_toggle`) as it acts.
 pub(crate) fn maybe_play_start_indicator<R: Runtime>(app: &AppHandle<R>) {
     if !crate::audio::is_recording() {
         if let Err(e) = show_indicator_instant(app) {

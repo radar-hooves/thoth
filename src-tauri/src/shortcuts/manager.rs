@@ -4,13 +4,12 @@
 //! for controlling recording and other application features.
 
 use crate::config::RecordingMode;
-use crate::recording_indicator;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::time::Instant;
-use tauri::{AppHandle, Emitter, Runtime};
+use tauri::{AppHandle, Runtime};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 /// Information about a registered shortcut
@@ -62,9 +61,8 @@ fn get_manager() -> &'static RwLock<ShortcutManagerState> {
     MANAGER.get_or_init(|| RwLock::new(ShortcutManagerState::new()))
 }
 
-/// Run the action bound to a shortcut id (toggle recording, copy last
-/// transcription, toggle enhancement, or emit `shortcut-triggered` for the
-/// frontend to handle).
+/// Run the action bound to a shortcut id: start or stop recording, copy the
+/// last transcription, or toggle enhancement.
 ///
 /// This is the single source of truth for what a shortcut *does*, independent
 /// of how the press was detected. The Tauri global-shortcut plugin (macOS and
@@ -179,14 +177,6 @@ pub(crate) fn dispatch_shortcut_action<R: Runtime>(
 
     tracing::info!("Shortcut {:?}: {}", edge, shortcut_id);
 
-    // For recording shortcuts, show indicator and play the start cue IMMEDIATELY
-    // in Rust before emitting to the frontend. This eliminates JS round-trip delay.
-    // Press only. On a hold-to-record release the recording is ENDING, and
-    // `pipeline_stop_and_process` plays the stop cue and hides the indicator.
-    if edge == Edge::Press && is_recording_shortcut(shortcut_id) {
-        recording_indicator::maybe_play_start_indicator(app);
-    }
-
     // Handle copy-last-transcription directly in Rust (no frontend round-trip).
     if shortcut_id == shortcut_ids::COPY_LAST_TRANSCRIPTION {
         match crate::clipboard::copy_last_transcription() {
@@ -203,20 +193,14 @@ pub(crate) fn dispatch_shortcut_action<R: Runtime>(
         return;
     }
 
-    // A hold-to-record release goes out on its own channel, not as another
-    // `shortcut-triggered` (#111). The frontend's toggle handler applies a
-    // 300 ms cooldown against key bounce, which would swallow the key-up of
-    // any hold shorter than that and leave the recording running with the key
-    // already let go — and a toggle would also START a recording if the press
-    // had failed. The release is a stop, and says so.
-    let channel = match edge {
-        Edge::Press => "shortcut-triggered",
-        Edge::Release => "shortcut-released",
-    };
-    match app.emit(channel, shortcut_id.to_string()) {
-        Ok(_) => tracing::info!("Emitted {} event for: {}", channel, shortcut_id),
-        Err(e) => tracing::error!("Failed to emit {} event: {}", channel, e),
-    }
+    // Everything left is a recording shortcut: Rust starts and stops it, in
+    // order, with no round trip through the settings window. A hold-to-record
+    // release is a stop, never a toggle (#111): a toggle would START a
+    // recording if the press had failed.
+    crate::pipeline::hotkey_toggle(match edge {
+        Edge::Press => crate::pipeline::ToggleIntent::Toggle,
+        Edge::Release => crate::pipeline::ToggleIntent::StopOnly,
+    });
 }
 
 /// Get the default shortcuts for Thoth
@@ -251,7 +235,7 @@ pub fn get_defaults() -> Vec<ShortcutInfo> {
 
 /// Register a global shortcut with the given ID and accelerator
 ///
-/// The shortcut will emit a "shortcut-triggered" event to the frontend on key down.
+/// A recording shortcut starts or stops recording through `pipeline::hotkey_toggle`.
 pub fn register<R: Runtime>(
     app: &AppHandle<R>,
     id: String,

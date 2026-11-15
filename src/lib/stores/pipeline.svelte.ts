@@ -13,8 +13,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { toast } from 'svelte-sonner';
-import { configStore, type AutoSubmit } from './config.svelte';
-import { settingsStore } from './settings.svelte';
 import { soundStore } from './sound.svelte';
 
 /** Debug logging — only active in development builds */
@@ -22,46 +20,6 @@ const debug = import.meta.env.DEV ? (...args: unknown[]) => console.log('[Pipeli
 
 /** Pipeline execution states */
 export type PipelineState = 'idle' | 'recording' | 'converting' | 'transcribing' | 'filtering' | 'enhancing' | 'outputting' | 'completed' | 'failed';
-
-/** Pipeline configuration for execution */
-export interface PipelineConfig {
-  /** Whether to apply dictionary replacements */
-  applyDictionary: boolean;
-  /** Whether to apply output filtering (formatting, whitespace) */
-  applyFiltering: boolean;
-  /** Whether to remove hesitation sounds (um, uh, er, ah) */
-  removeFillers: boolean;
-  /** Whether to convert US spellings to Australian/British equivalents */
-  australianSpelling: boolean;
-  /** Whether to convert spoken number words to digits */
-  spokenNumbersToDigits: boolean;
-  /** Whether to collapse runs of whitespace and trim leading/trailing spaces */
-  normaliseWhitespace: boolean;
-  /** Whether to fix spacing around punctuation marks */
-  cleanupPunctuation: boolean;
-  /** Whether to capitalise the first word of each sentence */
-  sentenceCase: boolean;
-  /** Whether to convert spoken formatting commands ("new paragraph" / "new line") into line breaks */
-  voiceFormattingCommands: boolean;
-  /** Whether AI enhancement is enabled */
-  enhancementEnabled: boolean;
-  /** Ollama model for enhancement */
-  enhancementModel: string;
-  /** Enhancement prompt template */
-  enhancementPrompt: string;
-  /** Which built-in or custom prompt this is, for telemetry only — never the template text */
-  enhancementPromptId?: string;
-  /** Whether to auto-copy to clipboard */
-  autoCopy: boolean;
-  /** Whether to auto-paste at cursor */
-  autoPaste: boolean;
-  /** Insertion method: "typing" or "paste" */
-  insertionMethod: string;
-  /** Whether to append a single space after the inserted text */
-  appendTrailingSpace: boolean;
-  /** Key combination sent after a successful insertion */
-  autoSubmit: AutoSubmit;
-}
 
 /** Pipeline execution result */
 export interface PipelineResult {
@@ -96,54 +54,6 @@ interface PipelineProgress {
  */
 export const NO_SPEECH_SENTINEL = 'Transcription produced no text';
 
-/** Default enhancement prompt */
-const DEFAULT_ENHANCEMENT_PROMPT = `Fix grammar and punctuation in the following text.
-Keep the original meaning and tone. Output only the corrected text, nothing else.
-
-Text: {text}`;
-
-/** Resolve the configured prompt ID to its template text */
-async function resolveEnhancementPrompt(promptId: string): Promise<string> {
-  try {
-    const prompt = await invoke<{ template: string } | null>('get_prompt_by_id', {
-      promptId,
-    });
-    if (prompt?.template) {
-      return prompt.template;
-    }
-  } catch (e) {
-    console.warn('[Pipeline] Failed to resolve prompt by ID, using default:', e);
-  }
-  return DEFAULT_ENHANCEMENT_PROMPT;
-}
-
-/** Create the default pipeline configuration based on app settings */
-async function getDefaultConfig(): Promise<PipelineConfig> {
-  const config = configStore.config;
-  const enhancementPrompt = config.enhancement.enabled ? await resolveEnhancementPrompt(config.enhancement.promptId) : DEFAULT_ENHANCEMENT_PROMPT;
-
-  return {
-    applyDictionary: true,
-    applyFiltering: true,
-    removeFillers: config.transcription.removeFillers,
-    australianSpelling: config.transcription.australianSpelling,
-    spokenNumbersToDigits: config.transcription.spokenNumbersToDigits,
-    normaliseWhitespace: config.transcription.normaliseWhitespace,
-    cleanupPunctuation: config.transcription.cleanupPunctuation,
-    sentenceCase: config.transcription.sentenceCase,
-    voiceFormattingCommands: config.transcription.voiceFormattingCommands,
-    enhancementEnabled: config.enhancement.enabled,
-    enhancementModel: config.enhancement.model,
-    enhancementPrompt,
-    enhancementPromptId: config.enhancement.enabled ? config.enhancement.promptId : undefined,
-    autoCopy: config.transcription.autoCopy,
-    autoPaste: config.transcription.autoPaste && settingsStore.autoPaste,
-    insertionMethod: 'paste',
-    appendTrailingSpace: config.transcription.appendTrailingSpace,
-    autoSubmit: config.transcription.autoSubmit,
-  };
-}
-
 /** Create the pipeline store */
 function createPipelineStore() {
   // Reactive state
@@ -160,17 +70,6 @@ function createPipelineStore() {
   let unlisteners: UnlistenFn[] = [];
   let isInitialised = false;
 
-  // Toggle cooldown: after a state change (start/stop), ignore further toggles
-  // for this duration. Prevents accidental double-toggles from immediately reversing the action.
-  // Key bounce is handled by the Rust shortcut debounce (50ms); this is a higher-level guard.
-  /**
-   * What a toggle call intends. Mirrors the Rust `ToggleIntent`; serialised
-   * snake_case over IPC.
-   */
-  type ToggleIntent = 'toggle' | 'stop_only';
-
-  const TOGGLE_COOLDOWN_MS = 300;
-  let lastToggleTime = 0;
   let isToggling = false;
 
   /**
@@ -193,9 +92,16 @@ function createPipelineStore() {
     const recordingStateUnlisten = await listen<PipelineState>('recording-state', (event) => {
       const incoming = event.payload;
       debug(' recording-state event received:', incoming);
+      const started = incoming === 'recording' && state !== 'recording';
       state = incoming;
       isRunning = state !== 'idle' && state !== 'completed' && state !== 'failed';
-      if (state !== 'recording') {
+      // Every start, whatever triggered it (the record key, the tray, MCP, the
+      // Recorder button), arrives here, so the duration clock starts here too.
+      if (started) {
+        recordingStartTime = Date.now();
+        recordingDuration = 0;
+        startDurationTimer();
+      } else if (state !== 'recording') {
         recordingStartTime = null;
       }
       debug(' State mirrored to:', state, 'isRunning:', isRunning);
@@ -308,34 +214,8 @@ function createPipelineStore() {
     });
     unlisteners.push(deviceFallbackUnlisten);
 
-    // Listen for shortcut events to trigger recording.
-    // The start-vs-stop decision is made by the Rust pipeline_toggle_recording
-    // command (which reads is_recording() — the single authority). The frontend
-    // does NOT re-decide here; it only updates display state from the outcome.
-    debug(' Setting up shortcut-triggered listener...');
-    const shortcutUnlisten = await listen<string>('shortcut-triggered', async (event) => {
-      const shortcutId = event.payload;
-      const timestamp = new Date().toISOString();
-      debug(`${timestamp} Shortcut event received:`, shortcutId, 'current state:', state, 'isRunning:', isRunning);
-
-      if (shortcutId === 'toggle_recording' || shortcutId === 'toggle_recording_alt') {
-        debug(`${timestamp} Calling pipeline_toggle_recording (Rust authority)...`);
-        await toggleRecording();
-        debug(`${timestamp} toggle completed, new state:`, state);
-      }
-    });
-    debug(' shortcut-triggered listener registered');
-    unlisteners.push(shortcutUnlisten);
-
-    // Hold-to-record's key-up (#111). Rust emits this ONLY in that mode and
-    // only for a recording shortcut, so there is no mode check here — and it
-    // asks to stop rather than to toggle, so a release can never start a
-    // recording the press failed to.
-    const releaseUnlisten = await listen<string>('shortcut-released', async (event) => {
-      debug('Shortcut released:', event.payload, '— stopping');
-      await toggleRecording(undefined, 'stop_only');
-    });
-    unlisteners.push(releaseUnlisten);
+    // The record key never comes through here: Rust starts and stops it
+    // (pipeline::hotkey_toggle) and this store mirrors the state events.
 
     // Seed the mirror from the backend's current state so a reload/HMR shows
     // the true state rather than defaulting to idle.
@@ -363,54 +243,29 @@ function createPipelineStore() {
   }
 
   /**
-   * Toggle recording — thin caller of the Rust authority command.
+   * Toggle recording from a button in a window (the record key goes through
+   * Rust's `pipeline::hotkey_toggle` instead).
    *
    * Start-vs-stop is decided by `pipeline_toggle_recording` in Rust, which
    * reads `is_recording()` — the single source of truth.  The frontend does NOT
    * branch on `state` here; it updates display from the returned outcome.
-   *
-   * Sound is also owned by Rust:
-   * - BING is played by the shortcut handler the instant the key is pressed.
-   * - BONG is played by pipeline_toggle_recording before capture disarms.
    */
-  async function toggleRecording(config?: Partial<PipelineConfig>, intent: ToggleIntent = 'toggle'): Promise<{ success: boolean; result?: PipelineResult; error?: string }> {
-    // Cooldown: ignore toggles that arrive too soon after the last state change.
-    // Prevents key bounce from immediately reversing a start or stop.
-    //
-    // A hold-to-record key-up is exempt (#111). It is a deliberate second
-    // event, not bounce, and a hold shorter than the cooldown is completely
-    // ordinary — applying it there would swallow the stop and leave the
-    // recording running with the key already released. Rust still debounces
-    // each edge at 50ms, so bounce protection is not lost.
-    const now = Date.now();
-    const elapsed = now - lastToggleTime;
-    if (intent !== 'stop_only' && elapsed < TOGGLE_COOLDOWN_MS) {
-      debug(`Toggle cooldown active (${elapsed}ms < ${TOGGLE_COOLDOWN_MS}ms), ignoring`);
-      return { success: false, error: 'Toggle cooldown active' };
-    }
-
+  async function toggleRecording(): Promise<{ success: boolean; result?: PipelineResult; error?: string }> {
     if (isToggling) {
       debug(' Toggle already in progress, ignoring');
       return { success: false, error: 'Toggle already in progress' };
     }
     isToggling = true;
-    lastToggleTime = now;
 
     try {
       debug(' toggleRecording: calling pipeline_toggle_recording (Rust authority)');
-
-      // Build config for the stop path (start path ignores it).
-      const defaultConfig = await getDefaultConfig();
-      const fullConfig: PipelineConfig = { ...defaultConfig, ...config };
 
       type ToggleOutcome = { action: 'started'; path: string } | { action: 'stopped' } | { action: 'ignored' };
 
       let outcome: ToggleOutcome;
       try {
-        outcome = await invoke<ToggleOutcome>('pipeline_toggle_recording', {
-          config: fullConfig,
-          intent,
-        });
+        // No config: Rust uses the saved settings, its one definition of them.
+        outcome = await invoke<ToggleOutcome>('pipeline_toggle_recording');
       } catch (e) {
         const errorMsg = `${e}`;
         debug(' pipeline_toggle_recording error:', errorMsg);
@@ -430,9 +285,6 @@ function createPipelineStore() {
         error = null;
         lastResult = null;
         audioPath = outcome.path;
-        recordingStartTime = Date.now();
-        recordingDuration = 0;
-        startDurationTimer();
       } else {
         debug(' Rust decided: STOP — recording-state event will update state');
         // BONG already played by Rust; indicator hidden by pipeline_stop_and_process.
@@ -499,20 +351,9 @@ function createPipelineStore() {
     isRunning = true;
 
     try {
-      const defaultConfig = await getDefaultConfig();
-      const config: PipelineConfig = {
-        ...defaultConfig,
-        autoCopy: false,
-        autoPaste: false,
-        // File transcription writes nowhere, so auto-submit would fire a stray
-        // Return into whatever happens to be focused (#112).
-        autoSubmit: 'off',
-      };
 
-      const result = await invoke<PipelineResult>('pipeline_transcribe_file', {
-        filePath,
-        config,
-      });
+      // Rust applies the saved settings and never pastes or submits a file's text.
+      const result = await invoke<PipelineResult>('pipeline_transcribe_file', { filePath });
 
       lastResult = result;
 
@@ -628,7 +469,6 @@ function createPipelineStore() {
     cancel,
     reset,
     forceReset,
-    getDefaultConfig,
   };
 }
 
