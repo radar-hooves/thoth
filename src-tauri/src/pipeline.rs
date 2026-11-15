@@ -1582,8 +1582,8 @@ pub async fn pipeline_toggle_recording(
 }
 
 /// The record key's one path, for every hotkey source (global shortcut, bare
-/// modifier, tray). Presses queue and are acted on in order, in Rust: none is
-/// debounced against the last or dropped, and none waits on the settings
+/// modifier, tray). Past the dispatcher's 50 ms key-bounce filter, presses queue
+/// and are acted on in order, in Rust: none is dropped, and none waits on the settings
 /// window, whose webview macOS throttles while it is hidden. A second tap that
 /// lands while the first is still opening the microphone stops the recording
 /// the moment it has started.

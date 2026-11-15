@@ -191,6 +191,7 @@
           copy_last: configStore.shortcuts.copyLast,
           toggle_enhancement: configStore.shortcuts.toggleEnhancement,
           recording_mode: configStore.shortcuts.recordingMode,
+          hands_free_silence_secs: configStore.shortcuts.handsFreeSilenceSecs,
         },
       });
     } catch (e) {
