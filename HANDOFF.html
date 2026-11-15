@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Thoth: open work</title>
-<meta name="description" content="2026.11.7 (two macOS permissions, instant record key, tray fix) to test, tag and release; macintosh-mandy to check; Settings restructure to design in Penpot.">
+<meta name="description" content="2026.11.7 to publish on his word; macintosh-mandy to check after; Settings restructure to design in Penpot (#207).">
 <style>
 /* A shift-handover sheet: what waits on him, by when, in columns that fill the width; then each thread folded to its state line. */
 :root {
@@ -138,8 +138,12 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <h2 id="for-the-operator">For the operator</h2>
 
 <section class="when today">
-<h3>Next time you close Thoth's window</h3>
+<h3>Today</h3>
 <div class="asks">
+<article class="ask" data-id="publish-2026-11-7" data-kind="decide" data-untracked="release go-ahead, put to him in chat 15/11">
+<h4>Publish Thoth 2026.11.7 once main's checks pass?</h4>
+<p>It carries the two-permission rework, the instant record key, the History and hands-free settings fix, the UX audit's small fixes and the menu bar fix. Publishing pushes it to every Mac through Thoth's updater, and it is the only way macintosh-mandy gets it. A yes lets the session wait on CI and tag the release when it goes green.</p>
+</article>
 <article class="ask" data-id="reopen-shows-window" data-kind="read" data-track="#206">
 <h4>Opening Thoth from Spotlight should bring its window back</h4>
 <p>The menu bar icon is back on huginn (local build installed 15/11 16:00, same certificate, no permission prompts). The other half of the fix is that opening Thoth while it runs now shows the window; no session can hide the window to test it. Close the window, open Thoth from Spotlight: the window should appear.</p>
@@ -152,10 +156,10 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <h2 id="threads">Threads</h2>
 
 <details class="thread" id="macos-permissions" open>
-<summary><h3>macOS permissions: two, asked once, kept across updates</h3><span class="state">On main (39ba494) and drive-tested on huginn 15/11; bumped to 2026.11.7 with the UX audit's open items, not yet tagged.</span></summary>
-<p class="next" data-id="release-2026-11-7" data-untracked="release step, no issue">Once main's <code>change</code> run on the head of main is green, <code>git tag -a v2026.11.7 -m "Release 2026.11.7"</code> on it and push the tag; the release workflow builds macOS on huginn's runner and publishes. This ships the tray fix too.</p>
+<summary><h3>macOS permissions and the record key</h3><span class="state">On main through 834bef4 and drive-tested on huginn 15/11: two permissions kept across reinstalls, the record key instant on rapid taps. Version 2026.11.7, not yet tagged.</span></summary>
+<p class="next" data-id="release-2026-11-7" data-untracked="release step, no issue">On his yes, once main's <code>change</code> run on the head of main is green, <code>git tag -a v2026.11.7 -m "Release 2026.11.7"</code> on it and push the tag; the release workflow builds macOS on huginn's runner and publishes. This ships the tray fix too.</p>
 <ul class="items">
-<li data-id="settings-restructure-penpot" data-untracked="his ruling 15/11: design first, no issue yet">The 08/10 UX audit's pane restructure (History, Insights, Transcribe out of Settings; Overview's switches into General; Integrations behind Advanced) is designed in Penpot and shown to him as before/after before any code. Not part of 2026.11.7.</li>
+<li data-id="settings-restructure-penpot" data-track="#207">The 08/10 UX audit's pane restructure (History, Insights, Transcribe out of Settings; Overview's switches into General; Integrations behind Advanced) is designed in Penpot and shown to him as before/after before any code. Not part of 2026.11.7.</li>
 <li data-id="mandy-permissions-check" data-untracked="waits on the release and on her Mac being awake">macintosh-mandy: update to 2026.11.7, then read <code>get_system</code>'s <code>permissions</code> over SSH (her Thoth's MCP) or the <code>permissions</code> event in Loki, and dictate once. On 15/11 her sshd reset every connection from huginn, direct and through atlas; huginn holds no ARP entry for 10.0.1.20, so she was most likely asleep or off the network.</li>
 <li data-id="nix-check-keep" data-untracked="decision recorded here for master's handoff item">Master asked Thoth's session to keep or delete <code>nix-check.yaml</code>: keep. It refreshes the <code>pnpmDeps</code> hash on pull requests, which the change pipeline does not.</li>
 <li data-id="pre-27-capture" data-untracked="no pre-27 Mac in the fleet to test on">On macOS before 27, recording a shortcut with an ordinary letter asks for Input Monitoring just in time (<code>ensure_listen_access</code>). Unexercised: every household Mac read so far runs 27.</li>
