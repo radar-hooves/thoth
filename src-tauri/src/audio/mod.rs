@@ -237,6 +237,14 @@ pub fn stop_recording() -> Result<String, Error> {
 
         let path = if use_warm {
             let p = recorder.disarm().map_err(|e| e.to_string())?;
+            if recorder.stream_failed() {
+                crate::app_handle::emit(
+                    "audio-device-fallback",
+                    "Your microphone stopped during the recording; Thoth kept what it heard until \
+                     then. The next recording opens the microphone again, or the system default if \
+                     it is gone.",
+                );
+            }
 
             if recording_is_bluetooth {
                 // Never hold a Bluetooth input stream warm — that pins the

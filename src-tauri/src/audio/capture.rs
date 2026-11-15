@@ -79,6 +79,10 @@ pub struct AudioRecorder {
     source_channels: Option<usize>,
     /// Whether the callback should forward samples to the writer.
     armed: Arc<AtomicBool>,
+    /// Set by the stream's error callback (the device went away, or the backend
+    /// failed): the open stream is dead, so the next start reopens the device
+    /// instead of arming a stream that delivers nothing (#183).
+    stream_failed: Arc<AtomicBool>,
 }
 
 impl Default for AudioRecorder {
@@ -100,6 +104,7 @@ impl AudioRecorder {
             source_rate: None,
             source_channels: None,
             armed: Arc::new(AtomicBool::new(false)),
+            stream_failed: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -124,9 +129,14 @@ impl AudioRecorder {
         self.armed.load(Ordering::Relaxed)
     }
 
-    /// Whether the cpal stream is open (warm).
+    /// Whether the cpal stream is open (warm) and has not failed since.
     pub fn is_warm(&self) -> bool {
-        self.stream.is_some()
+        self.stream.is_some() && !self.stream_failed()
+    }
+
+    /// Whether the open stream has reported an error since it was opened.
+    pub fn stream_failed(&self) -> bool {
+        self.stream_failed.load(Ordering::SeqCst)
     }
 
     /// Open the cpal input stream and start it playing ("warm").
@@ -137,9 +147,16 @@ impl AudioRecorder {
     #[allow(deprecated)] // cpal 0.17 deprecates name() but description() is not yet stable
     pub fn warm_up(&mut self, device: &cpal::Device) -> Result<()> {
         if self.stream.is_some() {
-            tracing::debug!("AudioRecorder::warm_up: stream already open, no-op");
-            return Ok(());
+            if !self.stream_failed() {
+                tracing::debug!("AudioRecorder::warm_up: stream already open, no-op");
+                return Ok(());
+            }
+            tracing::info!("AudioRecorder::warm_up: the open stream failed; reopening the device");
+            self.stream = None;
+            self.sender = None;
+            self.receiver = None;
         }
+        self.stream_failed = Arc::new(AtomicBool::new(false));
 
         let device_name = super::device::get_device_display_name(device);
         tracing::info!("AudioRecorder::warm_up: opening device '{}'", device_name);
@@ -168,6 +185,7 @@ impl AudioRecorder {
 
         let callback_metering = self.metering_buffer.clone();
         let callback_armed = self.armed.clone();
+        let callback_failed = self.stream_failed.clone();
 
         let stream = device.build_input_stream(
             supported_config.into(),
@@ -188,7 +206,8 @@ impl AudioRecorder {
                     let _ = callback_sender.send(RecordingMsg::Samples(data.to_vec()));
                 }
             },
-            |err| {
+            move |err| {
+                callback_failed.store(true, Ordering::SeqCst);
                 tracing::error!("Audio stream error: {}", err);
                 telemetry::report_error_with_cause("audio_capture_failed", &err);
                 tracing::error!(target: TELEMETRY_TARGET, error = %err, "audio_capture_failed");
@@ -691,6 +710,46 @@ mod tests {
             n
         );
         fs::remove_file(path).ok();
+    }
+
+    /// Rapid toggles on a warm stream (#183): each arm and disarm stays on the
+    /// open stream, never reopening the device, and a stream that reports a
+    /// failure is reopened by the next warm-up rather than armed again.
+    #[test]
+    #[serial_test::serial(writer_thread)]
+    fn rapid_toggles_stay_warm_and_a_failed_stream_reopens() {
+        let dir = tempdir().unwrap();
+        let mut recorder = AudioRecorder::new();
+        let Some(device) = cpal::default_host().default_input_device() else {
+            println!("No usable audio input device, skipping test");
+            return;
+        };
+        if recorder.warm_up(&device).is_err() {
+            println!("No usable audio input device, skipping test");
+            return;
+        }
+        for i in 0..8 {
+            let started = std::time::Instant::now();
+            recorder
+                .arm(&dir.path().join(format!("take{i}.wav")))
+                .unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(40));
+            recorder.disarm().unwrap();
+            assert!(recorder.is_warm(), "take {i} left the stream cold");
+            assert!(
+                started.elapsed() < std::time::Duration::from_millis(500),
+                "take {i} took {:?}",
+                started.elapsed()
+            );
+        }
+
+        recorder.stream_failed.store(true, Ordering::SeqCst);
+        assert!(!recorder.is_warm(), "a failed stream is not warm");
+        recorder.warm_up(&device).unwrap();
+        assert!(recorder.is_warm() && !recorder.stream_failed());
+        recorder.arm(&dir.path().join("after.wav")).unwrap();
+        recorder.disarm().unwrap();
+        recorder.cool_down();
     }
 
     #[test]
