@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026.11.7] - 2026-11-15
+
 ### Changed
 
 - **Two macOS permissions, asked for once.** Thoth needs only the microphone and Accessibility (macOS 27: Device Control and Data Access). A first launch asks for both, one dialogue after the other; afterwards the Overview shows anything missing beside one **Grant** button. Input Monitoring is no longer requested: macOS 27 folds it into Accessibility, and right Shift never needed it.
