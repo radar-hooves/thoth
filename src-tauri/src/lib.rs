@@ -221,11 +221,7 @@ pub fn run() {
 
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            // Another instance tried to launch — focus the existing main window
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            tray::show_main_window(app);
         }))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
@@ -714,6 +710,12 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|_app, _event| {
             // `tauri_plugin_telemetry`'s own `on_event` hook takes and drops the
-            // `Guard` on `RunEvent::Exit`; nothing left for this app to do here.
+            // `Guard` on `RunEvent::Exit`. Opening Thoth while it runs (Finder,
+            // Spotlight, the Dock) reaches the running process as a reopen, not a
+            // second launch, so the single-instance hook never sees it.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                tray::show_main_window(_app);
+            }
         });
 }

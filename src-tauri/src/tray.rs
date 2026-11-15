@@ -132,6 +132,22 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// The shortcut to show beside a menu item, if a menu can show it. A bare
+/// modifier (right Shift, the macOS default record key) has no menu key
+/// equivalent: muda refuses it and the whole tray fails to build.
+fn menu_accelerator(key: &str) -> Option<&str> {
+    (!key.is_empty() && !crate::keyboard_service::is_modifier_shortcut(key)).then_some(key)
+}
+
+/// Show and focus the main window: the tray's items, a second launch, and a
+/// reopen (Finder, Spotlight, or the Dock while Thoth runs) all land here.
+pub fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 /// Build the tray menu with current state
 // All args represent distinct, independent menu state; grouping would add
 // indirection without simplifying callers.
@@ -189,10 +205,8 @@ fn build_tray_menu(
         "Start Recording"
     };
     let mut toggle_builder = MenuItemBuilder::with_id(menu_ids::TOGGLE_RECORDING, recording_text);
-    if let Some(sc) = shortcuts {
-        if !sc.toggle_recording.is_empty() {
-            toggle_builder = toggle_builder.accelerator(&sc.toggle_recording);
-        }
+    if let Some(key) = shortcuts.and_then(|sc| menu_accelerator(&sc.toggle_recording)) {
+        toggle_builder = toggle_builder.accelerator(key);
     }
     let toggle_recording = toggle_builder.build(app)?;
 
@@ -201,12 +215,11 @@ fn build_tray_menu(
     // Copy last transcription
     let mut copy_builder = MenuItemBuilder::with_id(menu_ids::COPY_LAST, "Copy Last Transcription")
         .enabled(last_transcription.is_some());
-    if let Some(sc) = shortcuts {
-        if let Some(ref key) = sc.copy_last {
-            if !key.is_empty() {
-                copy_builder = copy_builder.accelerator(key);
-            }
-        }
+    if let Some(key) = shortcuts
+        .and_then(|sc| sc.copy_last.as_deref())
+        .and_then(menu_accelerator)
+    {
+        copy_builder = copy_builder.accelerator(key);
     }
     let copy_last = copy_builder.build(app)?;
 
@@ -743,38 +756,24 @@ fn run_shortcut(app: &AppHandle, shortcut_id: &str) {
 
 /// Open the history window
 fn handle_open_history(app: &AppHandle) {
-    // Show the main window and emit event to navigate to history
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.set_focus();
-        // Emit event to navigate to history view
-        if let Err(e) = app.emit("navigate", "history") {
-            tracing::warn!("Failed to emit navigate event: {}", e);
-        }
-    }
+    open_main_at(app, "history");
 }
 
 /// Open the transcribe pane
 fn handle_open_transcribe(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.set_focus();
-        if let Err(e) = app.emit("navigate", "transcribe") {
-            tracing::warn!("Failed to emit navigate event: {}", e);
-        }
-    }
+    open_main_at(app, "transcribe");
 }
 
 /// Open the settings window
 fn handle_open_settings(app: &AppHandle) {
-    // Show the main window and emit event to navigate to settings
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.set_focus();
-        // Emit event to navigate to settings view
-        if let Err(e) = app.emit("navigate", "overview") {
-            tracing::warn!("Failed to emit navigate event: {}", e);
-        }
+    open_main_at(app, "overview");
+}
+
+/// Show the main window on one of its views.
+fn open_main_at(app: &AppHandle, view: &str) {
+    show_main_window(app);
+    if let Err(e) = app.emit("navigate", view) {
+        tracing::warn!("Failed to emit navigate event: {}", e);
     }
 }
 
@@ -978,6 +977,18 @@ pub struct TrayStateInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_bare_modifier_record_key_is_left_off_the_menu() {
+        assert_eq!(menu_accelerator("ShiftRight"), None);
+        assert_eq!(menu_accelerator("MetaLeft"), None);
+        assert_eq!(menu_accelerator(""), None);
+        assert_eq!(menu_accelerator("F13"), Some("F13"));
+        assert_eq!(
+            menu_accelerator("CommandOrControl+Shift+Y"),
+            Some("CommandOrControl+Shift+Y")
+        );
+    }
 
     #[test]
     fn test_embedded_tray_icons_are_valid_png() {
