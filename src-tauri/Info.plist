@@ -4,7 +4,5 @@
 <dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Thoth needs microphone access to record and transcribe your voice.</string>
-	<key>NSAppleEventsUsageDescription</key>
-	<string>Thoth needs accessibility permissions to paste transcribed text into other applications.</string>
 </dict>
 </plist>

@@ -7,7 +7,9 @@ use crate::config::TypingTool;
 use crate::error::Error;
 use std::thread;
 use std::time::Duration;
-use tracing::{debug, info, warn};
+#[cfg(target_os = "linux")]
+use tracing::warn;
+use tracing::{debug, info};
 
 /// Method used to insert text into the target application.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -300,43 +302,38 @@ impl TextInsertService {
     fn insert_by_typing_macos(&self, text: &str) -> Result<(), String> {
         use enigo::{Enigo, Keyboard, Settings};
 
-        let mut enigo = match Enigo::new(&Settings::default()) {
-            Ok(e) => e,
-            Err(e) => {
-                warn!(
-                    "Failed to initialise enigo: {}, falling back to AppleScript",
-                    e
-                );
-                return self.type_text_applescript(text);
-            }
+        // Thoth's own Grant flow is the one place that asks for Accessibility;
+        // enigo would otherwise raise the system prompt on every attempt.
+        let settings = Settings {
+            open_prompt_to_get_permissions: false,
+            ..Settings::default()
         };
+        let mut enigo =
+            Enigo::new(&settings).map_err(|e| format!("Failed to initialise enigo: {e}"))?;
 
         // For text with special characters, multi-byte Unicode, or keystroke delay,
         // type character by character
         if self.config.keystroke_delay_ms > 0 || !text.is_ascii() {
             self.type_chars_with_enigo(&mut enigo, text)?;
-        } else if let Err(e) = enigo.text(text) {
-            warn!(
-                "Enigo text insertion failed: {}, falling back to AppleScript",
-                e
-            );
-            return self.type_text_applescript(text);
+        } else {
+            enigo
+                .text(text)
+                .map_err(|e| format!("Enigo text insertion failed: {e}"))?;
         }
 
         info!("Successfully inserted {} characters via enigo", text.len());
         Ok(())
     }
 
-    /// Type text character by character via enigo, falling back to AppleScript per character.
+    /// Type text character by character via enigo.
     #[cfg(target_os = "macos")]
     fn type_chars_with_enigo(&self, enigo: &mut enigo::Enigo, text: &str) -> Result<(), String> {
         use enigo::Keyboard;
 
         for c in text.chars() {
-            if let Err(e) = enigo.text(&c.to_string()) {
-                warn!("Failed to type character '{}': {}", c, e);
-                self.type_char_applescript(c)?;
-            }
+            enigo
+                .text(&c.to_string())
+                .map_err(|e| format!("Failed to type character '{c}': {e}"))?;
             if self.config.keystroke_delay_ms > 0 {
                 thread::sleep(Duration::from_millis(self.config.keystroke_delay_ms));
             }
@@ -355,41 +352,6 @@ impl TextInsertService {
         // so it also resolves the off-main-thread enigo crash that drove the
         // osascript workaround — with only the Accessibility permission.
         post_paste_cgevent()
-    }
-
-    #[cfg(target_os = "macos")]
-    fn type_text_applescript(&self, text: &str) -> Result<(), String> {
-        use std::process::Command;
-
-        // Escape special characters for AppleScript
-        let escaped = escape_for_applescript(text);
-
-        let script = format!(
-            "tell application \"System Events\" to keystroke \"{}\"",
-            escaped
-        );
-
-        let output = Command::new("osascript")
-            .arg("-e")
-            .arg(&script)
-            .output()
-            .map_err(|e| format!("Failed to execute AppleScript: {}", e))?;
-
-        if output.status.success() {
-            info!(
-                "Successfully inserted {} characters via AppleScript",
-                text.len()
-            );
-            Ok(())
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("AppleScript keystroke failed: {}", stderr))
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    fn type_char_applescript(&self, c: char) -> Result<(), String> {
-        self.type_text_applescript(&c.to_string())
     }
 
     // ========================================================================
@@ -915,18 +877,8 @@ pub fn emit_linux_typing_advisory(app: &tauri::AppHandle) {
 /// `CGEventPost` returns void and reports nothing when the process is not
 /// Accessibility-trusted — the event is simply dropped. Without the guard below
 /// this function returned `Ok(())` on a paste that never happened, so callers
-/// logged success while the user saw nothing inserted. That is not theoretical:
-/// the post-update `tccutil reset` in `platform::reset_permissions_after_update`
-/// revokes Accessibility on every version change, so a freshly updated Thoth
-/// lands here untrusted until the user re-grants. Check trust up front and fail
-/// loudly instead.
-///
-/// The check is `AXIsProcessTrusted()` (cheap, local) rather than
-/// `verify_accessibility_functional()`, which round-trips to the focused app's
-/// accessibility server and can block for the AX timeout if that app is
-/// unresponsive — not acceptable on the paste path, which runs while the
-/// pipeline holds `OUTPUT_LOCK`. The rarer stale-TCC case (trusted but
-/// non-functional) is still reported by the startup diagnostic in `lib.rs`.
+/// logged success while the user saw nothing inserted. Check trust up front
+/// (`AXIsProcessTrusted()`, cheap and local) and fail loudly instead.
 #[cfg(target_os = "macos")]
 fn post_paste_cgevent() -> Result<(), String> {
     use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation};
@@ -938,9 +890,7 @@ fn post_paste_cgevent() -> Result<(), String> {
     if !crate::platform::check_accessibility() {
         return Err(
             "Accessibility permission not granted — the paste keystroke would be silently \
-             discarded. Grant Thoth Accessibility access in System Settings › Privacy & \
-             Security › Accessibility (remove and re-add Thoth if it is already listed, as \
-             an update invalidates the existing grant)."
+             discarded. Press Grant on Thoth's Overview page."
                 .to_string(),
         );
     }
@@ -960,27 +910,6 @@ fn post_paste_cgevent() -> Result<(), String> {
 
     debug!("Pasted via CGEvent Cmd+V");
     Ok(())
-}
-
-/// Escape special characters for AppleScript string.
-///
-/// Escapes backslashes, double quotes, and all control characters
-/// to prevent AppleScript injection.
-#[cfg(target_os = "macos")]
-fn escape_for_applescript(text: &str) -> String {
-    let mut escaped = String::with_capacity(text.len());
-    for c in text.chars() {
-        match c {
-            '\\' => escaped.push_str("\\\\"),
-            '"' => escaped.push_str("\\\""),
-            '\n' => escaped.push_str("\\n"),
-            '\r' => escaped.push_str("\\r"),
-            '\t' => escaped.push_str("\\t"),
-            c if c.is_control() => {} // Strip other control characters
-            c => escaped.push(c),
-        }
-    }
-    escaped
 }
 
 // ============================================================================
@@ -1133,8 +1062,7 @@ fn post_submit_cgevent(combo: crate::config::AutoSubmit) -> Result<(), String> {
     if !crate::platform::check_accessibility() {
         return Err(
             "Accessibility permission not granted — the auto-submit keystroke would be \
-             silently discarded. Grant Thoth Accessibility access in System Settings › \
-             Privacy & Security › Accessibility."
+             silently discarded. Press Grant on Thoth's Overview page."
                 .to_string(),
         );
     }
@@ -1543,13 +1471,5 @@ mod tests {
             let back: AutoSubmit = serde_json::from_str(&json).unwrap();
             assert_eq!(back, value);
         }
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_escape_for_applescript() {
-        assert_eq!(escape_for_applescript("hello"), "hello");
-        assert_eq!(escape_for_applescript("say \"hi\""), "say \\\"hi\\\"");
-        assert_eq!(escape_for_applescript("path\\to"), "path\\\\to");
     }
 }

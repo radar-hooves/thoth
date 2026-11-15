@@ -491,10 +491,8 @@ export const thothMockCommands: CommandMap = {
   list_trash: () => [...MOCK_TRASH_ENTRIES],
 
   // -- Permissions pane --
-  check_accessibility: () => true,
-  check_input_monitoring: () => true,
-  verify_accessibility_functional: () => true,
-  check_microphone_permission: () => 'granted',
+  get_permissions: () => ({ microphone: true, accessibility: true }),
+  request_permissions: () => undefined,
 
   // -- Config path (settings pane) --
   get_config_path_cmd: () => '/Users/dev/.thoth/config.json',
@@ -579,8 +577,6 @@ export const thothMockCommands: CommandMap = {
   position_recorder_window: () => undefined,
   refresh_tray_menu: () => undefined,
   open_url: () => undefined,
-  open_privacy_pane: () => undefined,
-  relaunch_app: () => undefined,
   delete_all_data: () => undefined,
   delete_all_recordings: () => 0,
   export_to_csv: () => 0,
@@ -590,10 +586,6 @@ export const thothMockCommands: CommandMap = {
   enter_capture_mode: () => 'F13',
   exit_capture_mode: () => undefined,
   report_key_event: () => undefined,
-  try_start_keyboard_service: () => undefined,
-  request_input_monitoring: () => undefined,
-  reset_tcc_permissions: () => '',
-  remove_quarantine: () => undefined,
   start_audio_preview: () => undefined,
   stop_audio_preview: () => undefined,
 

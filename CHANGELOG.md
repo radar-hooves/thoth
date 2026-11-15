@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Two macOS permissions, asked for once.** Thoth needs only the microphone and Accessibility (macOS 27: Device Control and Data Access). A first launch asks for both, one dialogue after the other; afterwards the Overview shows anything missing beside one **Grant** button. Input Monitoring is no longer requested: macOS 27 folds it into Accessibility, and right Shift never needed it.
+- **Updates keep your permissions.** An update no longer clears Thoth's permissions or asks for an administrator password. The permission troubleshooting section is gone with it.
+- The record key starts working the moment Accessibility is switched on, without a restart.
+
+### Fixed
+
+- **The menu bar icon is back for right-Shift users.** A bare-modifier record key stopped the tray menu from building, and with the Dock icon off nothing could show the window. Opening Thoth while it runs now shows its window.
+
 ## [2026.11.6] - 2026-11-14
 
 ### Added

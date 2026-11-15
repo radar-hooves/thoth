@@ -1,6 +1,6 @@
 # Deploy Thoth
 
-Build, install, and launch Thoth locally with clean macOS permissions.
+Build, install, and launch Thoth locally. Permissions carry over: the build is signed with the same certificate as releases.
 
 ## Steps
 
@@ -30,25 +30,17 @@ Build, install, and launch Thoth locally with clean macOS permissions.
    xattr -cr /Applications/Thoth.app
    ```
 
-5. **Reset TCC permissions** - Clear stale Microphone, Accessibility, and Input Monitoring grants so macOS re-prompts cleanly:
-
-   ```bash
-   tccutil reset Microphone com.poodle64.thoth
-   tccutil reset Accessibility com.poodle64.thoth
-   tccutil reset ListenEvent com.poodle64.thoth
-   ```
-
-6. **Launch** - Open the freshly installed app:
+5. **Launch** - Open the freshly installed app:
 
    ```bash
    open /Applications/Thoth.app
    ```
 
-7. **Report** - Confirm the app launched and remind user to grant Microphone and Accessibility permissions when prompted.
+6. **Report** - Confirm the app launched and that `get_permissions` still reads both granted.
 
 ## Notes
 
 - Bundle identifier: `com.poodle64.thoth`
-- macOS caches TCC permissions per code signature; rebuilding changes the signature, so stale grants cause silent failures
+- macOS keys TCC grants to the designated requirement (bundle id plus certificate leaf); a build signed with the stable certificate keeps every grant, an ad-hoc one does not
 - The quarantine attribute (`com.apple.quarantine`) triggers Gatekeeper warnings on unsigned builds
 - If the build fails, check `pnpm install` was run and Rust toolchain is current

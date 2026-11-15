@@ -4,46 +4,12 @@ use objc2::runtime::AnyClass;
 use objc2::{class, msg_send};
 use objc2_foundation::NSString;
 use std::process::Command;
+use std::time::Duration;
+use tauri::Emitter;
 
-/// Check if Input Monitoring permission is granted
-///
-/// Uses the IOKit framework's IOHIDCheckAccess function.
-/// This is required for device_query to capture keyboard events.
-pub fn check_input_monitoring_permission() -> bool {
-    unsafe {
-        #[link(name = "IOKit", kind = "framework")]
-        unsafe extern "C" {
-            fn IOHIDCheckAccess(request: u32) -> u32;
-        }
-
-        // Mirrors Apple's private kIOHIDRequestTypeListenEvent / kIOHIDAccessTypeGranted
-        // (undocumented IOHIDCheckAccess API; values confirmed via IOKit private headers).
-        const IOHID_REQUEST_TYPE_LISTEN_EVENT: u32 = 1;
-        const IOHID_ACCESS_TYPE_GRANTED: u32 = 0;
-
-        let result = IOHIDCheckAccess(IOHID_REQUEST_TYPE_LISTEN_EVENT);
-        tracing::debug!("IOHIDCheckAccess(LISTEN_EVENT) returned: {}", result);
-        result == IOHID_ACCESS_TYPE_GRANTED
-    }
-}
-
-/// Open System Preferences to the Input Monitoring privacy pane
-pub fn open_input_monitoring_settings() {
-    let result = Command::new("open")
-        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
-        .spawn();
-
-    match result {
-        Ok(_) => tracing::info!("Opened Input Monitoring settings"),
-        Err(e) => tracing::error!("Failed to open Input Monitoring settings: {}", e),
-    }
-}
-
-/// Check if accessibility permission is granted
-///
-/// Uses the ApplicationServices framework to check if the process is trusted
-/// for accessibility. This is required for global shortcuts and keystroke
-/// simulation via enigo.
+/// Whether Thoth may post synthetic keystrokes (paste, auto-submit) and read
+/// the focused element's caret. macOS 27 shows this switch as "Device Control
+/// and Data Access"; earlier releases call it Accessibility.
 pub fn check_accessibility_permission() -> bool {
     unsafe {
         #[link(name = "ApplicationServices", kind = "framework")]
@@ -52,18 +18,6 @@ pub fn check_accessibility_permission() -> bool {
         }
 
         AXIsProcessTrusted()
-    }
-}
-
-/// Open System Preferences to the Accessibility privacy pane
-pub fn open_accessibility_settings() {
-    let result = Command::new("open")
-        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
-        .spawn();
-
-    match result {
-        Ok(_) => tracing::info!("Opened accessibility settings"),
-        Err(e) => tracing::error!("Failed to open accessibility settings: {}", e),
     }
 }
 
@@ -94,22 +48,9 @@ impl From<i64> for MicrophoneStatus {
     }
 }
 
-impl std::fmt::Display for MicrophoneStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MicrophoneStatus::NotDetermined => write!(f, "not_determined"),
-            MicrophoneStatus::Restricted => write!(f, "restricted"),
-            MicrophoneStatus::Denied => write!(f, "denied"),
-            MicrophoneStatus::Authorized => write!(f, "granted"),
-            MicrophoneStatus::Unknown => write!(f, "unknown"),
-        }
-    }
-}
-
 /// Check microphone permission status
 ///
 /// Uses AVFoundation's AVCaptureDevice to check authorization status for audio.
-/// Returns the detailed status.
 pub fn check_microphone_permission() -> MicrophoneStatus {
     unsafe {
         #[link(name = "AVFoundation", kind = "framework")]
@@ -122,18 +63,41 @@ pub fn check_microphone_permission() -> MicrophoneStatus {
         // alive for the duration of the message send but is not retained by the
         // callee, so binding it above is sufficient.
         let status: i64 = msg_send![cls, authorizationStatusForMediaType: &*media_type];
-
-        tracing::debug!("Microphone authorization status: {}", status);
         MicrophoneStatus::from(status)
     }
 }
 
-/// Request microphone permission
-///
-/// Triggers the system permission dialog for microphone access.
-/// The completion handler emits a `permission-changed` event so the
-/// frontend can re-check immediately when the user responds.
-pub fn request_microphone_permission(app: tauri::AppHandle) {
+/// Ask for whatever Thoth is missing, one system dialog at a time: the
+/// microphone first, then Accessibility once the microphone dialog is answered.
+/// Nothing is asked twice and nothing needs an administrator password.
+pub fn request_permissions(app: tauri::AppHandle) {
+    let bundle_id = app.config().identifier.clone();
+    request_microphone(&bundle_id.clone(), move || {
+        request_accessibility(&bundle_id)
+    });
+}
+
+fn request_microphone(bundle_id: &str, then: impl FnOnce() + Send + 'static) {
+    match check_microphone_permission() {
+        MicrophoneStatus::Authorized => then(),
+        // Parental controls or MDM: nothing Thoth can ask for.
+        MicrophoneStatus::Restricted => {
+            open_privacy_pane("Privacy_Microphone");
+            then();
+        }
+        // A refusal is remembered and the dialog never returns, so forget it
+        // and ask again: the user pressed Grant to be asked.
+        MicrophoneStatus::Denied => {
+            forget_decision("Microphone", bundle_id);
+            ask_microphone(then);
+        }
+        MicrophoneStatus::NotDetermined | MicrophoneStatus::Unknown => ask_microphone(then),
+    }
+}
+
+/// Show the system microphone dialog; `then` runs once it is answered.
+fn ask_microphone(then: impl FnOnce() + Send + 'static) {
+    let then = parking_lot::Mutex::new(Some(then));
     unsafe {
         #[link(name = "AVFoundation", kind = "framework")]
         unsafe extern "C" {}
@@ -142,14 +106,17 @@ pub fn request_microphone_permission(app: tauri::AppHandle) {
         let media_type = NSString::from_str("soun");
 
         // requestAccessForMediaType:completionHandler: requires a proper ObjC
-        // block, not a null pointer. The completion handler fires on a background
-        // thread when the user responds to the system dialog.
+        // block; it fires on a background thread when the user responds.
         let handler: block2::RcBlock<dyn Fn(objc2::runtime::Bool)> =
             block2::RcBlock::new(move |granted: objc2::runtime::Bool| {
-                tracing::info!("Microphone permission response: {}", granted.as_bool());
-                // Notify frontend so it can re-check all permissions instantly
-                use tauri::Emitter;
-                let _ = app.emit("permission-changed", "microphone");
+                if !granted.as_bool() {
+                    // No dialog was shown (macOS still remembers a refusal) or
+                    // the user declined it: the switch is the only way left.
+                    open_privacy_pane("Privacy_Microphone");
+                }
+                if let Some(then) = then.lock().take() {
+                    then();
+                }
             });
 
         let _: () = msg_send![
@@ -157,166 +124,110 @@ pub fn request_microphone_permission(app: tauri::AppHandle) {
             requestAccessForMediaType: &*media_type,
             completionHandler: &*handler
         ];
-
-        tracing::info!("Requested microphone permission");
     }
 }
 
-/// Open System Preferences to the Microphone privacy pane
-pub fn open_microphone_settings() {
-    let result = Command::new("open")
-        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
-        .spawn();
-
-    match result {
-        Ok(_) => tracing::info!("Opened microphone settings"),
-        Err(e) => tracing::error!("Failed to open microphone settings: {}", e),
+/// Ask for Accessibility. macOS shows its own dialog, whose "Open System
+/// Settings" lands on the switch, and lists Thoth there switched off.
+fn request_accessibility(bundle_id: &str) {
+    if check_accessibility_permission() {
+        return;
     }
-}
-
-/// Verify that accessibility permission is functionally working, not just granted.
-///
-/// `AXIsProcessTrusted()` can return `true` even when the TCC database entry is
-/// stale (e.g., after reinstall with a different code signature). This function
-/// goes further by actually attempting an Accessibility API call to confirm the
-/// permission is live.
-///
-/// Returns `true` if accessibility is genuinely working.
-/// Returns `false` if not granted, or if granted but stale/non-functional.
-pub fn verify_accessibility_functional() -> bool {
-    if !check_accessibility_permission() {
-        return false;
-    }
-
-    // Actually attempt an AX API call to verify the permission is live
-    use core_foundation::base::TCFType;
-    use core_foundation::string::CFString;
-
+    // A row recorded against another signature (an ad-hoc build, an older
+    // certificate) shows switched on yet is not honoured, and macOS will not
+    // prompt over it. Clearing Thoth's own row makes the switch the user flips
+    // the live one.
+    forget_decision("Accessibility", bundle_id);
     unsafe {
+        use core_foundation::base::TCFType;
+        use core_foundation::boolean::CFBoolean;
+        use core_foundation::dictionary::CFDictionary;
+        use core_foundation::string::{CFString, CFStringRef};
+
         #[link(name = "ApplicationServices", kind = "framework")]
         unsafe extern "C" {
-            fn AXUIElementCreateSystemWide() -> *mut std::ffi::c_void;
-            fn AXUIElementCopyAttributeValue(
-                element: *mut std::ffi::c_void,
-                attribute: *const std::ffi::c_void,
-                value: *mut *mut std::ffi::c_void,
-            ) -> i32;
-            fn CFRelease(cf: *const std::ffi::c_void);
+            static kAXTrustedCheckOptionPrompt: CFStringRef;
+            fn AXIsProcessTrustedWithOptions(options: *const std::ffi::c_void) -> bool;
         }
 
-        // kAXErrorCannotComplete — returned when permission is stale
-        const AX_ERROR_CANNOT_COMPLETE: i32 = -25204;
-
-        let system_wide = AXUIElementCreateSystemWide();
-        if system_wide.is_null() {
-            return false;
-        }
-
-        let attr = CFString::new("AXFocusedApplication");
-        let mut value: *mut std::ffi::c_void = std::ptr::null_mut();
-        let result = AXUIElementCopyAttributeValue(
-            system_wide,
-            attr.as_concrete_TypeRef() as *const _,
-            &mut value,
-        );
-
-        if !value.is_null() {
-            CFRelease(value as *const _);
-        }
-        CFRelease(system_wide as *const _);
-
-        // Result 0 = success (got a focused app).
-        // kAXErrorNoValue (-25212) = no focused app, but the API is responding — permission works.
-        // kAXErrorCannotComplete (-25204) = permission is stale/broken.
-        if result == AX_ERROR_CANNOT_COMPLETE {
-            tracing::warn!(
-                "Accessibility permission appears granted but AX API returned \
-                 kAXErrorCannotComplete — TCC entry is likely stale"
-            );
-            return false;
-        }
-
-        true
+        let options = CFDictionary::from_CFType_pairs(&[(
+            CFString::wrap_under_get_rule(kAXTrustedCheckOptionPrompt),
+            CFBoolean::true_value(),
+        )]);
+        AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef() as *const _);
     }
 }
 
-/// Reset the permissions that an update is likely to have invalidated, then
-/// point the user at System Settings to re-grant them.
-///
-/// macOS keys TCC grants to the app's code-signing identity; a self-built or
-/// non-notarised Thoth gets a fresh identity on each build, so after an update
-/// the old grants silently stop working ("appears granted but is stale"). Rather
-/// than have the user diagnose that, we reset the three permissions Thoth uses
-/// the moment we detect a version change, so they re-grant once from a clean
-/// slate. Best-effort: a failure (e.g. the user cancels the admin prompt) is
-/// logged and returned, not fatal.
-pub fn reset_permissions_after_update() -> Result<String, String> {
-    let services = vec![
-        "Accessibility".to_string(),
-        "ListenEvent".to_string(),
-        "Microphone".to_string(),
-    ];
-    reset_tcc_permissions(&services)
+/// Watch both permissions for the life of the app: macOS sends no event when
+/// either switch changes, in either direction. A change updates telemetry, the
+/// settings window and the tray; a new Accessibility grant also starts the
+/// record key. One cheap check a second, beside a keyboard poll fifty times as
+/// frequent.
+pub fn watch_permissions(app: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        let mut last = super::permissions();
+        loop {
+            std::thread::sleep(Duration::from_secs(1));
+            let now = objc2::rc::autoreleasepool(|_| super::permissions());
+            if now == last {
+                continue;
+            }
+            if now.accessibility && !last.accessibility {
+                crate::keyboard_service::start_monitoring(app.clone());
+            }
+            super::log_permissions();
+            let _ = app.emit("permission-changed", ());
+            crate::tray::rebuild_tray_menu(&app);
+            last = now;
+        }
+    });
 }
 
-/// Reset TCC (Transparency, Consent, and Control) permission entries for Thoth.
-///
-/// Uses `tccutil reset` via `osascript` to prompt for administrator privileges,
-/// which is required for system-level permissions (Accessibility, Input Monitoring).
-///
-/// Valid service names: "Accessibility", "ListenEvent", "Microphone", "All"
-pub fn reset_tcc_permissions(services: &[String]) -> Result<String, String> {
-    use std::process::Command;
-
-    if services.is_empty() {
-        return Err("No services specified to reset.".to_string());
-    }
-
-    const BUNDLE_ID: &str = "com.poodle64.thoth";
-
-    // Allowlist of valid TCC service names to prevent command injection
-    const VALID_SERVICES: &[&str] = &[
-        "Accessibility",
-        "ListenEvent",
-        "Microphone",
-        "Camera",
-        "ScreenCapture",
-        "All",
-    ];
-
-    for service in services {
-        if !VALID_SERVICES.contains(&service.as_str()) {
-            return Err(format!("Invalid TCC service name: {}", service));
-        }
-    }
-
-    let commands: Vec<String> = services
-        .iter()
-        .map(|s| format!("tccutil reset {} {}", s, BUNDLE_ID))
-        .collect();
-    let script = commands.join(" && ");
-
-    tracing::info!("Resetting TCC permissions: {}", script);
-
-    let output = Command::new("osascript")
-        .arg("-e")
-        .arg(format!(
-            "do shell script \"{}\" with administrator privileges",
-            script
-        ))
+/// Forget Thoth's recorded decision for one privacy service, so the next
+/// request asks afresh. `tccutil reset` on the app's own row needs no
+/// administrator rights.
+fn forget_decision(service: &str, bundle_id: &str) {
+    match Command::new("/usr/bin/tccutil")
+        .args(["reset", service, bundle_id])
         .output()
-        .map_err(|e| format!("Failed to execute tccutil: {}", e))?;
+    {
+        Ok(out) if out.status.success() => tracing::info!(service, "Cleared Thoth's privacy row"),
+        Ok(out) => tracing::warn!(
+            service,
+            stderr = %String::from_utf8_lossy(&out.stderr).trim(),
+            "tccutil reset refused"
+        ),
+        Err(e) => tracing::warn!(service, error = %e, "tccutil could not run"),
+    }
+}
 
-    if output.status.success() {
-        tracing::info!(
-            "TCC permissions reset successfully for services: {:?}",
-            services
-        );
-        Ok("Permissions reset successfully. Please re-grant them in System Settings.".to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        tracing::error!("TCC reset failed: {}", stderr);
-        Err(format!("Failed to reset permissions: {}", stderr))
+/// Open a Privacy & Security pane by its anchor. macOS 27 still resolves the
+/// legacy Security pane identifier.
+fn open_privacy_pane(anchor: &str) {
+    let url = format!("x-apple.systempreferences:com.apple.preference.security?{anchor}");
+    if let Err(e) = Command::new("/usr/bin/open").arg(&url).status() {
+        tracing::error!(error = %e, "Failed to open System Settings");
+    }
+}
+
+/// Make sure the shortcut editor can read ordinary keys, not just modifiers.
+///
+/// From macOS 27 the Accessibility switch ("Device Control and Data Access")
+/// carries keyboard listening too, so this is a no-op once Thoth is trusted.
+/// Earlier releases keep Input Monitoring separate: ask for it here, at the one
+/// moment it matters, rather than on the Overview page. Capture proceeds either
+/// way; bare modifiers such as right Shift never need it.
+pub fn ensure_listen_access() {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    unsafe extern "C" {
+        fn CGPreflightListenEventAccess() -> bool;
+        fn CGRequestListenEventAccess() -> bool;
+    }
+    // SAFETY: both take no arguments and only query or prompt TCC.
+    unsafe {
+        if !CGPreflightListenEventAccess() {
+            CGRequestListenEventAccess();
+        }
     }
 }
 

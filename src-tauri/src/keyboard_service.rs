@@ -341,44 +341,6 @@ pub fn restart_monitoring(app: AppHandle) {
 // IPC Commands
 // ---------------------------------------------------------------------------
 
-/// Check if Input Monitoring permission is available (macOS)
-#[tauri::command]
-pub fn check_input_monitoring() -> bool {
-    tauri_plugin_telemetry::traced_sync_value("check_input_monitoring", || {
-        #[cfg(target_os = "macos")]
-        {
-            crate::platform::check_input_monitoring_permission()
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            true
-        }
-    })
-}
-
-/// Request Input Monitoring permission (opens System Preferences on macOS)
-#[tauri::command]
-pub fn request_input_monitoring() {
-    tauri_plugin_telemetry::traced_sync_value("request_input_monitoring", || {
-        #[cfg(target_os = "macos")]
-        {
-            crate::platform::open_input_monitoring_settings();
-        }
-    })
-}
-
-/// Try to start the keyboard monitoring service.
-///
-/// Called by the frontend after Input Monitoring permission is newly granted,
-/// so the keyboard service can start without requiring an app restart.
-/// Idempotent: no-ops if already running or no modifier shortcuts are registered.
-#[tauri::command]
-pub fn try_start_keyboard_service(app: AppHandle) {
-    tauri_plugin_telemetry::traced_sync_value("try_start_keyboard_service", || {
-        start_monitoring(app);
-    })
-}
-
 /// Enter capture mode for shortcut recording in the settings UI.
 ///
 /// The single polling thread switches from monitoring to capturing.
@@ -390,15 +352,15 @@ pub async fn enter_capture_mode(app: AppHandle) -> Result<String, Error> {
     tauri_plugin_telemetry::traced("enter_capture_mode", async move {
         #[cfg(target_os = "macos")]
         {
-            if !crate::platform::check_input_monitoring_permission() {
-                tracing::warn!("Input Monitoring permission not granted");
+            if !crate::platform::check_accessibility() {
                 return Err(
-                    "Input Monitoring permission required. Please grant permission in \
-                 System Preferences > Privacy & Security > Input Monitoring"
+                    "Accessibility permission required: press Grant on the Overview \
+                            page, then switch Thoth on in System Settings."
                         .to_string()
                         .into(),
                 );
             }
+            crate::platform::macos::ensure_listen_access();
         }
 
         #[cfg(target_os = "linux")]
@@ -510,14 +472,14 @@ pub async fn report_key_event(
 
 /// Ensure the polling thread is running. Spawns one if not.
 ///
-/// On macOS, `DeviceState::new()` calls IOKit which aborts the process if
-/// the Input Monitoring TCC permission is missing. We check permission both
-/// here (fast-path to avoid a pointless spawn) and inside the thread (to
-/// close the TOCTOU window if permission is revoked between check and use).
+/// On macOS, device_query's `DeviceState` requires Accessibility and, when it is
+/// missing, raises the system prompt itself. Checking first keeps Thoth's own
+/// Grant flow the only thing that asks; the permission watcher starts this
+/// service once the grant lands.
 fn ensure_thread_running(app: AppHandle) {
     #[cfg(target_os = "macos")]
-    if !crate::platform::check_input_monitoring_permission() {
-        tracing::warn!("Skipping keyboard service: Input Monitoring permission not granted");
+    if !crate::platform::check_accessibility() {
+        tracing::warn!("Keyboard service waiting for Accessibility");
         return;
     }
 
@@ -538,29 +500,16 @@ fn ensure_thread_running(app: AppHandle) {
         }
         let _guard = ThreadGuard;
 
-        // Re-check inside the thread to close the TOCTOU window: permission
-        // could have been revoked between the outer check and this point.
-        #[cfg(target_os = "macos")]
-        if !crate::platform::check_input_monitoring_permission() {
-            tracing::warn!(
-                "Input Monitoring permission revoked before thread could start — exiting cleanly"
-            );
-            return;
-        }
-
         polling_loop(app);
     });
 }
 
 /// The single polling loop. Reads keys, then checks mode, then processes.
 fn polling_loop(app: AppHandle) {
-    // Use checked_new() instead of new() to avoid the assert-panic inside
-    // DeviceState::new() if Input Monitoring permission was revoked between
-    // the pre-spawn check and this point (TOCTOU residual).
+    // checked_new() rather than new(), which asserts Accessibility and would
+    // panic if it was revoked since the check in ensure_thread_running.
     let Some(device_state) = DeviceState::checked_new() else {
-        tracing::error!(
-            "DeviceState::checked_new() returned None — Input Monitoring permission not available"
-        );
+        tracing::error!("Keyboard service: Accessibility was revoked before it started");
         return;
     };
     let mut previous_keys: HashSet<Keycode> = HashSet::new();

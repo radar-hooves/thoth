@@ -535,7 +535,9 @@ impl ThothMcp {
         json_result(&state)
     }
 
-    #[tool(description = "Get GPU/system info and transcription readiness.")]
+    #[tool(
+        description = "Get GPU/system info, transcription readiness, and the OS permissions Thoth holds (microphone, accessibility)."
+    )]
     async fn get_system(&self) -> Result<CallToolResult, McpError> {
         let info = crate::platform::get_gpu_info().map_err(|e| core_err(e.to_string()))?;
         json_result(&info)

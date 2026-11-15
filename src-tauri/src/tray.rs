@@ -167,8 +167,9 @@ fn build_tray_menu(
         "🔴 Recording..."
     } else {
         // Check for issues that would prevent recording
-        let mic_ok = platform::check_microphone_permission() == "granted";
-        let accessibility_ok = platform::check_accessibility();
+        let permissions = platform::permissions();
+        let mic_ok = permissions.microphone;
+        let accessibility_ok = permissions.accessibility;
         let model_downloaded = transcription::download::check_model_downloaded(None);
 
         if !mic_ok {
@@ -626,7 +627,7 @@ pub fn set_last_transcription(app: &AppHandle, text: Option<String>) {
 }
 
 /// Rebuild the tray menu with current state
-fn rebuild_tray_menu(app: &AppHandle) {
+pub(crate) fn rebuild_tray_menu(app: &AppHandle) {
     // Enumerate devices and read config outside of any lock to avoid
     // blocking tray state updates during CoreAudio enumeration
     let devices = audio::device::list_input_devices();

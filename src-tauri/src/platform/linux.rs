@@ -521,24 +521,6 @@ pub fn get_caret_position() -> Option<CaretPosition> {
     None
 }
 
-/// Check if Input Monitoring permission is granted
-///
-/// On Linux, there's no equivalent to macOS Input Monitoring permission.
-/// Keyboard access depends on X11/Wayland security model.
-/// On X11, applications can grab keys by default.
-/// On Wayland, global shortcuts require XDG Desktop Portal support.
-pub fn check_input_monitoring_permission() -> bool {
-    // No equivalent permission on Linux
-    true
-}
-
-/// Open Input Monitoring settings
-///
-/// Not applicable on Linux. Logs a debug message.
-pub fn open_input_monitoring_settings() {
-    tracing::debug!("No input monitoring settings on Linux");
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -554,11 +536,6 @@ mod tests {
         // Just ensure it doesn't panic
         let status = check_microphone_permission();
         tracing::info!("Microphone status: {:?}", status);
-    }
-
-    #[test]
-    fn test_check_input_monitoring() {
-        assert!(check_input_monitoring_permission());
     }
 
     #[test]

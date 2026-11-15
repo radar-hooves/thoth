@@ -44,7 +44,7 @@ const MAX_ENHANCE_INPUT_CHARS: usize = 6_000;
 /// Exact `Error::Other` text for the two `enhance_text` outcomes the pipeline
 /// surfaces to the user as a toast: the household's existing sentinel-string
 /// pattern for a Tauri-command error the frontend branches on, same as the
-/// no-speech and Input Monitoring sentinels (`error.rs`'s module docs). A
+/// no-speech and Accessibility sentinels (`error.rs`'s module docs). A
 /// network or model error is not one of these: it logs and falls back
 /// without a toast, which is a separate, deliberately quieter path.
 pub const ENHANCEMENT_SKIPPED_TOO_LONG: &str = "Dictation too long to enhance";

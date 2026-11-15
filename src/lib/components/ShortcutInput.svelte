@@ -170,16 +170,9 @@
       console.error('Failed to start capture:', e);
       const errorMsg = String(e);
 
-      if (errorMsg.includes('Input Monitoring')) {
-        validationError = 'Input Monitoring permission required';
-        try {
-          await invoke('request_input_monitoring');
-        } catch {
-          // Ignore if opening settings fails
-        }
-      } else {
-        validationError = `Failed to start capture: ${e}`;
-      }
+      validationError = errorMsg.includes('Accessibility permission required')
+        ? 'Accessibility permission required: press Grant on the Overview page'
+        : `Failed to start capture: ${e}`;
       await stopCapture();
     }
   }

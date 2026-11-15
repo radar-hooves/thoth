@@ -512,17 +512,14 @@ pub struct GeneralConfig {
     pub window_decorations: bool,
     /// App version recorded on the most recent run.
     ///
-    /// Used to detect that an update has been applied: when this differs from
-    /// the running binary's version, macOS TCC permission grants are likely
-    /// stale (TCC keys grants to the code-signing identity, which changes on
-    /// each build), so the app resets them once and prompts a re-grant.
-    /// `None` on a genuinely fresh install — no reset is triggered then.
+    /// `None` only on a genuinely fresh install, which is how the first launch
+    /// skips the release-notes modal.
     #[serde(default)]
     pub last_run_version: Option<String>,
     /// The version whose release notes the user has already been shown.
     ///
     /// Deliberately NOT `last_run_version`: that one is overwritten on every
-    /// launch to drive the TCC reset above, so by the time a "what's new"
+    /// launch, so by the time a "what's new"
     /// check ran it would already equal the running version and the modal
     /// would never appear. `None` means never shown — on a fresh install the
     /// app records the running version without showing anything, so a first
@@ -1050,23 +1047,18 @@ pub fn set_enhancement_api_key(key: Option<String>) -> Result<(), Error> {
 }
 
 /// Record the running binary's version as `last_run_version`, persisting only
-/// when it changed.
+/// when it changed. A fresh install is told apart by this field being absent.
 ///
 /// Mutates the live config singleton in place and writes that — it does NOT go
 /// through the `get_config()` / `set_config()` round-trip, so it cannot be
-/// caught by that path's preservation guards. Returns `Some(previous_version)` when a *different*
-/// version was recorded before (a genuine update, so the caller can run
-/// one-time post-update steps), or `None` when the version was unchanged (no
-/// write) or this is a fresh install (no prior version recorded).
-pub fn record_last_run_version(version: &str) -> Result<Option<String>, Error> {
+/// caught by that path's preservation guards.
+pub fn record_last_run_version(version: &str) -> Result<(), Error> {
     let mut cached = get_config_instance().write();
-    let prev = cached.general.last_run_version.clone();
-    if prev.as_deref() == Some(version) {
-        return Ok(None); // unchanged — no write
+    if cached.general.last_run_version.as_deref() == Some(version) {
+        return Ok(()); // unchanged — no write
     }
     cached.general.last_run_version = Some(version.to_string());
-    save_to_disk(&cached)?;
-    Ok(prev) // Some(old) on a real update; None on a fresh install
+    save_to_disk(&cached).map_err(Into::into)
 }
 
 /// Record that a version's release notes have been shown (#113).

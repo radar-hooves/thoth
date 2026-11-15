@@ -12,9 +12,9 @@ You press the record key (right Shift on macOS, F13 elsewhere by default) and no
 
 ### macOS
 
-Diagnosis: macOS will not let any app see global key presses until you grant it two privacy permissions. Without them Thoth never receives the key.
+Diagnosis: Thoth starts listening for the key once it has the **Accessibility** permission (macOS 27: **Device Control and Data Access**).
 
-Fix: open System Settings > Privacy & Security and switch Thoth on under both **Accessibility** and **Input Monitoring**. Thoth's overview screen has buttons that jump straight to these panes, and it tells you when a permission is missing. After granting, quit and reopen Thoth so it picks up the new permission.
+Fix: on Thoth's Overview page, click **Grant** next to Permissions and switch Thoth on when System Settings opens. The key works as soon as the switch is on; no restart is needed.
 
 ### Linux (X11 vs Wayland)
 
@@ -39,7 +39,7 @@ Thoth transcribes fine (you can see it in history), but the text never lands whe
 
 Diagnosis: typing into another app, or sending a paste keystroke, counts as controlling your computer, which needs the **Accessibility** permission.
 
-Fix: grant Thoth **Accessibility** under System Settings > Privacy & Security (the same switch as for the hotkey), then restart Thoth.
+Fix: click **Grant** on Thoth's Overview page and switch Thoth on (the same switch as for the hotkey).
 
 ### Linux
 
@@ -87,13 +87,11 @@ Fix:
   - **Linux, launched from the applications menu**: the output goes to your user journal — `journalctl --user -b -t thoth`, or `journalctl --user -b` and search for it.
   - **macOS**: `open -a Thoth` will not show you anything, because it hands the app to launchd and nothing is attached to your terminal. Either run the binary inside the bundle from Terminal — `/Applications/Thoth.app/Contents/MacOS/thoth` — or open **Console.app**, pick this Mac under Devices, and filter the process to `thoth`.
 
-## Permissions broke after an update (macOS)
+## A permission is on in System Settings but Thoth says it is missing (macOS)
 
-Thoth worked, you updated it, and now the hotkey or text insertion has stopped, even though the permissions still look granted in System Settings.
+Diagnosis: macOS ties each grant to the signature of the app that received it. Releases are signed with one certificate, so updates keep their grants; a build signed differently (an old release, or one built on another machine) leaves a switch that looks on but is not honoured.
 
-Diagnosis: macOS ties each privacy grant to the app's exact code signature. A rebuilt or re-signed update can present a slightly different signature, so the old grant no longer matches and the permission is effectively dead even though the switch still looks on. (This is a macOS design, not a Thoth fault.)
-
-Fix: use Thoth's built-in **reset permissions** action on the overview screen (the "Reset & Re-grant" button). It clears the stale Accessibility and Input Monitoring entries and prompts you to grant them afresh; you will be asked for your administrator password because clearing system permissions requires it. After resetting, re-grant when prompted and restart Thoth.
+Fix: click **Grant** on the Overview page. Thoth clears its own stale entry and macOS asks again; switch Thoth on. No administrator password is involved.
 
 ## Where is my data, and how do I uninstall
 

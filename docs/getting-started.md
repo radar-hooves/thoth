@@ -24,14 +24,12 @@ Thoth needs permission to hear your microphone, and to start recording from a ke
 
 ### macOS
 
-macOS gates microphone and global-shortcut access behind its privacy system, so you grant each one once. The Overview checklist drives this for you:
+Thoth needs two macOS permissions, and asks for both the first time it starts, one system dialogue after the other:
 
-1. **Allow microphone access.** Click **Allow** on checklist step 2. macOS shows its own microphone dialogue; click Allow there too. This is the standard macOS permission under **System Settings > Privacy & Security > Microphone**.
-2. **Allow global shortcut.** Click **Allow** on checklist step 3. This grants **Accessibility** access under **System Settings > Privacy & Security > Accessibility**, which is what lets the recording hotkey work from any app rather than only when Thoth is focused.
+1. **Microphone.** Click Allow in the microphone dialogue.
+2. **Accessibility.** In the second dialogue, click **Open System Settings** and switch Thoth on. macOS 27 names this switch **Device Control and Data Access**; earlier releases call it **Accessibility**. It is what lets your shortcut key work in any app and lets Thoth paste at your cursor.
 
-If a step does not turn green, open **System Settings > Privacy & Security**, find **Microphone** or **Accessibility**, and confirm Thoth's switch is on. After an app update or reinstall the Accessibility permission can look granted but stop working; if Thoth flags this, use the **Reset & Re-grant** button it offers and toggle the permission again in System Settings.
-
-There is also an optional **Input Monitoring** permission in the checklist's "Optional settings" section. You only need it if you want to change the recording shortcut to a custom key; the default shortcut works without it.
+If either was skipped or declined, the Overview page shows what is missing next to a **Grant** button, which asks again. Both permissions survive Thoth updates and macOS updates.
 
 ### Linux
 
@@ -48,13 +46,13 @@ If anything here does not behave as described, see [troubleshooting.md](troubles
 
 The record hotkey is the key you press to start and stop dictation. The default is **right Shift** on macOS and **F13** on Linux and Windows.
 
-Right Shift is on every keyboard and a bare tap of it clashes with nothing; on macOS it needs the **Input Monitoring** permission from step 2. F13 is the default elsewhere because a modifier-only key cannot be read on Wayland, and almost nothing else uses F13. If the default conflicts with something, change it:
+Right Shift is on every keyboard and a bare tap of it clashes with nothing. F13 is the default elsewhere because a modifier-only key cannot be read on Wayland, and almost nothing else uses F13. If the default conflicts with something, change it:
 
 1. Open **Settings** and choose the **Recording** tab.
 2. In the keyboard-shortcuts section, click the recording shortcut field and press the key (or key combination) you want.
 3. The change saves immediately; Thoth re-registers the new shortcut.
 
-Single function keys (F13 through F20) make the most reliable shortcuts because they work as a bare key press with no extra permission. On macOS, a lone modifier key such as right Shift is what the **Input Monitoring** permission from step 2 is for. On Wayland, remember the compositor may override your choice (see the Linux notes above).
+Single function keys (F13 through F20) make the most reliable shortcuts because they work as a bare key press. On macOS before 27, recording a shortcut that includes an ordinary letter asks once for **Input Monitoring**; macOS 27 folds that into the Accessibility switch. On Wayland, remember the compositor may override your choice (see the Linux notes above).
 
 ## Step 4: your first dictation
 

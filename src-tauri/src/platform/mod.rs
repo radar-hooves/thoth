@@ -94,6 +94,8 @@ pub struct SystemGpuInfo {
     pub vram_mb: Option<u64>,
     /// List of all detected GPUs
     pub detected_gpus: Vec<DetectedGpu>,
+    /// The OS permissions Thoth holds right now
+    pub permissions: Permissions,
 }
 
 /// Information about a detected GPU
@@ -128,6 +130,7 @@ pub fn get_gpu_info() -> Result<SystemGpuInfo, Error> {
                         vram_mb: g.vram_mb,
                     })
                     .collect(),
+                permissions: permissions(),
             })
         }
 
@@ -143,6 +146,7 @@ pub fn get_gpu_info() -> Result<SystemGpuInfo, Error> {
                     name: get_macos_gpu_name().unwrap_or_else(|| "Apple GPU".to_string()),
                     vram_mb: None,
                 }],
+                permissions: permissions(),
             })
         }
 
@@ -158,6 +162,7 @@ pub fn get_gpu_info() -> Result<SystemGpuInfo, Error> {
                 gpu_name: None,
                 vram_mb: None,
                 detected_gpus: vec![],
+                permissions: permissions(),
             })
         }
 
@@ -169,6 +174,7 @@ pub fn get_gpu_info() -> Result<SystemGpuInfo, Error> {
                 gpu_name: None,
                 vram_mb: None,
                 detected_gpus: vec![],
+                permissions: permissions(),
             })
         }
     })
@@ -250,173 +256,82 @@ pub fn is_screen_locked() -> bool {
     }
 }
 
-/// Check if accessibility permissions are available
-#[tauri::command]
+/// What Thoth needs from the operating system to record and paste.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Permissions {
+    /// Microphone capture is allowed (on Linux: a capture source exists).
+    pub microphone: bool,
+    /// Synthetic keystrokes and the caret position are allowed (macOS only;
+    /// always true elsewhere).
+    pub accessibility: bool,
+}
+
+/// The live permission state, read from the OS on every call.
+pub fn permissions() -> Permissions {
+    #[cfg(target_os = "macos")]
+    {
+        Permissions {
+            microphone: macos::check_microphone_permission() == macos::MicrophoneStatus::Authorized,
+            accessibility: macos::check_accessibility_permission(),
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Permissions {
+            microphone: linux::check_microphone_permission() == linux::MicrophoneStatus::Granted,
+            accessibility: linux::check_accessibility_permission(),
+        }
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        Permissions {
+            microphone: true,
+            accessibility: true,
+        }
+    }
+}
+
+/// Record the permission state in telemetry: at launch and on each grant, so a
+/// Mac that cannot record or paste shows why without anyone at its keyboard.
+pub fn log_permissions() {
+    let p = permissions();
+    tracing::info!(
+        target: crate::TELEMETRY_TARGET,
+        microphone = p.microphone,
+        accessibility = p.accessibility,
+        "permissions"
+    );
+}
+
+/// Whether Thoth may post keystrokes (paste, auto-submit) on this platform.
 pub fn check_accessibility() -> bool {
-    tauri_plugin_telemetry::traced_sync_value("check_accessibility", || {
-        {
-            #[cfg(target_os = "macos")]
-            {
-                macos::check_accessibility_permission()
-            }
-            #[cfg(target_os = "linux")]
-            {
-                linux::check_accessibility_permission()
-            }
-            #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-            {
-                true // Not needed on other platforms
-            }
-        }
-    })
+    permissions().accessibility
 }
 
-/// Request accessibility permission (opens settings if needed)
 #[tauri::command]
-pub fn request_accessibility() -> bool {
-    tauri_plugin_telemetry::traced_sync_value("request_accessibility", || {
-        {
-            #[cfg(target_os = "macos")]
-            {
-                if !macos::check_accessibility_permission() {
-                    macos::open_accessibility_settings();
-                    false
-                } else {
-                    true
-                }
-            }
-            #[cfg(target_os = "linux")]
-            {
-                // X11 allows key grabbing and Wayland uses the XDG portal, so there is
-                // no per-app accessibility grant to request; it is always available.
-                true
-            }
-            #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-            {
-                true
-            }
-        }
-    })
+pub fn get_permissions() -> Permissions {
+    tauri_plugin_telemetry::traced_sync_value("get_permissions", permissions)
 }
 
-/// Check if Input Monitoring permission is granted
-///
-/// This is required for capturing keyboard input at the system level.
-pub fn check_input_monitoring_permission() -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        macos::check_input_monitoring_permission()
-    }
-    #[cfg(target_os = "linux")]
-    {
-        linux::check_input_monitoring_permission()
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    {
-        true // Not needed on other platforms
-    }
-}
-
-/// Open Input Monitoring settings
-pub fn open_input_monitoring_settings() {
-    #[cfg(target_os = "macos")]
-    {
-        macos::open_input_monitoring_settings();
-    }
-    #[cfg(target_os = "linux")]
-    {
-        linux::open_input_monitoring_settings();
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    {
-        // No input-monitoring concept on other platforms.
-    }
-}
-
-/// Verify that accessibility permission is functionally working, not just granted.
-///
-/// `AXIsProcessTrusted()` can return `true` for stale TCC entries (e.g., after
-/// reinstall with a different code signature). This performs an actual AX API
-/// call to confirm the permission is live.
+/// Ask for every missing permission, one system dialog after another. Each
+/// grant arrives as a `permission-changed` event from the macOS watcher.
 #[tauri::command]
-pub fn verify_accessibility_functional() -> bool {
-    tauri_plugin_telemetry::traced_sync_value("verify_accessibility_functional", || {
-        {
-            #[cfg(target_os = "macos")]
-            {
-                macos::verify_accessibility_functional()
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                true // Not needed on other platforms
-            }
-        }
-    })
-}
-
-/// Reset the permissions an app update is likely to have invalidated.
-///
-/// macOS keys TCC grants to the code-signing identity, which changes on each
-/// build, so after an update the old grants silently go stale. Called once when
-/// a version change is detected at startup. No-op on non-macOS platforms.
-pub fn reset_permissions_after_update() -> Result<String, String> {
-    #[cfg(target_os = "macos")]
-    {
-        macos::reset_permissions_after_update()
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        Ok("No permission reset needed on this platform.".to_string())
-    }
-}
-
-/// Reset TCC permission entries for Thoth.
-///
-/// Prompts for administrator privileges via macOS dialog, then runs
-/// `tccutil reset` for each specified service.
-///
-/// Valid services: "Accessibility", "ListenEvent", "Microphone", "All"
-#[tauri::command]
-pub async fn reset_tcc_permissions(services: Vec<String>) -> Result<String, Error> {
-    tauri_plugin_telemetry::traced("reset_tcc_permissions", async move {
+pub fn request_permissions(app: tauri::AppHandle) {
+    tauri_plugin_telemetry::traced_sync_value("request_permissions", || {
         #[cfg(target_os = "macos")]
         {
-            macos::reset_tcc_permissions(&services).map_err(Into::into)
+            macos::request_permissions(app);
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "linux")]
         {
-            let _ = services;
-            Ok("Permission reset is only supported on macOS.".to_string())
+            let _ = app;
+            // PulseAudio/PipeWire grant capture access without a system dialogue.
+            linux::request_microphone_permission();
         }
-    })
-    .await
-}
-
-/// Check microphone permission status
-///
-/// Returns the permission status as a string:
-/// - "granted" - Permission has been granted
-/// - "denied" - Permission was explicitly denied
-/// - "not_determined" - User hasn't been asked yet
-/// - "restricted" - Access is restricted (e.g., parental controls)
-/// - "unknown" - Unable to determine status
-#[tauri::command]
-pub fn check_microphone_permission() -> String {
-    tauri_plugin_telemetry::traced_sync_value("check_microphone_permission", || {
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
         {
-            #[cfg(target_os = "macos")]
-            {
-                macos::check_microphone_permission().to_string()
-            }
-            #[cfg(target_os = "linux")]
-            {
-                // Probes PulseAudio/PipeWire for an available capture source.
-                linux::check_microphone_permission().to_string()
-            }
-            #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-            {
-                "granted".to_string() // Not needed on other platforms
-            }
+            let _ = app;
         }
     })
 }
@@ -460,49 +375,6 @@ pub fn get_caret_position() -> Option<CaretPosition> {
     {
         None // Not implemented on other platforms yet
     }
-}
-
-/// Request microphone permission
-///
-/// Triggers the system permission dialog. If permission was already denied,
-/// this will open System Preferences instead.
-#[tauri::command]
-pub fn request_microphone_permission(app: tauri::AppHandle) {
-    tauri_plugin_telemetry::traced_sync_value("request_microphone_permission", || {
-        #[cfg(target_os = "macos")]
-        {
-            let status = macos::check_microphone_permission();
-            match status {
-                macos::MicrophoneStatus::NotDetermined => {
-                    // First time — trigger the system dialog. The completion
-                    // handler emits permission-changed when the user responds.
-                    macos::request_microphone_permission(app);
-                }
-                macos::MicrophoneStatus::Denied | macos::MicrophoneStatus::Restricted => {
-                    // Already denied - open System Preferences
-                    macos::open_microphone_settings();
-                }
-                macos::MicrophoneStatus::Authorized => {
-                    // Already granted, nothing to do
-                    tracing::info!("Microphone permission already granted");
-                }
-                macos::MicrophoneStatus::Unknown => {
-                    // Try requesting anyway
-                    macos::request_microphone_permission(app);
-                }
-            }
-        }
-        #[cfg(target_os = "linux")]
-        {
-            let _ = app;
-            // PulseAudio/PipeWire grant capture access without a system dialogue.
-            linux::request_microphone_permission();
-        }
-        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-        {
-            let _ = app;
-        }
-    })
 }
 
 #[cfg(test)]

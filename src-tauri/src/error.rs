@@ -5,7 +5,7 @@
 //! `Error` to its `Display` string, so the frontend keeps receiving a plain
 //! string exactly as it did when commands returned `Result<T, String>`. That
 //! preserves the error-string matching the UI relies on (the no-speech sentinel
-//! `"Transcription produced no text"` and the `"Input Monitoring"` hint).
+//! `"Transcription produced no text"` and the `"Accessibility permission required"` hint).
 //!
 //! Variants:
 //! - [`Error::Database`] and [`Error::Anyhow`] fold the existing source errors

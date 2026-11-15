@@ -282,19 +282,15 @@ pub fn run() {
             // events without a handle of their own (e.g. audio device fallback).
             app_handle::set(app.handle().clone());
 
-            // Request microphone permission BEFORE any audio enumeration.
-            // cpal's device enumeration touches CoreAudio which triggers the
-            // system mic prompt implicitly — but with no completion handler,
-            // so we can't detect the result. By calling requestAccess first,
-            // we own the dialog and get the result via our completion handler
-            // which emits a permission-changed event to the frontend.
+            // First launch: ask for both permissions straight away, one system
+            // dialog after the other. This runs BEFORE any audio enumeration:
+            // cpal touching CoreAudio would raise the microphone prompt itself,
+            // with no completion handler to chain Accessibility onto.
             #[cfg(target_os = "macos")]
+            if platform::macos::check_microphone_permission()
+                == platform::macos::MicrophoneStatus::NotDetermined
             {
-                use platform::macos::MicrophoneStatus;
-                if platform::macos::check_microphone_permission() == MicrophoneStatus::NotDetermined
-                {
-                    platform::macos::request_microphone_permission(app.handle().clone());
-                }
+                platform::macos::request_permissions(app.handle().clone());
             }
 
             // Initialise database early so tray menu queries work immediately
@@ -372,16 +368,9 @@ pub fn run() {
 
             // Version bookkeeping, on EVERY platform.
             //
-            // Two things read this and only one of them is macOS-specific, so
-            // the recording cannot be: macOS resets stale TCC grants after an
-            // update, and every platform suppresses the release-notes modal on
-            // a first launch (#113). Keeping the write inside the macOS block
-            // left Linux with `last_run_version` permanently unset, so a fresh
-            // Linux install opened with notes for a release it had never run.
-            //
-            // Underscore-prefixed because only the macOS branch below consumes
-            // it; the work above happens on every platform regardless.
-            let _update_from = {
+            // Every platform suppresses the release-notes modal on a first
+            // launch (#113), which needs the previously run version.
+            {
                 let current = env!("CARGO_PKG_VERSION").to_string();
 
                 // A genuinely fresh install has no prior version recorded, and
@@ -401,46 +390,14 @@ pub fn run() {
                 // round-trip, which re-saves every setting through that path's
                 // preservation guards on a launch that changes nothing else.
                 // record_last_run_version writes only when the version changed.
-                match config::record_last_run_version(&current) {
-                    // Some(prev): a different version was recorded before, i.e.
-                    // a genuine update.
-                    Ok(prev) => prev.map(|prev| (prev, current)),
-                    Err(e) => {
-                        tracing::error!("Failed to record last-run version: {}", e);
-                        None
-                    }
+                if let Err(e) = config::record_last_run_version(&current) {
+                    tracing::error!("Failed to record last-run version: {}", e);
                 }
-            };
+            }
 
             // macOS-specific setup
             #[cfg(target_os = "macos")]
             {
-                // Reset stale macOS permissions after an applied update.
-                //
-                // macOS keys TCC grants to the code-signing identity, which
-                // changes on each build, so after an update the previously
-                // granted microphone / accessibility / input-monitoring
-                // permissions silently stop working; reset them once so the
-                // user re-grants from a clean slate. A genuinely fresh install
-                // does NOT trigger a reset — there is nothing stale yet, which
-                // is why this reads the UPDATE rather than merely the version.
-                if let Some((prev, current)) = &_update_from {
-                    tracing::info!(
-                        "Update detected ({} → {}); resetting macOS permissions",
-                        prev,
-                        current
-                    );
-                    // Spawn so the admin-prompt does not block window setup.
-                    tauri::async_runtime::spawn_blocking(|| {
-                        match platform::reset_permissions_after_update() {
-                            Ok(msg) => tracing::info!("Post-update permission reset: {}", msg),
-                            Err(e) => {
-                                tracing::warn!("Post-update permission reset skipped: {}", e)
-                            }
-                        }
-                    });
-                }
-
                 // Set dock visibility based on user config
                 let show_dock = config::get_config()
                     .map(|c| c.general.show_in_dock)
@@ -466,25 +423,10 @@ pub fn run() {
                     });
                 }
 
-                // Log accessibility permission status on startup for diagnostics.
-                // The frontend pulls the authoritative state via check_accessibility +
-                // verify_accessibility_functional on mount — no event emission needed.
-                let has_accessibility = platform::check_accessibility();
-                if has_accessibility {
-                    if platform::verify_accessibility_functional() {
-                        tracing::info!("Accessibility permission granted and functional");
-                    } else {
-                        tracing::warn!(
-                            "Accessibility permission appears granted but is stale — \
-                             TCC entry may need resetting"
-                        );
-                    }
-                } else {
-                    tracing::warn!(
-                        "Accessibility permission not granted - global shortcuts may not work"
-                    );
-                }
+                platform::macos::watch_permissions(app.handle().clone());
             }
+
+            platform::log_permissions();
 
             // Pre-warm the recording indicator window to eliminate first-show delay.
             // This loads the webview content in the background so it's ready instantly.
@@ -525,20 +467,13 @@ pub fn run() {
             commands::greet,
             commands::show_window,
             commands::open_url,
-            commands::remove_quarantine,
-            commands::open_privacy_pane,
-            commands::relaunch_app,
             commands::set_show_in_dock,
             commands::get_show_in_dock,
             commands::set_audio_device,
             commands::report_update_check,
             // Platform
-            platform::check_accessibility,
-            platform::request_accessibility,
-            platform::verify_accessibility_functional,
-            platform::reset_tcc_permissions,
-            platform::check_microphone_permission,
-            platform::request_microphone_permission,
+            platform::get_permissions,
+            platform::request_permissions,
             platform::get_gpu_info,
             // Audio
             audio::device::list_audio_devices,
@@ -687,9 +622,6 @@ pub fn run() {
             // Keyboard service (shortcut capture + modifier monitoring)
             keyboard_service::enter_capture_mode,
             keyboard_service::exit_capture_mode,
-            keyboard_service::check_input_monitoring,
-            keyboard_service::request_input_monitoring,
-            keyboard_service::try_start_keyboard_service,
             keyboard_service::report_key_event,
             // Control API
             control_api::get_integrations_status,
