@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - **A "tap or hold" recording mode.** A quick tap (under 300 ms) latches the recording until your next press; holding the key records for as long as you hold it and stops on release, as push-to-talk. It is one more option in the recording-mode list and works with a bare-modifier key such as right Shift.
+- **The window opens where you left it.** Its position and size are kept between launches, and a window last seen on a display that is no longer connected comes back on one that is.
 
 ### Changed
 
