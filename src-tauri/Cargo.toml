@@ -206,6 +206,13 @@ whisper-rs = { version = "0.16", default-features = false }
 mockito = "1"
 serial_test = "4"
 
+# Debug info stays in the objects' side files, where a debugger reads it, rather
+# than in every linked binary. Each test binary links the 441 MB library rlib;
+# with the debug info inside, eight links at once outran a 6 GB CI runner.
+# macOS already builds this way.
+[profile.dev]
+split-debuginfo = "unpacked"
+
 [profile.release]
 codegen-units = 1
 lto = true
