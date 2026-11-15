@@ -24,7 +24,7 @@
         pkg = builtins.fromJSON (builtins.readFile ./package.json);
         # The kit crates are git dependencies of one repository, so one hash
         # covers them all; `scripts/update-kit-hash.sh` sets it from Cargo.lock.
-        kitHash = "sha256-JLbjtyEKlMMVm5Zj8yXjgOqHYbcRlIpmpyfSx9cmds0=";
+        kitHash = "sha256-9Mnft66pD36+xddsZAgnneSouXVPEd3/d6bh1qZdA1A=";
 
         # Rust toolchain with Tauri prerequisites
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {

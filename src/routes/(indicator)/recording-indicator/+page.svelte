@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { listen, emit, type UnlistenFn } from '@tauri-apps/api/event';
   import { invoke } from '@tauri-apps/api/core';
-  import type { IndicatorStyle } from '$lib/stores/config.svelte';
+  import type { IndicatorStyle } from '#lib/stores/config.svelte.js';
 
   // Helper to emit logs to main window (since this window's console is separate)
   function indicatorLog(...args: unknown[]) {
@@ -374,7 +374,7 @@
     for (let i = 0; i < WAVEFORM_BARS; i++) {
       // Read from circular buffer, oldest first
       const bufIndex = (waveformIndex + i) % WAVEFORM_BARS;
-      const level = waveformHistory[bufIndex];
+      const level = waveformHistory[bufIndex] ?? 0;
 
       // Minimum visible height + scaled height
       const barHeight = Math.max(4, level * maxBarHeight);

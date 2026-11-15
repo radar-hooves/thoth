@@ -9,7 +9,7 @@
   import * as Card from '@poodle64/ui/card';
   import * as AlertDialog from '@poodle64/ui/alert-dialog';
   import { Alert, AlertDescription } from '@poodle64/ui/alert';
-  import { formatBytes } from '$lib/utils/format';
+  import { formatBytes } from '#lib/utils/format.js';
 
   interface ModelInfo {
     id: string;

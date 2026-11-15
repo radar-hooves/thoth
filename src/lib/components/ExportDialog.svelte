@@ -7,7 +7,7 @@
   import { Input } from '@poodle64/ui/input';
   import { Label } from '@poodle64/ui/label';
   import { Alert, AlertDescription } from '@poodle64/ui/alert';
-  import * as RadioGroup from '$components/ui/radio-group';
+  import * as RadioGroup from '#lib/components/ui/radio-group/index.js';
   import AlertCircleIcon from '@lucide/svelte/icons/alert-circle';
 
   interface Props {

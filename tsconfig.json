@@ -1,16 +1,9 @@
 {
-  "extends": "./.svelte-kit/tsconfig.json",
-  "compilerOptions": {
-    "allowJs": true,
-    "checkJs": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "sourceMap": true,
-    "strict": true,
-    "module": "ESNext",
-    "moduleResolution": "bundler"
-  },
-  "exclude": ["src-tauri/target", "node_modules", "build", "dist"]
+	"extends": "$app/tsconfig",
+	"compilerOptions": {
+		"noUncheckedIndexedAccess": true,
+		"sourceMap": true,
+		"strict": true
+	},
+	"include": ["src", "vite.config.ts", "vite.elements.config.ts", "playwright.config.ts", "tests"]
 }

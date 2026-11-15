@@ -5,7 +5,7 @@
 // (Checkbox) and a portal-based compound component (Dialog) — plus the three
 // state surfaces the canonical-shape alignment converged onto the package.
 //
-// The three are imported through `$components/common`, the barrel that replaced
+// The three are imported through `#lib/components/common`, the barrel that replaced
 // the local copies: a test importing straight from @poodle64/ui would pass even
 // if the barrel were broken, which is the only thing the swap actually changed.
 import { describe, it, expect } from 'vitest';

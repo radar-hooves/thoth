@@ -4,7 +4,7 @@
   import HistoryItem from './HistoryItem.svelte';
   import { Skeleton } from '@poodle64/ui/skeleton';
   import Clock from '@lucide/svelte/icons/clock';
-  import { EmptyState } from '$components/common';
+  import { EmptyState } from '#lib/components/common/index.js';
 
   interface Props {
     items: TranscriptionRecord[];
@@ -92,20 +92,20 @@
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       const nextIndex = Math.min(currentIndex + 1, items.length - 1);
-      onSelect?.(items[nextIndex]);
+      onSelect?.(items[nextIndex]!);
       scrollToIndex(nextIndex);
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       const prevIndex = Math.max(currentIndex - 1, 0);
-      onSelect?.(items[prevIndex]);
+      onSelect?.(items[prevIndex]!);
       scrollToIndex(prevIndex);
     } else if (event.key === 'Home') {
       event.preventDefault();
-      onSelect?.(items[0]);
+      onSelect?.(items[0]!);
       scrollToIndex(0);
     } else if (event.key === 'End') {
       event.preventDefault();
-      onSelect?.(items[items.length - 1]);
+      onSelect?.(items[items.length - 1]!);
       scrollToIndex(items.length - 1);
     }
   }

@@ -20,7 +20,7 @@
   import { Badge } from '@poodle64/ui/badge';
   import * as Card from '@poodle64/ui/card';
   import { Alert, AlertDescription } from '@poodle64/ui/alert';
-  import { LoadingState } from '$components/common';
+  import { LoadingState } from '#lib/components/common/index.js';
 
   interface ModelStats {
     name: string;

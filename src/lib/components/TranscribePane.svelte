@@ -91,7 +91,7 @@
           isDragOver = false;
           const paths = event.payload.paths;
           if (paths.length > 0) {
-            handleTranscribeFile(paths[0]);
+            handleTranscribeFile(paths[0]!);
           }
         }
       })

@@ -4,7 +4,7 @@
   // Imported through the barrel the migration introduced, not straight from the
   // package: the barrel is what every call site now resolves, so it is what the
   // test must exercise.
-  import { EmptyState, ErrorState, LoadingState } from '$components/common';
+  import { EmptyState, ErrorState, LoadingState } from '#lib/components/common/index.js';
 
   let checked = $state(false);
   let emptyActionClicks = $state(0);

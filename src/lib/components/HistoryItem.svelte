@@ -3,7 +3,7 @@
   import { historyStore } from '../stores/history.svelte';
   import { Checkbox } from '@poodle64/ui/checkbox';
   import { Badge } from '@poodle64/ui/badge';
-  import * as ContextMenu from '$components/ui/context-menu';
+  import * as ContextMenu from '#lib/components/ui/context-menu/index.js';
   import Copy from '@lucide/svelte/icons/copy';
   import Trash2 from '@lucide/svelte/icons/trash-2';
 

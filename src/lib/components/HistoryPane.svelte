@@ -23,7 +23,7 @@
   import { Badge } from '@poodle64/ui/badge';
   import { Checkbox } from '@poodle64/ui/checkbox';
   import * as AlertDialog from '@poodle64/ui/alert-dialog';
-  import { EmptyState } from '$components/common';
+  import { EmptyState } from '#lib/components/common/index.js';
   import HistoryList from './HistoryList.svelte';
   import HistoryFilterPanel, { type FilterState } from './HistoryFilterPanel.svelte';
   import ExportDialog from './ExportDialog.svelte';

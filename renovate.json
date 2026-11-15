@@ -10,20 +10,8 @@
       "enabled": false
     },
     {
-      "description": "Held (02/11/2026): app-factory v2026.11.1 holds SvelteKit 3 and adapter-static 4 until bits-ui and the tooling support them (app-factory#60, #61); this repo follows the factory.",
-      "matchPackageNames": ["@sveltejs/kit", "@sveltejs/adapter-static"],
-      "matchUpdateTypes": ["major"],
-      "enabled": false
-    },
-    {
       "description": "Held (02/11/2026): TypeScript 7 is held by app-factory v2026.11.1 (app-factory#60, #61); this repo follows the factory.",
       "matchPackageNames": ["typescript"],
-      "matchUpdateTypes": ["major"],
-      "enabled": false
-    },
-    {
-      "description": "Held (02/11/2026): sveltekit-superforms 3 fails svelte-check against our zod 4 (ZodValidationSchema '_zod.version.minor' mismatch in AIEnhancementSettings.svelte and DictionaryEditor.svelte); retry when superforms accepts zod 4.4.",
-      "matchPackageNames": ["sveltekit-superforms"],
       "matchUpdateTypes": ["major"],
       "enabled": false
     },
