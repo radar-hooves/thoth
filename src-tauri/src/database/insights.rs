@@ -987,15 +987,15 @@ mod tests {
     #[test]
     fn daily_activity_groups_by_day() {
         let conn = make_test_db();
-        // Seeded at midday UTC so the local-time bucketing stays on the same
-        // calendar day for any timezone within +-11h (covers AEST and the
-        // UTC CI runner), keeping the assertions timezone-stable.
+        // Seeded between 11:00 and 11:30 UTC, so local-time bucketing keeps each
+        // row on its calendar day from UTC-11 to UTC+12 (the UTC CI runner, AEST,
+        // and a Mac on AEDT, where a 13:00 UTC row lands at midnight next day).
         seed_row(
             &conn,
             "a1",
             "x",
             Some(1.0),
-            "2024-03-01T12:00:00Z",
+            "2024-03-01T11:00:00Z",
             false,
             None,
             None,
@@ -1006,7 +1006,7 @@ mod tests {
             "a2",
             "y",
             Some(1.0),
-            "2024-03-01T13:00:00Z",
+            "2024-03-01T11:30:00Z",
             false,
             None,
             None,
@@ -1017,7 +1017,7 @@ mod tests {
             "a3",
             "z",
             Some(1.0),
-            "2024-03-02T12:00:00Z",
+            "2024-03-02T11:00:00Z",
             false,
             None,
             None,
