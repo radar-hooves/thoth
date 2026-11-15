@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import zipfile
 from pathlib import Path
 
@@ -849,6 +850,7 @@ def host(tmp_path: Path):
         calls = (s / "calls").read_text().splitlines()
         return r, (s / "latest").read_text().strip(), after, calls
 
+    image.env = env
     return old, new, image
 
 
@@ -861,7 +863,7 @@ def test_image_publishes_and_leaves_a_source_run_container_to_its_host(host, lab
     old, new, image = host
     r, latest, after, calls = image([(old, lab) for lab in labels], old, new)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert f"docker push -q {REF}:{new}" in calls and latest == f"d-{new}"
+    assert any(c.startswith("docker buildx build") and "--push" in c and f"{REF}:{new}" in c for c in calls) and latest == f"d-{new}"
     # Watchtower is asked, and watched, only for what it takes.
     assert asked(calls) == ("" in labels)
     assert after == [(old if lab else new, lab) for lab in labels]
@@ -922,11 +924,38 @@ def test_a_rollback_leaves_a_source_run_container_to_its_host(host, labels, tmp_
     assert asked(calls) == bool(took) and after == [(old, lab) for lab in labels]
 
 
-def test_an_older_run_never_rolls_a_source_run_container_back(host):
+def test_the_build_pushes_a_single_manifest_with_no_attestations(host):
+    old, new, image = host
+    _, _, _, calls = image([(old, "")], old, new)
+    (build,) = [c for c in calls if c.startswith("docker buildx build")]
+    assert {"--push", "--provenance=false", "--sbom=false"} <= set(build.split())
+
+
+def test_an_older_run_skips_when_the_host_runs_a_newer_commit(host):
     old, new, image = host
     r, latest, _, calls = image([(new, "true")], new, old)
-    assert r.returncode != 0 and "refusing to roll it back" in r.stderr
-    assert latest == f"d-{new}" and not any(c.startswith("docker push") for c in calls)
+    assert r.returncode == 0 and "or newer; skipping" in r.stdout
+    assert latest == f"d-{new}" and not any(c.startswith("docker buildx") for c in calls)
+
+
+def test_a_run_of_the_commit_the_host_runs_skips_without_a_restart(host):
+    old, new, image = host
+    r, _, _, calls = image([(new, "")], new, new)
+    assert r.returncode == 0 and "or newer; skipping" in r.stdout
+    assert not asked(calls) and not any(c.startswith("stack-up") for c in calls)
+
+
+def test_a_second_run_waits_for_the_image_lock_then_skips(host, tmp_path):
+    old, new, image = host
+    locks = tmp_path / "locks"
+    locks.mkdir()
+    image.env["CHANGE_LOCKS"] = str(locks)
+    held = subprocess.Popen(["flock", str(locks / "image-app.lock"), "sleep", "2"])
+    time.sleep(0.5)
+    start = time.monotonic()
+    r, _, _, _ = image([(new, "")], new, old)
+    held.wait()
+    assert time.monotonic() - start > 1 and "skipping" in r.stdout
 
 
 def test_a_stale_source_run_container_never_asks_watchtower_again(host):
@@ -978,7 +1007,6 @@ def test_a_container_on_a_hand_tagged_image_is_refused_at_once(host, tmp_path):
         "container box-c0" in r.stderr and "pull" in r.stderr and "recreate" in r.stderr
     )
     assert latest == f"d-{old}" and not asked(calls)
-    assert not any(c.startswith("docker push") for c in calls)
 
 
 def test_copied_reads_the_context_paths_a_dockerfile_takes():
@@ -1676,6 +1704,65 @@ def test_code_from_a_red_run_ships_with_the_next_green_one_though_it_touched_onl
     (tmp_path / "green").mkdir()
     out = run_plan_sh(repo, tests, [(code, "success")], tmp_path / "green")
     assert out["deploys"] == "[]"
+
+
+def test_a_red_runs_code_is_carried_once_then_fixed_forward(app, tmp_path):
+    repo, shipped_sha = app
+    first = change(repo, {"backend/app.py": "x = 2\n"})  # red
+    second = change(repo, {"backend/tests/test_x.py": "x = 1\n"})  # carried it, red again
+    third = change(repo, {"backend/tests/test_x.py": "x = 2\n"})
+
+    def deploys(runs, sub):
+        (tmp_path / sub).mkdir()
+        out = run_plan_sh(repo, third, runs, tmp_path / sub)
+        return [m["name"] for m in json.loads(out["deploys"])]
+
+    # One red run since the green one: the app change is carried and ships.
+    assert deploys([(first, "failure"), (shipped_sha, "success")], "one") == ["sample-app"]
+    # Two: the app change was carried once and went red again, so it is not carried again.
+    assert deploys(
+        [(second, "failure"), (first, "failure"), (shipped_sha, "success")], "two"
+    ) == []
+    # A cancelled run tested nothing: it is neither carried nor counted.
+    assert deploys(
+        [(second, "cancelled"), (first, "failure"), (shipped_sha, "success")], "cancelled"
+    ) == ["sample-app"]
+
+
+def test_red_carry_counts_distinct_commits_and_runs_that_tested_something(app, tmp_path):
+    repo, shipped_sha = app
+    first = change(repo, {"backend/app.py": "x = 2\n"})
+    second = change(repo, {"backend/tests/test_x.py": "x = 1\n"})
+
+    def plan(head, runs, sub):
+        (tmp_path / sub).mkdir()
+        out = run_plan_sh(repo, head, runs, tmp_path / sub)
+        return out, [m["name"] for m in json.loads(out["deploys"])]
+
+    # A retry dispatch on the head's own commit is not a second red run: base stays green.
+    _, d = plan(
+        first, [(first, "failure"), (first, "failure"), (shipped_sha, "success")], "same"
+    )
+    assert d == ["sample-app"]
+    # Nor is a retry of an earlier commit: still one distinct red commit, still carried.
+    _, d = plan(
+        second,
+        [(first, "failure"), (first, "failure"), (shipped_sha, "success")],
+        "retry",
+    )
+    assert d == ["sample-app"]
+    # startup_failure and stale tested nothing: they drop no code.
+    for end in ("startup_failure", "stale"):
+        _, d = plan(
+            second,
+            [(second, end), (first, end), (shipped_sha, "success")],
+            end,
+        )
+        assert d == ["sample-app"]
+    # No green run in the window: no base, so every member tests and none ships.
+    out, d = plan(second, [(second, "failure"), (first, "failure")], "nogreen")
+    assert d == []
+    assert any(m["test"] for m in json.loads(out["members"]))
 
 
 def declared(tmp_path: Path, test: str = 'test = "just check"\n') -> tuple[Path, str]:

@@ -2,7 +2,7 @@
 # Resolve head and bases for the event, run plan.py, and hand its legs to the workflow.
 # A pull request diffs from its merge-base. A push or dispatch diffs from the newest run of
 # this workflow on main that went green and whose head is an ancestor of this one, so code a
-# red run left unshipped ships with the next green one; an image diffs from the
+# red run left unshipped ships with the next green one, carried once (see walk); an image diffs from the
 # revision running live. A root image whose containers carry household.run-from-source=true
 # serves code its host fast-forwards from a checkout, so it builds only when its environment
 # moved, and waits on no test. A fork's pull request plans nothing: its code never runs here.
@@ -24,18 +24,36 @@ none='{"members":[],"artefacts":[],"libraries":[],"repo_suites":false,"typecheck
 # this one: sets base, and history when main has any completed run at all. A run that did not
 # go green never shipped what it planned, whichever leg failed, so it is no base: the next
 # green run diffs from the last commit that shipped and takes the failed run's code with it.
+# A red run's code is carried once: when a second run since the last green one also went red,
+# the first was carried and failed again, so the base moves up to its head and the next run
+# carries only what the second added. A leg that keeps failing is fixed forward by a change to
+# it, not re-run by every push. Reds are distinct commits (a retry dispatch on one commit is
+# one), never the head itself. A run that may have tested nothing (cancelled, skipped,
+# startup_failure, stale, neutral, action_required) counts for neither side: only a conclusion
+# of failure or timed_out, which means a leg ran and went red, is a carry. With no green run
+# in the window there is no base, as before.
 walk() {
-  local runs id sha kind end
+  local runs id sha kind end reds=()
   runs=$(gh api "repos/$slug/actions/workflows/change.yaml/runs?branch=main&status=completed&per_page=20" \
     --jq '.workflow_runs[] | "\(.id) \(.head_sha) \(.event) \(.conclusion)"') ||
     die "cannot list $slug's change.yaml runs: the caller must grant actions: read (by hand, pass a base)"
   [ -z "$runs" ] || history=1
   while read -r id sha kind end; do
-    [ -n "$id" ] && [ "$kind" != pull_request ] && [ "$end" = success ] || continue
+    [ -n "$id" ] && [ "$kind" != pull_request ] || continue
     git -C "$repo" merge-base --is-ancestor "$sha" "$head" 2>/dev/null || continue
-    base=$sha
-    note "base: run $id at ${sha:0:12}"
-    return
+    case $end in
+      success)
+        if [ "${#reds[@]}" -ge 2 ]; then
+          base=${reds[1]}
+          note "base: red run at ${base:0:12}: its code was carried once and went red again"
+        else
+          base=$sha
+          note "base: run $id at ${sha:0:12}"
+        fi
+        return ;;
+      cancelled | skipped | startup_failure | stale | neutral | action_required) ;;
+      *) [ "$sha" = "$head" ] || [[ " ${reds[*]-} " == *" $sha "* ]] || reds+=("$sha") ;;
+    esac
   done <<<"$runs"
   [ -z "$history" ] || note "no green run among main's last 20: no base, so every member tests and none ships"
 }
