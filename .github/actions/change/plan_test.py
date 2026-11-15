@@ -863,7 +863,15 @@ def test_image_publishes_and_leaves_a_source_run_container_to_its_host(host, lab
     old, new, image = host
     r, latest, after, calls = image([(old, lab) for lab in labels], old, new)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert any(c.startswith("docker buildx build") and "--push" in c and f"{REF}:{new}" in c for c in calls) and latest == f"d-{new}"
+    assert (
+        any(
+            c.startswith("docker buildx build")
+            and "--push" in c
+            and f"{REF}:{new}" in c
+            for c in calls
+        )
+        and latest == f"d-{new}"
+    )
     # Watchtower is asked, and watched, only for what it takes.
     assert asked(calls) == ("" in labels)
     assert after == [(old if lab else new, lab) for lab in labels]
@@ -935,7 +943,9 @@ def test_an_older_run_skips_when_the_host_runs_a_newer_commit(host):
     old, new, image = host
     r, latest, _, calls = image([(new, "true")], new, old)
     assert r.returncode == 0 and "or newer; skipping" in r.stdout
-    assert latest == f"d-{new}" and not any(c.startswith("docker buildx") for c in calls)
+    assert latest == f"d-{new}" and not any(
+        c.startswith("docker buildx") for c in calls
+    )
 
 
 def test_a_run_of_the_commit_the_host_runs_skips_without_a_restart(host):
@@ -1709,7 +1719,9 @@ def test_code_from_a_red_run_ships_with_the_next_green_one_though_it_touched_onl
 def test_a_red_runs_code_is_carried_once_then_fixed_forward(app, tmp_path):
     repo, shipped_sha = app
     first = change(repo, {"backend/app.py": "x = 2\n"})  # red
-    second = change(repo, {"backend/tests/test_x.py": "x = 1\n"})  # carried it, red again
+    second = change(
+        repo, {"backend/tests/test_x.py": "x = 1\n"}
+    )  # carried it, red again
     third = change(repo, {"backend/tests/test_x.py": "x = 2\n"})
 
     def deploys(runs, sub):
@@ -1718,18 +1730,26 @@ def test_a_red_runs_code_is_carried_once_then_fixed_forward(app, tmp_path):
         return [m["name"] for m in json.loads(out["deploys"])]
 
     # One red run since the green one: the app change is carried and ships.
-    assert deploys([(first, "failure"), (shipped_sha, "success")], "one") == ["sample-app"]
+    assert deploys([(first, "failure"), (shipped_sha, "success")], "one") == [
+        "sample-app"
+    ]
     # Two: the app change was carried once and went red again, so it is not carried again.
-    assert deploys(
-        [(second, "failure"), (first, "failure"), (shipped_sha, "success")], "two"
-    ) == []
+    assert (
+        deploys(
+            [(second, "failure"), (first, "failure"), (shipped_sha, "success")], "two"
+        )
+        == []
+    )
     # A cancelled run tested nothing: it is neither carried nor counted.
     assert deploys(
-        [(second, "cancelled"), (first, "failure"), (shipped_sha, "success")], "cancelled"
+        [(second, "cancelled"), (first, "failure"), (shipped_sha, "success")],
+        "cancelled",
     ) == ["sample-app"]
 
 
-def test_red_carry_counts_distinct_commits_and_runs_that_tested_something(app, tmp_path):
+def test_red_carry_counts_distinct_commits_and_runs_that_tested_something(
+    app, tmp_path
+):
     repo, shipped_sha = app
     first = change(repo, {"backend/app.py": "x = 2\n"})
     second = change(repo, {"backend/tests/test_x.py": "x = 1\n"})
@@ -1741,7 +1761,9 @@ def test_red_carry_counts_distinct_commits_and_runs_that_tested_something(app, t
 
     # A retry dispatch on the head's own commit is not a second red run: base stays green.
     _, d = plan(
-        first, [(first, "failure"), (first, "failure"), (shipped_sha, "success")], "same"
+        first,
+        [(first, "failure"), (first, "failure"), (shipped_sha, "success")],
+        "same",
     )
     assert d == ["sample-app"]
     # Nor is a retry of an earlier commit: still one distinct red commit, still carried.
@@ -1767,16 +1789,18 @@ def test_red_carry_counts_distinct_commits_and_runs_that_tested_something(app, t
 
 def declared(tmp_path: Path, test: str = 'test = "just check"\n') -> tuple[Path, str]:
     repo = tmp_path / "tree"
-    init(repo, {".github/change.toml": test, "flake.nix": "{}\n", "hosts/a/x.nix": "1\n"})
+    init(
+        repo, {".github/change.toml": test, "flake.nix": "{}\n", "hosts/a/x.nix": "1\n"}
+    )
     return repo, commit(repo)
 
 
 def test_a_repo_with_no_manifest_declares_its_test_command(tmp_path):
     repo, base = declared(tmp_path)
     p = plan(repo, base, base)
-    assert [(m["name"], m["toolchain"], m["path"], m["deploy"]) for m in p["members"]] == [
-        ("tree", "command", "", "none")
-    ]
+    assert [
+        (m["name"], m["toolchain"], m["path"], m["deploy"]) for m in p["members"]
+    ] == [("tree", "command", "", "none")]
     assert p["libraries"] == [] and p["artefacts"] == [] and not p["repo_suites"]
     assert p["legs"] == []
     for path, text in (
@@ -1814,7 +1838,8 @@ def test_a_declaration_beside_a_manifest_fails_the_plan(mono):
 
 def test_a_declared_test_leg_runs_on_the_labels_it_names(tmp_path):
     repo, base = declared(
-        tmp_path, 'test = "just check"\ntest_on = ["self-hosted", "household", "atlas"]\n'
+        tmp_path,
+        'test = "just check"\ntest_on = ["self-hosted", "household", "atlas"]\n',
     )
     row = member(plan(repo, base, base), "tree")
     assert row["test_on"] == ["self-hosted", "household", "atlas"]
@@ -1905,12 +1930,56 @@ def test_gradle_members_within_the_gradle_pool_keep_their_own_legs(droid, tmp_pa
     assert groups == [] and sorted(m["name"] for m in singles) == DROID
 
 
+def test_a_member_shipping_with_a_library_of_its_run_is_a_carrier(mono, tmp_path):
+    repo, base = mono
+    both = change(
+        repo, {"packages/lib/lib.py": "x = 2\n", "packages/a/a.py": "x = 2\n"}
+    )
+    head = change(repo, {"packages/b/b.py": "x = 2\n"})
+
+    def legs(sub, at=head, since=base, **extra):
+        (tmp_path / sub).mkdir()
+        out = run_plan_sh(repo, at, [(since, "success")], tmp_path / sub, **extra)
+        return {
+            k: json.loads(out[k])
+            for k in ("members", "groups", "carriers", "carrier_groups")
+        }
+
+    # Each waits on lib's marker, so its leg starts once the library legs end, never beside them.
+    out = legs("ship")
+    assert [(m["name"], m["waits"]) for m in out["carriers"]] == [
+        ("a", ["passed-lib"]),
+        ("b", ["passed-lib"]),
+    ]
+    assert out["members"] == out["groups"] == out["carrier_groups"] == []
+    # Past the pool's size they share carrier groups, which ship.
+    out = legs("grouped", CHANGE_GROUPS="1")
+    assert [(g["name"], g["names"], g["release"]) for g in out["carrier_groups"]] == [
+        ("carrier-group-1", ["a", "b"], True)
+    ]
+    assert out["carriers"] == out["groups"] == []
+    # A run that ships nothing waits on nothing: both test at once.
+    out = legs("unshipped", GITHUB_REF="refs/heads/x")
+    assert sorted(m["name"] for m in out["members"]) == ["a", "b"]
+    assert out["carriers"] == out["carrier_groups"] == []
+    # With lib not in the run, b ships alone and starts at once.
+    out = legs("alone", since=both)
+    assert [m["name"] for m in out["members"]] == ["b"] and out["carriers"] == []
+
+
 def test_a_library_keeps_its_own_leg(mono, tmp_path):
     repo, base = mono
     head = change(repo, {"packages/lib/lib.py": "x = 2\n"})
     out = run_plan_sh(
-        repo, head, [(base, "success")], tmp_path, CHANGE_GROUPS="1", GITHUB_REF="refs/heads/x"
+        repo,
+        head,
+        [(base, "success")],
+        tmp_path,
+        CHANGE_GROUPS="1",
+        GITHUB_REF="refs/heads/x",
     )
     groups, singles = groups_of(out)
     assert json.loads(out["libraries"])[0]["name"] == "lib"
-    assert "lib" not in {n for g in groups for n in g["names"]} | {m["name"] for m in singles}
+    assert "lib" not in {n for g in groups for n in g["names"]} | {
+        m["name"] for m in singles
+    }

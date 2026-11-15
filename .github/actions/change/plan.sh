@@ -12,7 +12,8 @@
 # names its members in its `passed: ...` step, so grouped members skip too.
 # More than CHANGE_GROUPS members of one runner class share that many group legs (group.sh),
 # Gradle's past CHANGE_GRADLE_GROUPS, its pool's size; a library, an image's member or a
-# declared-runner member keeps its own leg.
+# declared-runner member keeps its own leg. A member that ships with a library of this run
+# (a carrier) has its legs, or groups, of its own, which start once the library legs end.
 # Usage: plan.sh <repo-dir> [head [base]]   (outputs on stdout, summary on stderr by hand)
 . "$(dirname "$0")/lib.sh"
 repo=$(cd "${1:-.}" && pwd) head=${2:-} base=${3:-}
@@ -143,22 +144,29 @@ deploys=$(jq -c --argjson s "$ship" '(.members | map({key: .name, value: .}) | f
      build_on, deploy_on}]
   | map(. + {split: ((.build_on | sort) != (.deploy_on | sort))} | . + {phase: (if .split then "release" else "" end)})' <<<"$plan")
 groups=${CHANGE_GROUPS:-6} gradle=${CHANGE_GRADLE_GROUPS:-2}
+# A carrier waits on its libraries' markers, and a leg waiting on one of an unfinished leg holds
+# a runner that leg needs: four did, on atlas's four test units, for 1.5 h (#461).
 split=$(jq -c --argjson s "$ship" --argjson n "$groups" --argjson gn "$gradle" 'def rel: .deploy_now and $s and (.deploy | IN("wheel", "mcp"));
-  def class: if .toolchain == "gradle" then "gradle-" elif rel then "release-" else "" end;
+  def class: if .toolchain == "gradle" then "gradle-" elif rel and .waits != [] then "carrier-" elif rel then "release-" else "" end;
   .libraries as $l | [.artefacts[].members[]] as $held
   | [.members[] | select((.test or (.deploy_now and $s)) and (.name | IN($l[]) | not))] as $run
   | [$run[] | select((has("test_on") | not) and .deploy != "image" and (.name | IN($held[]) | not))] as $el
-  | [("", "release-", "gradle-") as $c | (if $c == "gradle-" then $gn else $n end) as $k
+  | def legs($cs): [$cs[] as $c | (if $c == "gradle-" then $gn else $n end) as $k
      | [$el[] | select(class == $c)] | select(length > $k) | to_entries | group_by(.key % $k)
-     | to_entries[] | {name: ($c + "group-" + (.key + 1 | tostring)), release: ($c == "release-"),
+     | to_entries[] | {name: ($c + "group-" + (.key + 1 | tostring)), release: ($c | IN("release-", "carrier-")),
        gradle: ($c == "gradle-"), members: (.value | map(.value))}
-     | . + {names: [.members[].name], deep: ($s and any(.members[]; .deploy_now))}] as $g
-  | {groups: $g, members: ($run - [$g[].members[]])}' <<<"$plan")
+     | . + {names: [.members[].name], deep: ($s and any(.members[]; .deploy_now))}];
+  legs(["", "release-", "gradle-"]) as $g | legs(["carrier-"]) as $cg
+  | ($run - [$g[].members[], $cg[].members[]]) as $own
+  | {groups: $g, members: [$own[] | select(class != "carrier-")],
+     carrier_groups: $cg, carriers: [$own[] | select(class == "carrier-")]}' <<<"$plan")
 {
   echo "plan=$plan"
   echo "head=$head"
   echo "members=$(jq -c .members <<<"$split")"
   echo "groups=$(jq -c .groups <<<"$split")"
+  echo "carriers=$(jq -c .carriers <<<"$split")"
+  echo "carrier_groups=$(jq -c .carrier_groups <<<"$split")"
   echo "libraries=$(jq -c '[.libraries[] as $n | .members[] | select(.name == $n)]' <<<"$plan")"
   echo "deploys=$deploys"
   echo "builds=$(jq -c '[.[] | select(.split) | .phase = "build"]' <<<"$deploys")"
