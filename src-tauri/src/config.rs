@@ -740,6 +740,40 @@ fn save_to_disk(config: &Config) -> Result<(), String> {
     })
 }
 
+/// Write `contents` to `path`, readable by the owner only from the moment it
+/// exists: a temporary file beside it is created `0o600`, then renamed over it,
+/// so neither a half-written file nor a world-readable one is ever on disk. Each
+/// call has its own temporary name, so two saves at once cannot collide; the
+/// last rename wins, as the last write did before.
+pub(crate) fn write_private_file(path: &std::path::Path, contents: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let tmp = path.with_extension(format!(
+        "tmp.{}.{}",
+        std::process::id(),
+        SEQ.fetch_add(1, Ordering::Relaxed)
+    ));
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let written = options.open(&tmp).and_then(|mut file| {
+        file.write_all(contents)?;
+        file.sync_all()
+    });
+    match written.and_then(|()| fs::rename(&tmp, path)) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = fs::remove_file(&tmp);
+            Err(e)
+        }
+    }
+}
+
 fn try_save_to_disk(config: &Config) -> Result<(), String> {
     ensure_config_dir()?;
 
@@ -747,18 +781,9 @@ fn try_save_to_disk(config: &Config) -> Result<(), String> {
     let contents = serde_json::to_string_pretty(config)
         .map_err(|e| format!("Failed to serialise config: {}", e))?;
 
-    fs::write(&path, &contents).map_err(|e| format!("Failed to write config file: {}", e))?;
-
-    // Restrict config file permissions to owner-only (rw-------) because it
-    // may contain an API key in plaintext.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let permissions = fs::Permissions::from_mode(0o600);
-        if let Err(e) = fs::set_permissions(&path, permissions) {
-            tracing::warn!("Failed to set config file permissions to 0o600: {}", e);
-        }
-    }
+    // Owner-only: it may hold an API key in plaintext.
+    write_private_file(&path, contents.as_bytes())
+        .map_err(|e| format!("Failed to write config file: {}", e))?;
 
     tracing::info!(
         "Config saved to disk: device_id={:?}, toggle_recording_alt={:?}",
@@ -1154,6 +1179,25 @@ mod tests {
     /// `get_config_instance()` and writes to it must hold this guard for its
     /// full lifetime.
     static CONFIG_TEST_LOCK: StdMutex<()> = StdMutex::new(());
+
+    #[cfg(unix)]
+    #[test]
+    fn a_private_file_is_owner_only_from_creation_and_on_replace() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("secret");
+        // An existing world-readable file, as an older build left it.
+        fs::write(&path, "old").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+
+        write_private_file(&path, b"new").unwrap();
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), "new");
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        let leftovers: Vec<_> = fs::read_dir(dir.path()).unwrap().collect();
+        assert_eq!(leftovers.len(), 1, "no temporary file is left behind");
+    }
 
     #[test]
     fn test_default_config_has_current_version() {

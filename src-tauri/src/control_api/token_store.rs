@@ -35,16 +35,7 @@ pub fn read_token() -> Option<String> {
 fn write_token(token: &str) -> io::Result<()> {
     let dir = crate::config::get_config_dir();
     fs::create_dir_all(&dir)?;
-    let path = token_path();
-    fs::write(&path, token)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if let Err(e) = fs::set_permissions(&path, fs::Permissions::from_mode(0o600)) {
-            tracing::warn!("Failed to set token-store permissions to 0o600: {}", e);
-        }
-    }
-    Ok(())
+    crate::config::write_private_file(&token_path(), token.as_bytes())
 }
 
 /// One-time migration source: the token a previous version stored inside

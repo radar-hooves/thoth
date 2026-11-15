@@ -189,15 +189,8 @@ fn write_file_secret(path: &std::path::Path, password: Option<&str>) -> Result<(
             let dir = crate::config::get_config_dir();
             fs::create_dir_all(&dir)
                 .map_err(|e| format!("Failed to create the config directory: {e}"))?;
-            fs::write(path, pw).map_err(|e| format!("Failed to write the password store: {e}"))?;
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                if let Err(e) = fs::set_permissions(path, fs::Permissions::from_mode(0o600)) {
-                    tracing::warn!("Failed to set password-store permissions to 0o600: {e}");
-                }
-            }
-            Ok(())
+            crate::config::write_private_file(path, pw.as_bytes())
+                .map_err(|e| format!("Failed to write the password store: {e}"))
         }
         None => match fs::remove_file(path) {
             Ok(()) => Ok(()),
