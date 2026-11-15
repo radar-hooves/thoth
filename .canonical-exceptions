@@ -80,7 +80,6 @@ skeleton:.github/workflows/change.yaml  2026-12-31  # Thoth is public and cannot
 skeleton:scripts/tauri-release.sh       2026-12-31  # release path: check-release-writable and the macOS devShell install; template's would change the release
 skeleton:scripts/cargo-codesign.sh      2026-12-31  # verify-bundles also runs verify-macos-libraries and the hardened-runtime check; signing path
 skeleton:src/app.html                   2026-12-31  # template carries web-only /elements/placed.js and no dark class; Thoth is dark-only
-skeleton:src/test/setup.ts              2026-12-31  # template's imports ./mocks/app-state.svelte, which the desktop skeleton does not stamp
 skeleton:.github/actionlint.yaml        2026-12-31  # runner labels light, gradle, release, ubuntu-26.04 are used by nix-check.yaml and release.yaml
 skeleton:renovate.json                  2026-12-31  # Thoth's holds (SvelteKit 3, TypeScript 7, superforms, tauri-action, ubuntu)
 skeleton:src/lib/utils.ts               2026-12-31  # vendored shadcn ui components import WithElementRef from $lib/utils
@@ -88,4 +87,3 @@ skeleton:vite.config.ts                 2026-12-31  # template is the SvelteKit 
 skeleton:tsconfig.json                  2026-12-31  # extends $app/tsconfig (SvelteKit 3); Thoth is on Kit 2, held
 skeleton:stylelint.config.js            2026-12-31  # template's style rules flag 44 existing findings (40 autofixable); adopting them is a separate pass
 skeleton:.pre-commit-config.yaml        2026-12-31  # default_language_version python3.14: huginn has no usable python3.15 (pip 25 breaks on 3.15's typing), so the hook environment cannot build; restore 3.15 when the host has one
-skeleton:scripts/bump-version.sh        2026-12-31  # keeps its forward-only and stray-declaration guards (tested by scripts/test-bump-version.sh) until the skeleton's carries them (app-factory#138)
