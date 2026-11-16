@@ -156,13 +156,9 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <h4>Approve the Settings redesign, and say where Insights should live</h4>
 <p>The before and after are drawn in Penpot (Thoth › Settings restructure, pages Before and After), with renders and a one-page map of where every pane goes in <code>docs/research/settings-restructure/</code>; the map is <code>after-00-where-everything-went.png</code>. Ten panes become nine sections on the factory's Settings layout, the one Bragi uses: Recording first, then Models, AI Enhancement, Dictionary, a new Text section (output filtering and how text is inserted), General, Storage, Advanced (API, MCP, telemetry, the word list) and About. History, Insights and Transcribe leave Settings. Transcribe becomes "Transcribe File…" in the menu bar, and Overview's status line moves into the menu bar's first line. The one open choice is where Insights goes: a second view inside the History window (recommended: one window instead of two) or a window of its own. No code is written until you approve. One thing changed since it was drawn: the factory's Settings layout is now a panel-page frame, which Thoth already runs and Bragi does not yet, so the After page is redrawn on that frame before building, and Bragi takes the same look (bragi#266).</p>
 </article>
-<article class="ask" data-id="release-look" data-kind="decide" data-track="#208">
-<h4>Look at the new Thoth on huginn, then it can go out to everyone</h4>
-<p>2026.11.7 is released (16/11, on your word) and installed on macintosh-mandy, same certificate, file transcription proved there. Her microphone switch is off in macOS, so dictating fails until she clicks Allow on the Thoth microphone box now waiting on her screen. If it is gone, she turns Thoth on in System Settings, Privacy &amp; Security, Microphone.</p>
-</article>
 <article class="ask" data-id="reopen-shows-window" data-kind="read" data-track="#206">
 <h4>Opening Thoth from Spotlight should bring its window back</h4>
-<p>On the same build: close Thoth's window, then open Thoth from Spotlight while it runs; the window should appear. The menu bar icon is back on huginn, and the window is now the factory's, which shows it whenever no other Thoth window is open.</p>
+<p>On the installed 2026.11.7: close Thoth's window, then open Thoth from Spotlight while it runs; the window should appear. The menu bar icon is back on huginn, and the window is now the factory's, which shows it whenever no other Thoth window is open.</p>
 </article>
 </div>
 </section>
@@ -173,7 +169,7 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 
 <details class="thread" id="holistic-review" open>
 <summary><h3>Holistic review: Thoth and Bragi as one cloth, with the factory</h3><span class="state">Verdict on #208 (15/11): Thoth refactor, Bragi carry on, factory converge. On Thoth main: the fixes, the structural clean-up, one settings write path, one shared database connection, and camelCase at the IPC boundary with a guard against overwriting a newer config, the factory's secrets writer, IPC spans and updater (#209), its window module (#212), the desktop stamp (#213) and SvelteKit 3 (#214), on factory v2026.11.57. Bragi's main has the secret store, spans, window module, one shared store and the stamp (#259, #261, #262). All three build the library as an rlib alone. Atlas's capped runners carry a CPU quota matched to their memory (yggdrasil#468), and all three split debug info out of linked test binaries (16/11): Thoth's test build passes under a 4 GB cap at 8 CPUs where it was OOM-killed at 6 GB, and main is green on atlas-3.</span></summary>
-<p class="next" data-id="review-packages" data-track="#208 radar-hooves/bragi#266">Every package not waiting on him has landed; the release waits only on his look at the installed candidate (the ask above). Bragi's SvelteKit 3 is on main (bragi#263) with <code>@poodle64/ui</code> held at 2026.10.15: its current <code>SettingsShell</code> is a panel-page frame that changes Bragi's Settings layout, so the bump (bragi#266) is decided with Thoth's Settings design (#207), which uses the same component. titan's root disk was full on 16/11 (named to master-orchestrator), failing any CI job it takes.</p>
+<p class="next" data-id="review-packages" data-track="#208 radar-hooves/bragi#266">Every package not waiting on him has landed, and 2026.11.7 is released (16/11, his word, recorded on #208). macintosh-mandy runs it with both permissions allowed. Bragi's SvelteKit 3 is on main (bragi#263) with <code>@poodle64/ui</code> held at 2026.10.15: its current <code>SettingsShell</code> is a panel-page frame that changes Bragi's Settings layout, so the bump (bragi#266) is decided with Thoth's Settings design (#207), which uses the same component. titan's root disk was full on 16/11 (named to master-orchestrator), failing any CI job it takes.</p>
 <ul class="items">
 <li data-id="review-writeup" data-track="#208">The write-up is <code>docs/research/2026-11-15-holistic-review.md</code>, gitignored and local to huginn's checkout, with the three reads beside it. Keep its findings tables current as packages land.</li>
 <li data-id="settings-design-lane" data-track="#207">The Settings design is delivered and put to him above. Build it on <code>SettingsShell</code> once he approves, from the Penpot After page.</li>
@@ -181,14 +177,12 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <li data-id="apps-become-stamps" data-track="radar-hooves/app-factory#138">Both apps are stamps (Thoth #213, Bragi #262). Their remaining departures carry trackers and expire by 31/12/2026; the permanent ones (Thoth's pipeline copy, the release and signing scripts, a dark-only <code>app.html</code>, per-app Renovate holds and runner labels) are proposed to the factory as ratified variants. Close app-factory#138 once those are ruled.</li>
 <li data-id="window-runtime-proof" data-untracked="proved at each app's next install on huginn">The window module's second launch, close-to-hide and restored position are read on each installed release (Thoth 2026.11.7, Bragi's next), never from a debug build beside the installed app.</li>
 <li data-id="public-pipeline" data-track="radar-hooves/master-project#460">Thoth carries a 4,600-line copy of master's change pipeline because Thoth is public. Master's answer decides whether the copy can go.</li>
-<li data-id="release-2026-11-7" data-track="#208">His ruling of 15/11, recorded on #208: publish only once the review is worked through. On his "release": date the CHANGELOG's [2026.11.7] section, and on a green <code>change</code> run at the head of main, tag and push. The release workflow publishes its draft by itself once both platforms build, so the look at the installed candidate comes first. The previous build is at the scratchpad's <code>Thoth-2026.11.7-15nov.app</code>.</li>
-<li data-id="mandy-permissions-check" data-untracked="waits on her click">macintosh-mandy 16/11 15:35: updated to 2026.11.7 while she was idle 28 minutes; <code>transcribe_file</code> returned the right sentence. <code>get_system</code> reads <code>microphone: false</code>: macOS held Thoth as refused, so I reset it and relaunched, and the system box is waiting on her screen. Once she has clicked Allow, read <code>permissions</code> again over <code>ssh mandy</code>. The release job set CI itself because the DMG step timed out on a locked huginn (PRs 218, 219).</li>
 <li data-id="ci-rerun-rule" data-untracked="own slip, noted so it is not repeated">A failed main run is never re-run (<code>rules-library/fleet/ci.md</code>): fix forward, or dispatch <code>change</code> with <code>roll</code>. On 15/11 this session re-ran one after a runner shutdown on titan.</li>
 </ul>
 </details>
 
 <details class="thread" id="macos-permissions">
-<summary><h3>macOS permissions and the record key</h3><span class="state">On main and drive-tested on huginn 15/11: two permissions kept across reinstalls, the record key instant on rapid taps. Ships with the release above.</span></summary>
+<summary><h3>macOS permissions and the record key</h3><span class="state">On main and drive-tested on huginn 15/11: two permissions kept across reinstalls, the record key instant on rapid taps. Released in 2026.11.7 (16/11).</span></summary>
 <ul class="items">
 <li data-id="settings-restructure-penpot" data-track="#207">The 08/10 UX audit's pane restructure onto <code>SettingsShell</code> is drawn and waits on his approval (the Settings ask above).</li>
 <li data-id="nix-check-keep" data-untracked="decision recorded here for master's handoff item">Master asked Thoth's session to keep or delete <code>nix-check.yaml</code>: keep. It refreshes the <code>pnpmDeps</code> hash on pull requests, which the change pipeline does not.</li>
@@ -197,7 +191,7 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 </details>
 
 <details class="thread" id="tray-missing">
-<summary><h3>Menu bar icon missing, window unreachable</h3><span class="state">Fixed on main and installed on huginn; ships with the release.</span></summary>
+<summary><h3>Menu bar icon missing, window unreachable</h3><span class="state">Released in 2026.11.7 (16/11).</span></summary>
 <ul class="items">
 <li data-id="tray-guard-invisible" data-track="#206 radar-hooves/app-factory#139">The tray failure was invisible: <code>guard_tray</code> logs only locally. Filed as app-factory#139, in the factory lane now.</li>
 </ul>
@@ -206,9 +200,6 @@ No scripts, no external loads, no secret values, no names of anyone outside the 
 <details class="thread" id="release-footprint">
 <summary><h3>Release path and memory footprint (carried from 02/11)</h3><span class="state">Items from the 02/11 handoff, carried over unchanged and not re-checked on 15/11.</span></summary>
 <p class="next" data-id="footprint-day-check" data-untracked="carried from 02/11 handoff, unverified">After a day of dictating over screenshots, read <code>footprint $(pgrep -x thoth)</code>; it should stay in the hundreds of MB, not the 20 GB 2026.10.2 reached.</p>
-<ul class="items">
-<li data-id="xcode-link-release-proof" data-untracked="carried from 02/11 handoff, unverified">The macOS leg of the first release cut since the switch to Xcode clang/ld linking (<code>darwinSwiftLinkHook</code>) proves the release path.</li>
-</ul>
 </details>
 </section>
 </main>
