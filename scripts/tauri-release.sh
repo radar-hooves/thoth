@@ -11,6 +11,10 @@ cd "$(dirname "$0")/.."
 # Check again after building: a failed-job rerun can skip the workflow's gate.
 bash scripts/check-release-writable.sh
 if [[ "$(uname -s)" == Darwin ]]; then
+    # With CI set and the override unset, the DMG bundler skips its Finder
+    # AppleScript, which times out whenever huginn's screen is locked.
+    export CI=true
+    unset TAURI_BUNDLER_DMG_IGNORE_CI
     # shellcheck disable=SC2016 # Expanded inside the dev shell, not its caller.
     nix develop --command bash -c '
         set -euo pipefail
