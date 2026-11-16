@@ -146,6 +146,9 @@ jobs:
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The huginn runner's service leaves CI unset, so the DMG bundler drives
+          # Finder by AppleScript, which times out whenever the screen is locked.
+          CI: 'true'
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # GGML_NATIVE=OFF stops GGML's -march=native from re-enabling the i8mm
