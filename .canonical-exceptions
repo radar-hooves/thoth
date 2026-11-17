@@ -75,7 +75,6 @@ root-inventory:.mcp.json           2026-08-27  # present on disk but gitignored:
 # Skeleton-owned files Thoth keeps its own version of (v2026.11.56 stamp). Each is
 # a departure from the template; .template-parity.json hashes them as they stand.
 # ---------------------------------------------------------------------------
-skeleton:.github/workflows/change.yaml  2026-12-31  # Thoth is public and cannot call master's private pipeline (master-project#460); calls its own copy
 skeleton:scripts/tauri-release.sh       2026-12-31  # release path: check-release-writable and the macOS devShell install; template's would change the release
 skeleton:scripts/cargo-codesign.sh      2026-12-31  # verify-bundles also runs verify-macos-libraries and the hardened-runtime check; signing path
 skeleton:src/app.html                   2026-12-31  # template carries web-only /elements/placed.js and no dark class; Thoth is dark-only
