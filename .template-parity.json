@@ -64,7 +64,7 @@
     ".envrc": "e22895ae2755ec1f1abb2c4a8b4b6cd79fbde37a5eef87adc5e17ded015e9b48",
     ".gitattributes": "56948d73f4cc6397495f0cc82465bb90a04e7defec97ea10ed770900d37d1071",
     ".github/actionlint.yaml": "5053e0e3c3b884417fdd06d5425be5ffb0d00428749f4ce19113f793400ed144",
-    ".github/workflows/change.yaml": "770f570404145b27f0faf1e620f0b555db75da159d736f69ee0b2fb568973e95",
+    ".github/workflows/change.yaml": "b13065d7080170c552be41d85c75d8be7902c0d28af78402736f2fb3126bd9e3",
     ".gitignore": "defb5b3b7d4193ef777569a9d4ae57fe9227ce70ae9f61cea7de15d7bc8d6824",
     ".npmrc": "93d7b61d9d1758fdd82288796ffff0cbf7da54b37525d7b00ff8d5adf7fca13e",
     ".pre-commit-config.yaml": "3c20689882f30d91cfafbb0589e82988682c710cc3bb5527bcba8d720f6dd80d",
