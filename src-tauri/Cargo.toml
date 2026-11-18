@@ -137,7 +137,7 @@ chrono = { version = "0.4", features = ["serde"] }
 parking_lot = "0.12"
 dirs = "7.0"
 # Process RSS/CPU sampling for telemetry (own process only, no whole-system scan).
-sysinfo = { version = "0.33", default-features = false, features = ["system"] }
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 arboard = "3.4"
 enigo = "0.6"
 open = "5"
