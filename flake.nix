@@ -1,5 +1,5 @@
 {
-  description = "Thoth - Privacy-first, offline-capable voice transcription application";
+  description = "Private, offline voice transcription for macOS and Linux: press a key, speak, and the text lands at your cursor";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -391,7 +391,7 @@
           doCheck = false; # tests need audio hardware
 
           meta = with pkgs.lib; {
-            description = "Privacy-first, offline-capable voice transcription (GPU Parakeet + Whisper)";
+            description = "Private, offline voice transcription for macOS and Linux: press a key, speak, and the text lands at your cursor";
             homepage = "https://github.com/radar-hooves/thoth";
             license = licenses.mit;
             platforms = [ "x86_64-linux" ];

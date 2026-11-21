@@ -8,7 +8,7 @@
 
 **Press a key. Speak. Text appears.**
 
-**[Download for macOS](https://github.com/radar-hooves/thoth/releases/latest)** · **[Download for Linux](https://github.com/radar-hooves/thoth/releases/latest)**
+**[Download for macOS and Linux](https://github.com/radar-hooves/thoth/releases/latest)**
 
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8D8?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app/)
 [![Rust](https://img.shields.io/badge/Rust-2024-DEA584?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)

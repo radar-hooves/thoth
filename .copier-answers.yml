@@ -3,7 +3,7 @@ _src_path: gh:radar-hooves/app-factory
 bundle_identifier: com.poodle64.thoth
 dark_first: false
 density: comfortable
-description: Privacy-first, offline-capable voice transcription application
+description: "Private, offline voice transcription for macOS and Linux: press a key, speak, and the text lands at your cursor"
 frontend_port: 1422
 linux_cargo_args: --no-default-features --features vulkan
 project_name: thoth

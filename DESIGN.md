@@ -1,6 +1,6 @@
 ---
 name: Thoth
-description: Privacy-first, offline-capable voice transcription application
+description: "Private, offline voice transcription for macOS and Linux: press a key, speak, and the text lands at your cursor"
 version: 2026.8.1
 status: "on @poodle64/design-tokens and @poodle64/ui, with the drift and craft gates holding it"
 ---

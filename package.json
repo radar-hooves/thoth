@@ -2,7 +2,7 @@
   "name": "thoth-tauri",
   "version": "2026.11.7",
   "private": true,
-  "description": "Privacy-first, offline-capable voice transcription application",
+  "description": "Private, offline voice transcription for macOS and Linux: press a key, speak, and the text lands at your cursor",
   "type": "module",
   "packageManager": "pnpm@10.28.0",
   "scripts": {
