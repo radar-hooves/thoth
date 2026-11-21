@@ -90,13 +90,7 @@
           vulkan-tools
           # Shader compiler for Vulkan
           shaderc
-          # CUDA toolkit for whisper.cpp CUDA acceleration (NVIDIA GPUs)
-          cudaPackages.cudatoolkit
-          cudaPackages.cuda_nvcc
-          cudaPackages.cuda_cudart
-          cudaPackages.cuda_cccl
-          cudaPackages.libcublas
-          # GCC for CUDA compilation
+          # GCC for the C/C++ build scripts (whisper.cpp, sherpa-onnx)
           gcc
         ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
           # macOS: applesoft libraries (via Xcode) are used automatically
@@ -185,6 +179,17 @@
           unset __thoth_xcode __thoth_xcode_sdk
         '';
 
+        # CUDA toolkit for whisper.cpp / GPU Parakeet. Unfree, so no binary cache
+        # serves it and a runner unpacks every redist archive; only the `cuda` shell
+        # carries it, so the default shell (tests, CI) never fetches it.
+        cudaToolchain = [
+          cudaPackages.cudatoolkit
+          cudaPackages.cuda_nvcc
+          cudaPackages.cuda_cudart
+          cudaPackages.cuda_cccl
+          cudaPackages.libcublas
+        ];
+
         # One dev-shell definition, optionally wired for GPU Parakeet (CUDA).
         mkThothShell = { gpuParakeet ? false }: pkgs.mkShell ({
           # Platform-specific library paths (Linux). With gpuParakeet, also expose
@@ -193,10 +198,10 @@
             (pkgs.lib.makeLibraryPath ([
               pkgs.libappindicator-gtk3
               pkgs.vulkan-loader
+            ] ++ pkgs.lib.optionals gpuParakeet [
               cudaPackages.cuda_cudart
               cudaPackages.cuda_cccl
               cudaPackages.libcublas
-            ] ++ pkgs.lib.optionals gpuParakeet [
               sherpaOnnxCuda           # libsherpa-onnx-c-api.so + onnxruntime CUDA EP
               cudaPackages.cudnn       # libcudnn.so.9
               # The onnxruntime CUDA execution provider dlopen()s the full CUDA
@@ -215,14 +220,14 @@
           LIBCLANG_PATH = pkgs.lib.makeLibraryPath [ pkgs.llvmPackages.libclang ];
 
           # CUDA environment variables for whisper.cpp
-          CUDA_PATH = pkgs.lib.optionalString pkgs.stdenv.isLinux "${cudaPackages.cudatoolkit}";
-          CUDA_HOME = pkgs.lib.optionalString pkgs.stdenv.isLinux "${cudaPackages.cudatoolkit}";
+          CUDA_PATH = pkgs.lib.optionalString (gpuParakeet && pkgs.stdenv.isLinux) "${cudaPackages.cudatoolkit}";
+          CUDA_HOME = pkgs.lib.optionalString (gpuParakeet && pkgs.stdenv.isLinux) "${cudaPackages.cudatoolkit}";
 
           # Linker search path for CUDA driver (libcuda.so)
           RUSTFLAGS = pkgs.lib.optionalString pkgs.stdenv.isLinux "-L /run/opengl-driver/lib";
 
           packages = commonPackages
-            ++ pkgs.lib.optionals (gpuParakeet && pkgs.stdenv.isLinux) [ cudaPackages.cudnn ];
+            ++ pkgs.lib.optionals (gpuParakeet && pkgs.stdenv.isLinux) (cudaToolchain ++ [ cudaPackages.cudnn ]);
 
           shellHook = ''
             echo "𓅝 Thoth Development Environment${pkgs.lib.optionalString gpuParakeet " (GPU Parakeet / CUDA)"}"
@@ -242,14 +247,11 @@
             echo "Commands:"
             echo "  pnpm install        - Install dependencies"
             echo "  pnpm tauri dev      - Start development build"
-            echo "  pnpm tauri dev -- --features cuda    - Dev with CUDA GPU acceleration"
-            echo "  pnpm tauri build -- --features cuda  - Build with CUDA"
             echo "  cargo test          - Run Rust tests (from src-tauri/)"
             echo ""
             echo "GPU Acceleration (Linux):"
-            echo "  --features cuda     - NVIDIA GPUs (Whisper)"
             echo "  --features vulkan   - Cross-platform (Whisper)"
-            echo "  nix develop .#cuda  - GPU Parakeet (NVIDIA, via sherpa-onnx CUDA)"
+            echo "  nix develop .#cuda  - NVIDIA CUDA (Whisper --features cuda, GPU Parakeet)"
           '') + bindgenHook + darwinSwiftLinkHook;
         } // pkgs.lib.optionalAttrs gpuParakeet {
           # Make sherpa-onnx-sys link the CUDA libs instead of downloading CPU ones.
