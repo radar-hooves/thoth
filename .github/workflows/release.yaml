@@ -83,7 +83,7 @@ jobs:
 
       - name: Install pnpm
         if: matrix.platform != 'huginn'
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           # Reads the packageManager pin from package.json rather than
           # floating to whatever latest pnpm 10.x exists at run time.
@@ -117,7 +117,7 @@ jobs:
 
       - name: Setup Rust
         if: matrix.platform != 'huginn'
-        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
 
       # Shared with ci.yaml — see scripts/install-linux-ci-deps.sh for why the
       # Vulkan SDK is needed and why every network call there is bounded and
