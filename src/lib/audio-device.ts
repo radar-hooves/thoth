@@ -2,22 +2,12 @@
 
 import type { AudioDevice } from './stores/settings.svelte';
 
-export type InputState =
-  /** Nothing saved; recording from the system default. */
-  | 'default'
-  /** The saved device is connected and in use. */
-  | 'saved'
-  /** The saved device is absent; recording from the system default. */
-  | 'fallback'
-  /** The saved device is absent and there is no input at all. */
-  | 'none';
-
+/** The backend's resolution (`resolve_input_device`): the device recording uses, and why. */
 export interface InputResolution {
-  state: InputState;
-  /** The saved device's friendly name, when one is saved. */
-  savedName: string | null;
-  /** The device recording uses now. */
+  saved_missing: boolean;
   active: AudioDevice | null;
+  system_default: AudioDevice | null;
+  reason: 'saved' | 'system_default' | 'bluetooth_avoided' | 'bluetooth_only';
 }
 
 const SERIAL = /^([0-9A-F]{8,}|\d+)$/i;
@@ -36,37 +26,38 @@ export function friendlyNameFromId(id: string): string | null {
   return names.at(-1) ?? null;
 }
 
-export function resolveInput(savedId: string | null, devices: AudioDevice[]): InputResolution {
-  const systemDefault = devices.find((d) => d.is_default) ?? null;
-  if (!savedId) {
-    return { state: systemDefault ? 'default' : 'none', savedName: null, active: systemDefault };
+/** What the pane says. Names come from the backend's resolution; only a missing device's name is read from its id. */
+export function bannerText(r: InputResolution, savedId: string | null): { title: string; detail: string; ok: boolean } {
+  if (!r.active) {
+    return {
+      ok: false,
+      title: 'No Microphone',
+      detail: savedId ? `${savedName(savedId)} isn't connected and no other input device is available.` : 'No input device is available.',
+    };
   }
-  const saved = devices.find((d) => d.id === savedId);
-  if (saved) return { state: 'saved', savedName: saved.name, active: saved };
+  const using = r.active.name;
+  const bluetooth =
+    r.reason === 'bluetooth_avoided'
+      ? ` ${r.system_default?.name} is Bluetooth, so Thoth records from ${using} to keep headphone audio in high quality.`
+      : r.reason === 'bluetooth_only'
+        ? ' It is a Bluetooth mic, so headphone audio drops to call quality while recording.'
+        : '';
+  if (r.saved_missing && savedId) {
+    const saved = savedName(savedId);
+    return {
+      ok: false,
+      title: 'Using System Default',
+      detail: `${saved} isn't connected, so Thoth is using ${using} (system default).${bluetooth} Thoth uses ${saved} again once it is reconnected.`,
+    };
+  }
+  if (r.reason === 'saved') return { ok: true, title: 'Active Device', detail: using };
   return {
-    state: systemDefault ? 'fallback' : 'none',
-    savedName: friendlyNameFromId(savedId) ?? 'Your saved microphone',
-    active: systemDefault,
+    ok: r.reason !== 'bluetooth_only',
+    title: 'Active Device',
+    detail: `${using} (System Default)${bluetooth}`,
   };
 }
 
-export function bannerText(r: InputResolution): { title: string; detail: string; ok: boolean } {
-  switch (r.state) {
-    case 'default':
-      return { ok: true, title: 'Active Device', detail: `${r.active?.name} (System Default)` };
-    case 'saved':
-      return { ok: true, title: 'Active Device', detail: r.active?.name ?? '' };
-    case 'fallback':
-      return {
-        ok: false,
-        title: 'Using System Default',
-        detail: `${r.savedName} isn't connected, so Thoth is using ${r.active?.name} (system default). Thoth uses ${r.savedName} again once it is reconnected.`,
-      };
-    case 'none':
-      return {
-        ok: false,
-        title: 'No Microphone',
-        detail: r.savedName ? `${r.savedName} isn't connected and no other input device is available.` : 'No input device is available.',
-      };
-  }
+function savedName(id: string): string {
+  return friendlyNameFromId(id) ?? 'Your saved microphone';
 }

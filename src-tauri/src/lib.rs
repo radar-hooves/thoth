@@ -486,6 +486,7 @@ pub fn run() {
                 platform::get_gpu_info,
                 // Audio
                 audio::device::list_audio_devices,
+                audio::device::resolve_input_device,
                 audio::preview::start_audio_preview,
                 audio::preview::stop_audio_preview,
                 audio::start_recording,

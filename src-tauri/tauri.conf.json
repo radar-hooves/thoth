@@ -1,133 +1,133 @@
 {
-	"$schema": "https://schema.tauri.app/config/2",
-	"productName": "Thoth",
-	"version": "2026.11.8",
-	"identifier": "com.poodle64.thoth",
-	"build": {
-		"runner": "../scripts/cargo-codesign.sh",
-		"beforeDevCommand": "npm run dev",
-		"devUrl": "http://localhost:1422",
-		"beforeBuildCommand": "npm run build",
-		"beforeBundleCommand": "bash scripts/cargo-codesign.sh check-bundle",
-		"frontendDist": "../build"
-	},
-	"app": {
-		"macOSPrivateApi": true,
-		"windows": [
-			{
-				"label": "main",
-				"title": "Thoth",
-				"width": 1100,
-				"height": 1200,
-				"minWidth": 980,
-				"minHeight": 700,
-				"visible": true,
-				"titleBarStyle": "Overlay",
-				"hiddenTitle": true
-			},
-			{
-				"label": "recording-indicator",
-				"title": "",
-				"url": "/recording-indicator",
-				"width": 58,
-				"height": 58,
-				"visible": false,
-				"resizable": false,
-				"decorations": false,
-				"transparent": true,
-				"alwaysOnTop": true,
-				"skipTaskbar": true,
-				"focus": false
-			},
-			{
-				"label": "history",
-				"title": "Thoth - History",
-				"url": "/history",
-				"width": 800,
-				"height": 600,
-				"visible": false,
-				"titleBarStyle": "Overlay",
-				"hiddenTitle": true
-			},
-			{
-				"label": "prompt-guide",
-				"title": "Thoth - Prompt Writing Guide",
-				"url": "/prompt-guide",
-				"width": 900,
-				"height": 700,
-				"visible": false,
-				"titleBarStyle": "Overlay",
-				"hiddenTitle": true
-			}
-		],
-		"security": {
-			"csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset:; connect-src ipc: http://ipc.localhost http://localhost:* https://localhost:*; font-src 'self' data:"
-		}
-	},
-	"plugins": {
-		"fs": {
-			"requireLiteralLeadingDot": false
-		},
-		"updater": {
-			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEExOEY5RURGQUJBNkQzRjkKUldUNTA2YXIzNTZQb1lNSGQ3WVlkbDY3VVlUQlJYSzJzQW5ieUhhci9NVnVDUms5T0NJa21acnEK",
-			"endpoints": [
-				"https://github.com/radar-hooves/thoth/releases/latest/download/latest.json"
-			]
-		}
-	},
-	"bundle": {
-		"active": true,
-		"targets": "all",
-		"createUpdaterArtifacts": true,
-		"icon": [
-			"icons/32x32.png",
-			"icons/128x128.png",
-			"icons/128x128@2x.png",
-			"icons/icon.icns",
-			"icons/icon.ico"
-		],
-		"category": "public.app-category.productivity",
-		"shortDescription": "Privacy-first voice transcription",
-		"longDescription": "Thoth is a privacy-first, offline-capable voice transcription application that converts speech to text with near-instantaneous processing.",
-		"macOS": {
-			"minimumSystemVersion": "14.0",
-			"signingIdentity": "-",
-			"entitlements": "./Entitlements.plist",
-			"dmg": {
-				"windowSize": {
-					"width": 660,
-					"height": 400
-				},
-				"appPosition": {
-					"x": 180,
-					"y": 220
-				},
-				"applicationFolderPosition": {
-					"x": 480,
-					"y": 220
-				}
-			}
-		},
-		"linux": {
-			"appimage": {
-				"bundleMediaFramework": true
-			},
-			"deb": {
-				"depends": [
-					"libasound2",
-					"libwebkit2gtk-4.1-0",
-					"libgtk-3-0",
-					"libvulkan1"
-				],
-				"recommends": [
-					"wtype",
-					"xdg-utils",
-					"libayatana-appindicator3-1"
-				],
-				"section": "sound",
-				"priority": "optional",
-				"desktopTemplate": "linux/thoth.desktop"
-			}
-		}
-	}
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Thoth",
+  "version": "2026.11.8",
+  "identifier": "com.poodle64.thoth",
+  "build": {
+    "runner": "../scripts/cargo-codesign.sh",
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1422",
+    "beforeBuildCommand": "npm run build",
+    "beforeBundleCommand": "bash scripts/cargo-codesign.sh check-bundle",
+    "frontendDist": "../build"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Thoth",
+        "width": 1100,
+        "height": 1200,
+        "minWidth": 980,
+        "minHeight": 700,
+        "visible": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
+      },
+      {
+        "label": "recording-indicator",
+        "title": "",
+        "url": "/recording-indicator",
+        "width": 58,
+        "height": 58,
+        "visible": false,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false
+      },
+      {
+        "label": "history",
+        "title": "Thoth - History",
+        "url": "/history",
+        "width": 800,
+        "height": 600,
+        "visible": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
+      },
+      {
+        "label": "prompt-guide",
+        "title": "Thoth - Prompt Writing Guide",
+        "url": "/prompt-guide",
+        "width": 900,
+        "height": 700,
+        "visible": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset:; connect-src ipc: http://ipc.localhost http://localhost:* https://localhost:*; font-src 'self' data:"
+    }
+  },
+  "plugins": {
+    "fs": {
+      "requireLiteralLeadingDot": false
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEExOEY5RURGQUJBNkQzRjkKUldUNTA2YXIzNTZQb1lNSGQ3WVlkbDY3VVlUQlJYSzJzQW5ieUhhci9NVnVDUms5T0NJa21acnEK",
+      "endpoints": [
+        "https://github.com/radar-hooves/thoth/releases/latest/download/latest.json"
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "public.app-category.productivity",
+    "shortDescription": "Privacy-first voice transcription",
+    "longDescription": "Thoth is a privacy-first, offline-capable voice transcription application that converts speech to text with near-instantaneous processing.",
+    "macOS": {
+      "minimumSystemVersion": "14.0",
+      "signingIdentity": "-",
+      "entitlements": "./Entitlements.plist",
+      "dmg": {
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        },
+        "appPosition": {
+          "x": 180,
+          "y": 220
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 220
+        }
+      }
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      },
+      "deb": {
+        "depends": [
+          "libasound2",
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0",
+          "libvulkan1"
+        ],
+        "recommends": [
+          "wtype",
+          "xdg-utils",
+          "libayatana-appindicator3-1"
+        ],
+        "section": "sound",
+        "priority": "optional",
+        "desktopTemplate": "linux/thoth.desktop"
+      }
+    }
+  }
 }

@@ -12,7 +12,7 @@
   import Mic from '@lucide/svelte/icons/mic';
   import MicOff from '@lucide/svelte/icons/mic-off';
   import AlertCircle from '@lucide/svelte/icons/alert-circle';
-  import { bannerText, resolveInput } from '../audio-device';
+  import { bannerText, friendlyNameFromId } from '../audio-device';
 
   interface AudioLevelEvent {
     rms: number;
@@ -29,8 +29,10 @@
 
   const DEFAULT_VALUE = '__system_default__';
 
-  let resolution = $derived(resolveInput(settingsStore.selectedDeviceId, settingsStore.audioDevices));
-  let banner = $derived(bannerText(resolution));
+  let resolution = $derived(settingsStore.resolution);
+  let banner = $derived(
+    resolution ? bannerText(resolution, settingsStore.selectedDeviceId) : null
+  );
 
   function linearToMeterPosition(linear: number): number {
     if (linear <= 0) return 0;
@@ -47,8 +49,11 @@
 
   /** The saved device when it is not connected, so the select can still name it. */
   let missingDevice = $derived(
-    resolution.state === 'fallback' || (resolution.state === 'none' && settingsStore.selectedDeviceId)
-      ? { id: settingsStore.selectedDeviceId as string, label: `${resolution.savedName} (not connected)` }
+    resolution?.saved_missing && settingsStore.selectedDeviceId
+      ? {
+          id: settingsStore.selectedDeviceId,
+          label: `${friendlyNameFromId(settingsStore.selectedDeviceId) ?? 'Saved microphone'} (not connected)`,
+        }
       : null
   );
 
@@ -132,6 +137,7 @@
 
 <div class="flex flex-col gap-5">
   <!-- Device status banner -->
+  {#if banner}
   <div
     class="flex items-center gap-3 rounded-lg border px-4 py-3 {banner.ok
       ? 'border-green-500/40 bg-green-500/5'
@@ -155,6 +161,7 @@
       <span class="text-sm font-medium text-foreground">{banner.detail}</span>
     </div>
   </div>
+  {/if}
 
   <!-- Device selector -->
   <div class="flex flex-col gap-2">

@@ -9,6 +9,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { configStore } from './config.svelte';
+import type { InputResolution } from '../audio-device';
 
 /** Audio device information from the Tauri backend */
 export interface AudioDevice {
@@ -28,6 +29,7 @@ export interface AudioDevice {
  */
 export function createSettingsStore() {
   let audioDevices = $state<AudioDevice[]>([]);
+  let resolution = $state<InputResolution | null>(null);
   let isLoadingDevices = $state<boolean>(false);
   let error = $state<string | null>(null);
   let isInitialised = $state<boolean>(false);
@@ -46,6 +48,7 @@ export function createSettingsStore() {
     try {
       const devices = await invoke<AudioDevice[]>('list_audio_devices');
       audioDevices = devices;
+      await refreshResolution();
 
       // Check if stored selection is currently available
       const currentDeviceId = configStore.audio.deviceId;
@@ -64,6 +67,11 @@ export function createSettingsStore() {
     }
   }
 
+  /** Ask the backend which device recording uses now, and why. */
+  async function refreshResolution(): Promise<void> {
+    resolution = await invoke<InputResolution>('resolve_input_device');
+  }
+
   /**
    * Select an audio input device
    *
@@ -76,6 +84,7 @@ export function createSettingsStore() {
     await invoke('set_audio_device', { deviceId });
     // Update the in-memory config so the UI reflects the change immediately
     configStore.updateAudio('deviceId', deviceId);
+    await refreshResolution();
   }
 
   /**
@@ -136,6 +145,7 @@ export function createSettingsStore() {
     // Listen for device changes from the tray menu so the UI stays in sync
     deviceChangedUnlisten = await listen<string | null>('audio-device-changed', (event) => {
       configStore.updateAudio('deviceId', event.payload);
+      void refreshResolution();
     });
 
     // The backend watches the system's input devices; reload when one comes or goes.
@@ -195,6 +205,9 @@ export function createSettingsStore() {
     },
     get selectedDeviceId() {
       return configStore.audio.deviceId;
+    },
+    get resolution() {
+      return resolution;
     },
     get isLoadingDevices() {
       return isLoadingDevices;

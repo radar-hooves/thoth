@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026.11.8] - 2026-11-26
+
+### Fixed
+
+- **The Input Device pane tells one true story.** A saved microphone that is not plugged in is named (for example "Plantronics Blackwire 3220 Series isn't connected, so Thoth is using DJI MIC MINI (system default)"), and the dropdown shows it as not connected instead of a raw id. Choosing System Default no longer leaves the dropdown reading "Select device…". The banner names the device Thoth will actually record from, including when a Bluetooth default is passed over for another input. One refresh button confirms what it found.
+- **A returning microphone is used again.** Thoth watches the system's input devices, so a saved microphone that is plugged back in is picked up without a visit to Settings.
+
 ## [2026.11.7] - 2026-11-16
 
 ### Added

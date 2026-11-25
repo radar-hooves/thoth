@@ -18,8 +18,29 @@ const PLANTRONICS = 'coreaudio:AppleUSBAudioEngine:Plantronics:Plantronics Black
 const DJI = { id: 'coreaudio:DJI', name: 'DJI MIC MINI', is_default: true };
 const BLACKWIRE = { id: PLANTRONICS, name: 'Plantronics Blackwire 3220 Series', is_default: false };
 
-function mount(saved: string | null, devices: unknown[]) {
-  invoke.mockImplementation(async (cmd: string) => (cmd === 'list_audio_devices' ? devices : undefined));
+/** The backend's resolution, computed here the way Rust's resolve_input does for these fixtures. */
+function resolutionFor(saved: string | null, devices: Array<typeof DJI>, bluetoothDefault = false) {
+  const systemDefault = devices.find((d) => d.is_default) ?? null;
+  const found = devices.find((d) => d.id === saved);
+  if (found) return { saved_missing: false, active: found, system_default: systemDefault, reason: 'saved' };
+  if (bluetoothDefault) {
+    const other = devices.find((d) => !d.is_default) ?? null;
+    return {
+      saved_missing: saved !== null,
+      active: other ?? systemDefault,
+      system_default: systemDefault,
+      reason: other ? 'bluetooth_avoided' : 'bluetooth_only',
+    };
+  }
+  return { saved_missing: saved !== null, active: systemDefault, system_default: systemDefault, reason: 'system_default' };
+}
+
+function mount(saved: string | null, devices: Array<typeof DJI>, bluetoothDefault = false) {
+  invoke.mockImplementation(async (cmd: string) => {
+    if (cmd === 'list_audio_devices') return devices;
+    if (cmd === 'resolve_input_device') return resolutionFor(saved, devices, bluetoothDefault);
+    return undefined;
+  });
   configStore.updateAudio('deviceId', saved);
   return render(AudioDeviceSelector);
 }
@@ -56,10 +77,19 @@ describe('AudioDeviceSelector states', () => {
   it('device returns: the pane follows the store back to the saved device', async () => {
     mount(PLANTRONICS, [DJI]);
     await screen.findByText(/isn't connected/);
-    invoke.mockImplementation(async () => [DJI, BLACKWIRE]);
+    invoke.mockImplementation(async (cmd: string) => (cmd === 'list_audio_devices' ? [DJI, BLACKWIRE] : resolutionFor(PLANTRONICS, [DJI, BLACKWIRE])));
     await settingsStore.loadAudioDevices();
     await waitFor(() => expect(screen.getByText('Active Device')).toBeTruthy());
     expect(screen.queryByText(/isn't connected/)).toBeNull();
+  });
+
+  it('Bluetooth default: banner and dropdown name the device recorded from', async () => {
+    const PODS = { id: 'coreaudio:pods', name: 'AirPods Pro', is_default: true };
+    const MAC = { id: 'coreaudio:mac', name: 'MacBook Microphone', is_default: false };
+    mount(null, [PODS, MAC], true);
+    await screen.findByText(/AirPods Pro is Bluetooth, so Thoth records from MacBook Microphone/);
+    expect(screen.getByText(/^MacBook Microphone \(System Default\)/)).toBeTruthy();
+    expect(screen.queryByText('DJI MIC MINI (System Default)')).toBeNull();
   });
 
   it('no input at all: says so', async () => {
