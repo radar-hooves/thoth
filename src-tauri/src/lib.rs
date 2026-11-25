@@ -464,6 +464,8 @@ pub fn run() {
             // for both lists; off, the loop only checks the config each wake.
             external_dictionary::spawn_sync_loop();
 
+            audio::watch::start();
+
             // Re-warm the model after wake-from-sleep (CoreML cache eviction)
             #[cfg(target_os = "macos")]
             platform::macos::register_wake_observer();

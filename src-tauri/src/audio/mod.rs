@@ -11,6 +11,7 @@ pub mod preview;
 pub mod ring_buffer;
 pub mod speech_gate;
 pub mod vad;
+pub mod watch;
 pub mod wav;
 
 pub use capture::AudioRecorder;

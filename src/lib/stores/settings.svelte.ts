@@ -32,6 +32,7 @@ export function createSettingsStore() {
   let error = $state<string | null>(null);
   let isInitialised = $state<boolean>(false);
   let deviceChangedUnlisten: UnlistenFn | null = null;
+  let devicesChangedUnlisten: UnlistenFn | null = null;
   let promptChangedUnlisten: UnlistenFn | null = null;
   let enhancementToggledUnlisten: UnlistenFn | null = null;
   let trayRebuildUnlisten: UnlistenFn | null = null;
@@ -52,10 +53,7 @@ export function createSettingsStore() {
         // Device not currently enumerated, but keep the preference intact.
         // The Rust backend falls back to the system default gracefully,
         // and the device may reappear (e.g. USB reconnect, sleep/wake).
-        console.warn(
-          `Configured audio device '${currentDeviceId}' not currently available. ` +
-            'Preference preserved; backend will use system default as fallback.'
-        );
+        console.warn(`Configured audio device '${currentDeviceId}' not currently available. ` + 'Preference preserved; backend will use system default as fallback.');
       }
     } catch (e) {
       const errorMsg = `${e}`;
@@ -140,6 +138,11 @@ export function createSettingsStore() {
       configStore.updateAudio('deviceId', event.payload);
     });
 
+    // The backend watches the system's input devices; reload when one comes or goes.
+    devicesChangedUnlisten = await listen('audio-devices-changed', () => {
+      void loadAudioDevices();
+    });
+
     // Listen for prompt changes from the tray menu so the UI stays in sync
     promptChangedUnlisten = await listen<string>('prompt-changed', (event) => {
       configStore.updateEnhancement('promptId', event.payload);
@@ -164,6 +167,10 @@ export function createSettingsStore() {
    * Clean up event listeners
    */
   function cleanup(): void {
+    if (devicesChangedUnlisten) {
+      devicesChangedUnlisten();
+      devicesChangedUnlisten = null;
+    }
     if (deviceChangedUnlisten) {
       deviceChangedUnlisten();
       deviceChangedUnlisten = null;

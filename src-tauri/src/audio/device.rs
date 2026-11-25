@@ -121,6 +121,13 @@ pub fn find_input_device_by_id(id_str: &str) -> Option<cpal::Device> {
 static LAST_FALLBACK_ID: std::sync::OnceLock<parking_lot::Mutex<Option<String>>> =
     std::sync::OnceLock::new();
 
+/// Let the next missing-device fallback notify again (the device list changed).
+pub fn forget_fallback_notice() {
+    if let Some(cell) = LAST_FALLBACK_ID.get() {
+        *cell.lock() = None;
+    }
+}
+
 /// Emit a user-facing notice that the configured input device was not found and
 /// the default is being used, deduped per distinct missing id.
 fn notify_device_fallback_once(missing_id: &str) {

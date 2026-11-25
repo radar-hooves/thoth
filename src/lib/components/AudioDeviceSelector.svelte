@@ -12,6 +12,7 @@
   import Mic from '@lucide/svelte/icons/mic';
   import MicOff from '@lucide/svelte/icons/mic-off';
   import AlertCircle from '@lucide/svelte/icons/alert-circle';
+  import { bannerText, resolveInput } from '../audio-device';
 
   interface AudioLevelEvent {
     rms: number;
@@ -26,23 +27,10 @@
   let peakLevel = $state(0);
   let unlisten: UnlistenFn | null = null;
 
-  let selectedDeviceAvailable = $derived.by(() => {
-    const deviceId = settingsStore.selectedDeviceId;
-    if (!deviceId) {
-      return settingsStore.audioDevices.some((d) => d.is_default);
-    }
-    return settingsStore.audioDevices.some((d) => d.id === deviceId);
-  });
+  const DEFAULT_VALUE = '__system_default__';
 
-  let selectedDeviceName = $derived.by(() => {
-    const deviceId = settingsStore.selectedDeviceId;
-    if (!deviceId) {
-      const defaultDevice = settingsStore.audioDevices.find((d) => d.is_default);
-      return defaultDevice ? `${defaultDevice.name} (System Default)` : 'System Default';
-    }
-    const device = settingsStore.audioDevices.find((d) => d.id === deviceId);
-    return device ? device.name : 'Unknown Device';
-  });
+  let resolution = $derived(resolveInput(settingsStore.selectedDeviceId, settingsStore.audioDevices));
+  let banner = $derived(bannerText(resolution));
 
   function linearToMeterPosition(linear: number): number {
     if (linear <= 0) return 0;
@@ -54,8 +42,15 @@
   let meterLevel = $derived(linearToMeterPosition(currentLevel));
   let meterPeak = $derived(linearToMeterPosition(peakLevel));
 
-  /** Derive the select value: null device id maps to the empty-string sentinel */
-  let selectValue = $derived(settingsStore.selectedDeviceId ?? '');
+  /** A null device id is the system default; the select needs a non-empty value to show a label. */
+  let selectValue = $derived(settingsStore.selectedDeviceId ?? DEFAULT_VALUE);
+
+  /** The saved device when it is not connected, so the select can still name it. */
+  let missingDevice = $derived(
+    resolution.state === 'fallback' || (resolution.state === 'none' && settingsStore.selectedDeviceId)
+      ? { id: settingsStore.selectedDeviceId as string, label: `${resolution.savedName} (not connected)` }
+      : null
+  );
 
   onMount(async () => {
     await settingsStore.loadAudioDevices();
@@ -66,7 +61,7 @@
   });
 
   async function handleDeviceChange(value: string | undefined): Promise<void> {
-    const resolved = value === '' || value === undefined ? null : value;
+    const resolved = value === DEFAULT_VALUE || value === undefined ? null : value;
     await settingsStore.selectAudioDevice(resolved);
     if (isPreviewActive) {
       await restartPreview();
@@ -122,6 +117,10 @@
 
   async function refreshDevices(): Promise<void> {
     await settingsStore.loadAudioDevices();
+    if (!settingsStore.error) {
+      const n = settingsStore.audioDevices.length;
+      toast.success(`Devices refreshed: ${n} input ${n === 1 ? 'device' : 'devices'} found`);
+    }
   }
 
   /** Build the display label for the system default option */
@@ -134,12 +133,12 @@
 <div class="flex flex-col gap-5">
   <!-- Device status banner -->
   <div
-    class="flex items-center gap-3 rounded-lg border px-4 py-3 {selectedDeviceAvailable
+    class="flex items-center gap-3 rounded-lg border px-4 py-3 {banner.ok
       ? 'border-green-500/40 bg-green-500/5'
       : 'border-yellow-500/40 bg-yellow-500/5'}"
   >
-    <div class="shrink-0 size-5 {selectedDeviceAvailable ? 'text-green-500' : 'text-yellow-500'}">
-      {#if selectedDeviceAvailable}
+    <div class="shrink-0 size-5 {banner.ok ? 'text-green-500' : 'text-yellow-500'}">
+      {#if banner.ok}
         <Mic class="size-5" />
       {:else}
         <MicOff class="size-5" />
@@ -147,17 +146,14 @@
     </div>
     <div class="flex flex-col gap-0.5 flex-1 min-w-0">
       <span
-        class="text-xs font-semibold uppercase tracking-wide {selectedDeviceAvailable
+        class="text-xs font-semibold uppercase tracking-wide {banner.ok
           ? 'text-green-500'
           : 'text-yellow-500'}"
       >
-        {selectedDeviceAvailable ? 'Active Device' : 'Device Unavailable'}
+        {banner.title}
       </span>
-      <span class="text-sm font-medium truncate text-foreground">{selectedDeviceName}</span>
+      <span class="text-sm font-medium text-foreground">{banner.detail}</span>
     </div>
-    {#if !selectedDeviceAvailable}
-      <Button variant="outline" size="sm" onclick={refreshDevices}>Refresh</Button>
-    {/if}
   </div>
 
   <!-- Device selector -->
@@ -166,14 +162,15 @@
       Input Device
     </label>
     <div class="flex gap-2 items-center">
-      {#key settingsStore.audioDevices.length}
+      {#key `${settingsStore.audioDevices.length}:${missingDevice?.id}`}
         <Select.Root
           type="single"
           value={selectValue}
           onValueChange={handleDeviceChange}
           disabled={settingsStore.isLoadingDevices}
           items={[
-            { value: '', label: defaultOptionLabel },
+            { value: DEFAULT_VALUE, label: defaultOptionLabel },
+            ...(missingDevice ? [{ value: missingDevice.id, label: missingDevice.label }] : []),
             ...settingsStore.audioDevices.map((d) => ({
               value: d.id,
               label: `${d.name}${d.is_default ? ' (Default)' : ''}`,
@@ -184,7 +181,14 @@
             <SelectPrimitive.Value placeholder="Select device…" />
           </Select.Trigger>
           <Select.Content>
-            <Select.Item value="" label={defaultOptionLabel}>{defaultOptionLabel}</Select.Item>
+            <Select.Item value={DEFAULT_VALUE} label={defaultOptionLabel}>
+              {defaultOptionLabel}
+            </Select.Item>
+            {#if missingDevice}
+              <Select.Item value={missingDevice.id} label={missingDevice.label}>
+                {missingDevice.label}
+              </Select.Item>
+            {/if}
             {#each settingsStore.audioDevices as device (device.id)}
               <Select.Item
                 value={device.id}
