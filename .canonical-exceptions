@@ -77,9 +77,6 @@ root-inventory:.mcp.json           2026-08-27  # present on disk but gitignored:
 # ---------------------------------------------------------------------------
 skeleton:scripts/tauri-release.sh       2026-12-31  # release path: check-release-writable and the macOS devShell install; template's would change the release
 skeleton:scripts/cargo-codesign.sh      2026-12-31  # verify-bundles also runs verify-macos-libraries and the hardened-runtime check; signing path
-skeleton:src/app.html                   2026-12-31  # template carries web-only /elements/placed.js and no dark class; Thoth is dark-only
 skeleton:.github/actionlint.yaml        2026-12-31  # runner labels light, gradle, release, ubuntu-26.04 are used by nix-check.yaml and release.yaml
 skeleton:renovate.json                  2026-12-31  # Thoth's holds (TypeScript 7, tauri-action, ubuntu)
-skeleton:src/lib/utils.ts               2026-12-31  # vendored shadcn ui components import WithElementRef from #lib/utils
 skeleton:stylelint.config.js            2026-12-31  # template's style rules flag 44 existing findings (40 autofixable); adopting them is a separate pass
-skeleton:.pre-commit-config.yaml        2026-12-31  # default_language_version python3.14: huginn has no usable python3.15 (pip 25 breaks on 3.15's typing), so the hook environment cannot build; restore 3.15 when the host has one

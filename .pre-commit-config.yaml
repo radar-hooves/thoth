@@ -1,6 +1,5 @@
-default_language_version:
-  python: python3.14
-
+# No default_language_version: pre-commit-hooks is the one Python hook and builds
+# under the Python that runs pre-commit; the desktop apps' Mac has no python3.15.
 # Merge commits run no gate without pre-merge-commit; changing this needs `pre-commit install` re-run.
 default_install_hook_types: [pre-commit, pre-merge-commit, commit-msg]
 

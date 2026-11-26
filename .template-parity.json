@@ -63,11 +63,11 @@
   "files": {
     ".envrc": "e22895ae2755ec1f1abb2c4a8b4b6cd79fbde37a5eef87adc5e17ded015e9b48",
     ".gitattributes": "56948d73f4cc6397495f0cc82465bb90a04e7defec97ea10ed770900d37d1071",
-    ".github/actionlint.yaml": "5053e0e3c3b884417fdd06d5425be5ffb0d00428749f4ce19113f793400ed144",
+    ".github/actionlint.yaml": "cc542b10cce29dc3546f4d75a395c39b58efa6212d182a44dc1be620c272814b",
     ".github/workflows/change.yaml": "b13065d7080170c552be41d85c75d8be7902c0d28af78402736f2fb3126bd9e3",
     ".gitignore": "defb5b3b7d4193ef777569a9d4ae57fe9227ce70ae9f61cea7de15d7bc8d6824",
     ".npmrc": "93d7b61d9d1758fdd82288796ffff0cbf7da54b37525d7b00ff8d5adf7fca13e",
-    ".pre-commit-config.yaml": "3c20689882f30d91cfafbb0589e82988682c710cc3bb5527bcba8d720f6dd80d",
+    ".pre-commit-config.yaml": "2986dd09c2cf1f1819b55c4093d1a68f297a52cb75adff2741560b2d5fb1a81c",
     ".vscode/extensions.json": "ee700d5d6cbe41ce9c2e6b3d4c0c047e23e8f956e39592994416cc01af317f14",
     "components.json": "8f4cb621a73e8c3596a5d94076eae3f5e7fae328ed87221400082fc4b98d9794",
     "renovate.json": "1b353a597256da092789a0f31dd33b545c609c31ee754846b77eaabbeeaf8801",
@@ -75,6 +75,7 @@
     "scripts/cargo-codesign.sh": "7cfddf424824c94c75868d9df963674f58c3ab9b1da0832a60b8f300042e46b0",
     "scripts/check-design-craft.mjs": "a56bf7dbd00e6740e88e82bee026fa01f193b2052ffc11261b757bea16961a3e",
     "scripts/check-ui-drift.mjs": "748d2653e9259d82816c061cf8020a995a6f55d073a42a20ac573349a2014bc9",
+    "scripts/publish-release.sh": "1ce91a6772ef5c3aa47dce0f120a675986361749745539cd2fc0610de6ee6ff9",
     "scripts/tauri-release.sh": "c49a9a965c7ec7dacf91c829f8d5285bd223636536ca32af7168791bbb4f8fa2",
     "scripts/update-kit-hash.sh": "ff0dd35e5ae5b6471481b1a7c9ab68919399cc2f48007a294a52a564561c3ae3",
     "scripts/update-pnpm-deps-hash.sh": "cafbf14c84bdceb821d65ee3a1e3756e01c1cbd749b7343b741544f664e7f46d",
@@ -83,8 +84,8 @@
     "scripts/webkit-layout/sweep.py": "081c64d24de9edc23ebb5f4aa865615ce2d9d965ff4fa93ac74c6a1bcd29c1a3",
     "scripts/webkit-layout/tauri-mock.js": "9364efeaeeaf62f87febbbb5890bb58e746e29ce0ab548952f2ac3654e3478d9",
     "src-tauri/src/main.rs": "f56c72c0da384def7cd1311f7a24da24319ed1fbd32b472df0f96f6826a208f6",
-    "src/app.html": "4dadc9b1239f8f0e0abdcd11c00359230cb25a152d96785e972e0e52751cd61d",
-    "src/lib/utils.ts": "ac702cbdf6203b191b303c1d2afdca106aef830e522ea48cc26db39847abbf01",
+    "src/app.html": "2925843e331c7e64c34f495c1965901dc5caf1500f82b7f5014088fd119ab2f8",
+    "src/lib/utils.ts": "840869bdd16a29ecc29e2be6da78b27fed4c8364d57fddc7aa4aec22b5e458ed",
     "src/routes/+layout.ts": "c0f598c761adf7f09306cae2e5f27563305f0fbdbe04f826f8b8d6961b531967",
     "src/test/setup.test.ts": "18d3fe71f4f76deb5b65f129c4a948089504a658c83b2437a598a7a4db842e03",
     "src/test/setup.ts": "0b90a2b8b4be75fa034b409c1a6bc338b6c4282e128476cf17c5888fb9d264b7",
@@ -95,7 +96,7 @@
   },
   "omitted": {},
   "template": {
-    "commit": "42bcca61dcb7fedf1da8bcd748909921605bcc35"
+    "commit": "1f871889bf69a8c4b24066cfed93242e75196790"
   },
   "variants": {}
 }
