@@ -6411,7 +6411,7 @@ dependencies = [
 
 [[package]]
 name = "thoth"
-version = "2026.11.8"
+version = "2026.11.9"
 dependencies = [
  "anyhow",
  "arboard",

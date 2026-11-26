@@ -1,6 +1,6 @@
 [package]
 name = "thoth"
-version = "2026.11.8"
+version = "2026.11.9"
 description = "Private, offline voice transcription for macOS and Linux: press a key, speak, and the text lands at your cursor"
 authors = ["poodle64"]
 license = "MIT"

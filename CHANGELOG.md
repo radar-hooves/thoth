@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026.11.9] - 2026-11-27
+
+### Changed
+
+- **Releases publish through the factory's one step.** The release now refuses to publish when `latest.json` is missing a signed platform or carries a signature that is not its artifact's, so an installed copy can never be stranded by a half-written feed. Thoth keeps its updater key; installed copies keep updating.
+- Built on app-factory v2026.11.84: the shared HTTP client sends trace context, the minimum Rust is 1.95, and the unused window-state plugin is gone.
+
 ## [2026.11.8] - 2026-11-26
 
 ### Fixed
