@@ -5,7 +5,6 @@
 
 use crate::error::Error;
 use parking_lot::RwLock;
-use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -394,60 +393,11 @@ pub fn export_dictionary() -> Result<String, Error> {
 ///
 /// Matches whole words only: an entry `hook -> look` rewrites "hook" but leaves
 /// "webhook" untouched. Multi-word entries (e.g. "machine learning") anchor at
-/// the phrase boundaries. Entries that begin or end with a non-word character
-/// (punctuation) simply don't anchor on that side, which is the closest sensible
-/// behaviour for a `\b`-based boundary.
+/// the phrase boundaries. A key edge that is not a letter or digit takes no
+/// boundary. Wordhoard's one-pass rules live in `canonical::apply_list`.
 pub fn apply_dictionary(text: &str) -> String {
     let dictionary = get_dictionary().read();
-
-    if dictionary.entries.is_empty() {
-        return text.to_string();
-    }
-
-    let mut result = text.to_string();
-
-    for entry in &dictionary.entries {
-        result = replace_whole_word(&result, &entry.from, &entry.to, entry.case_sensitive);
-    }
-
-    result
-}
-
-/// Replace whole-word occurrences of `from` with `to`.
-///
-/// Anchors the (regex-escaped) needle between `\b` word boundaries so substrings
-/// inside larger words are left alone. Falls back to plain substring replacement
-/// only if the boundary pattern fails to compile (it never should for escaped
-/// input, but we never want a malformed entry to drop the whole transcription).
-fn replace_whole_word(text: &str, from: &str, to: &str, case_sensitive: bool) -> String {
-    if from.is_empty() {
-        return text.to_string();
-    }
-
-    let pattern = format!(r"\b{}\b", regex::escape(from));
-    let regex = RegexBuilder::new(&pattern)
-        .case_insensitive(!case_sensitive)
-        .build();
-
-    match regex {
-        Ok(re) => whole_word_replace_all(&re, text, to),
-        Err(e) => {
-            tracing::warn!(
-                "Dictionary entry '{}' failed to compile as regex ({e}); falling back to substring replace",
-                from
-            );
-            if case_sensitive {
-                text.replace(from, to)
-            } else {
-                text.to_string()
-            }
-        }
-    }
-}
-
-/// Replace all regex matches with a literal replacement (no `$`-capture expansion).
-fn whole_word_replace_all(re: &Regex, text: &str, to: &str) -> String {
-    re.replace_all(text, regex::NoExpand(to)).into_owned()
+    crate::canonical::apply_list(&dictionary.entries, &[], text)
 }
 
 /// Tauri command to apply dictionary replacements
@@ -471,6 +421,15 @@ pub fn get_vocabulary_for_context() -> Vec<String> {
 mod tests {
     use super::*;
 
+    fn apply1(text: &str, from: &str, to: &str, case_sensitive: bool) -> String {
+        let entry = DictionaryEntry {
+            from: from.to_string(),
+            to: to.to_string(),
+            case_sensitive,
+        };
+        crate::canonical::apply_list(&[entry], &[], text)
+    }
+
     /// The filter joins every S&P that kept a trace of its ampersand; a bare
     /// "S P" kept none, and one case-sensitive entry finishes the job. The
     /// inputs are Parakeet's output for "S&P" in the operator's test of
@@ -487,7 +446,7 @@ mod tests {
         ] {
             let filtered = crate::transcription::filter::repair_ampersands(heard);
             assert_eq!(
-                replace_whole_word(&filtered, "S P", "S&P", true),
+                apply1(&filtered, "S P", "S&P", true),
                 written,
                 "from {heard:?}"
             );
@@ -502,11 +461,11 @@ mod tests {
     fn test_whole_word_does_not_match_substring() {
         // The core #57 fix: an entry must not rewrite a substring inside a word.
         assert_eq!(
-            replace_whole_word("the webhook fired", "hook", "look", false),
+            apply1("the webhook fired", "hook", "look", false),
             "the webhook fired"
         );
         assert_eq!(
-            replace_whole_word("classification", "class", "klass", false),
+            apply1("classification", "class", "klass", false),
             "classification"
         );
     }
@@ -514,12 +473,12 @@ mod tests {
     #[test]
     fn test_whole_word_matches_standalone() {
         assert_eq!(
-            replace_whole_word("grab the hook", "hook", "look", false),
+            apply1("grab the hook", "hook", "look", false),
             "grab the look"
         );
         // Adjacent punctuation still counts as a boundary.
         assert_eq!(
-            replace_whole_word("the hook, please", "hook", "look", false),
+            apply1("the hook, please", "hook", "look", false),
             "the look, please"
         );
     }
@@ -527,8 +486,8 @@ mod tests {
     #[test]
     fn test_whole_word_case_insensitive() {
         assert_eq!(
-            replace_whole_word("Hello HELLO hello", "hello", "hi", false),
-            "hi hi hi"
+            apply1("Hello HELLO hello", "hello", "hi", false),
+            "Hi HI hi"
         );
     }
 
@@ -536,7 +495,7 @@ mod tests {
     fn test_whole_word_case_sensitive() {
         // Only the exact-case standalone word is rewritten.
         assert_eq!(
-            replace_whole_word("Hello hello HELLO", "hello", "hi", true),
+            apply1("Hello hello HELLO", "hello", "hi", true),
             "Hello hi HELLO"
         );
     }
@@ -544,7 +503,7 @@ mod tests {
     #[test]
     fn test_whole_word_multi_word_entry() {
         assert_eq!(
-            replace_whole_word(
+            apply1(
                 "I love machine learning a lot",
                 "machine learning",
                 "ML",
@@ -559,49 +518,37 @@ mod tests {
         // A user entry containing regex metacharacters must be escaped, not interpreted.
         // `.` is a metacharacter; without escaping it would match any character.
         assert_eq!(
-            replace_whole_word("use node.js here", "node.js", "Node", false),
+            apply1("use node.js here", "node.js", "Node", false),
             "use Node here"
         );
         // It must NOT match a different character in the metacharacter slot.
-        assert_eq!(
-            replace_whole_word("nodexjs", "node.js", "Node", false),
-            "nodexjs"
-        );
+        assert_eq!(apply1("nodexjs", "node.js", "Node", false), "nodexjs");
     }
 
     #[test]
     fn test_whole_word_trailing_punctuation_does_not_anchor() {
-        // Documented limitation: an entry ending in a non-word char (e.g. "c++")
-        // has no word boundary after it, so `\b…\b` cannot match. This is
-        // acceptable graceful degradation rather than silently falling back to
-        // substring matching (which would reintroduce the #57 bug).
-        assert_eq!(
-            replace_whole_word("the c++ code", "c++", "cpp", false),
-            "the c++ code"
-        );
+        // A key edge that is not a letter or digit takes no boundary (wordhoard spec).
+        assert_eq!(apply1("the c++ code", "c++", "cpp", false), "the cpp code");
     }
 
     #[test]
     fn test_whole_word_replacement_is_literal_not_capture() {
         // A `to` value containing `$1` must be inserted verbatim, not expanded.
         assert_eq!(
-            replace_whole_word("see foo here", "foo", "$1 bar", false),
+            apply1("see foo here", "foo", "$1 bar", false),
             "see $1 bar here"
         );
     }
 
     #[test]
     fn test_whole_word_empty_from() {
-        assert_eq!(
-            replace_whole_word("Empty from", "", "replacement", false),
-            "Empty from"
-        );
+        assert_eq!(apply1("Empty from", "", "replacement", false), "Empty from");
     }
 
     #[test]
     fn test_whole_word_no_match() {
         assert_eq!(
-            replace_whole_word("The quick brown fox", "cat", "dog", false),
+            apply1("The quick brown fox", "cat", "dog", false),
             "The quick brown fox"
         );
     }
@@ -609,7 +556,7 @@ mod tests {
     #[test]
     fn test_whole_word_unicode() {
         assert_eq!(
-            replace_whole_word("a café here", "café", "coffee", false),
+            apply1("a café here", "café", "coffee", false),
             "a coffee here"
         );
     }
@@ -970,12 +917,9 @@ mod tests {
         let text = "Hello hello HELLO";
 
         // Case-insensitive should rewrite all three whole words.
-        assert_eq!(replace_whole_word(text, "hello", "hi", false), "hi hi hi");
+        assert_eq!(apply1(text, "hello", "hi", false), "Hi hi HI");
 
         // Case-sensitive should only rewrite the exact-case word.
-        assert_eq!(
-            replace_whole_word(text, "hello", "hi", true),
-            "Hello hi HELLO"
-        );
+        assert_eq!(apply1(text, "hello", "hi", true), "Hello hi HELLO");
     }
 }

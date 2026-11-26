@@ -34,6 +34,8 @@ pub mod telemetry_metrics;
 pub mod text_insert;
 pub mod transcription;
 pub mod tray;
+#[cfg(test)]
+mod wordhoard_fixtures;
 
 /// Register a single shortcut, using keyboard_service for standalone modifiers
 fn register_single_shortcut(

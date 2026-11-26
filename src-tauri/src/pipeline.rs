@@ -12,7 +12,6 @@ use crate::TELEMETRY_TARGET;
 use crate::canonical;
 use crate::clipboard;
 use crate::database;
-use crate::dictionary;
 use crate::enhancement;
 use crate::error::Error;
 use crate::transcription;
@@ -719,10 +718,8 @@ pub(crate) fn apply_text_post_processing(
             tracing::debug!("Post-processing: after filtering: {} chars", t.len());
         }
         if apply_dictionary {
-            t = dictionary::apply_dictionary(&t);
-            tracing::debug!("Post-processing: after dictionary: {} chars", t.len());
-            t = canonical::apply_canonical(&t);
-            tracing::debug!("Post-processing: after canonical: {} chars", t.len());
+            t = canonical::apply_installed_list(&t);
+            tracing::debug!("Post-processing: after word list: {} chars", t.len());
         }
         t
     })

@@ -13,10 +13,13 @@
 //! On first run the file is absent; the module seeds from the dictionary so
 //! existing behaviour is preserved exactly (AliasOnly policy = same as today).
 
+use crate::dictionary::DictionaryEntry;
 use crate::error::Error;
 use parking_lot::RwLock;
+use regex::{Regex, RegexBuilder};
 use rphonetic::{DoubleMetaphone, Encoder};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -298,8 +301,21 @@ fn output_form(canonical_term: &str, matched_span: &str) -> String {
 /// literal instruction, not a guess, which is why the sweep tries every window
 /// for one of these before it tries any fuzzy match.
 fn matches_exact(candidate: &str, ct: &CanonicalTerm) -> bool {
-    let cand_lc = candidate.to_lowercase();
-    cand_lc == ct.term.to_lowercase() || ct.aliases.iter().any(|a| a.to_lowercase() == cand_lc)
+    let cand = word_key(candidate);
+    cand == word_key(&ct.term) || ct.aliases.iter().any(|a| word_key(a) == cand)
+}
+
+/// The words of `s`, lower-cased and joined by one space: any gap between
+/// words ("port-cullis", "port. cullis") is the same as a space.
+fn word_key(s: &str) -> String {
+    let words: Vec<&str> = tokenise(s)
+        .into_iter()
+        .filter_map(|sp| match sp {
+            Span::Word(w) => Some(w),
+            Span::Gap(_) => None,
+        })
+        .collect();
+    words.join(" ").to_lowercase()
 }
 
 /// True when `candidate` matches `ct` by the policy's fuzzy gate.
@@ -384,7 +400,11 @@ fn fuzzy_matches_any(cand_lc: &str, term_lc: &str, aliases: &[String], threshold
 
 /// How many tokens (words) does `term` contain?
 fn term_word_count(term: &str) -> usize {
-    term.split_whitespace().count().max(1)
+    word_key(term)
+        .split(' ')
+        .filter(|w| !w.is_empty())
+        .count()
+        .max(1)
 }
 
 /// True when a window of `window_size` tokens is a valid candidate for `ct`.
@@ -568,6 +588,218 @@ fn snap_with_terms(terms: &[CanonicalTerm], text: &str) -> String {
         }
     }
     out
+}
+
+// ---------------------------------------------------------------------------
+// The one pass (wordhoard's "Applying the list")
+// ---------------------------------------------------------------------------
+
+/// An entry compiled for the one pass: a literal key anchored at a position.
+struct CompiledEntry<'a> {
+    entry: &'a DictionaryEntry,
+    anchored: Regex,
+    first: char,
+    /// A boundary is required before / after only where the key's edge is a
+    /// letter or digit.
+    bound_before: bool,
+    bound_after: bool,
+}
+
+fn compile_entries(entries: &[DictionaryEntry]) -> Vec<CompiledEntry<'_>> {
+    entries
+        .iter()
+        .filter_map(|entry| {
+            let first = entry.from.chars().next()?;
+            let last = entry.from.chars().next_back()?;
+            let anchored = RegexBuilder::new(&format!(r"\A(?:{})", regex::escape(&entry.from)))
+                .case_insensitive(!entry.case_sensitive)
+                .build()
+                .ok()?;
+            Some(CompiledEntry {
+                entry,
+                anchored,
+                first,
+                bound_before: first.is_alphanumeric(),
+                bound_after: last.is_alphanumeric(),
+            })
+        })
+        .collect()
+}
+
+/// Case-following for a target that has no upper-case letter.
+fn follow_case(heard: &str, target: &str) -> String {
+    if target == target.to_lowercase() {
+        crate::transcription::filter::restore_case(heard, target)
+    } else {
+        target.to_string()
+    }
+}
+
+/// The longest exact term match starting at the word `wi`: (end byte, output).
+fn exact_term_at(
+    terms: &[CanonicalTerm],
+    text: &str,
+    spans: &[Span<'_>],
+    word_idx: &[usize],
+    starts: &[usize],
+    wi: usize,
+    global_max_window: usize,
+) -> Option<(usize, String)> {
+    let max_window = global_max_window.min(word_idx.len() - wi);
+    for window_size in (1..=max_window).rev() {
+        let words: Vec<&str> = (wi..wi + window_size)
+            .map(|w| match &spans[word_idx[w]] {
+                Span::Word(s) | Span::Gap(s) => *s,
+            })
+            .collect();
+        let candidate = words.join(" ");
+        if candidate.to_lowercase().len() < 4 {
+            continue;
+        }
+        let found = terms
+            .iter()
+            .find(|ct| window_compatible(ct, window_size) && matches_exact(&candidate, ct));
+        if let Some(ct) = found {
+            let last = wi + window_size - 1;
+            let end = starts[word_idx[last]] + words[window_size - 1].len();
+            let heard = &text[starts[word_idx[wi]]..end];
+            return Some((end, follow_case(heard, &ct.term)));
+        }
+    }
+    None
+}
+
+/// Apply the whole list to `text` as wordhoard specifies: one left-to-right
+/// pass taking the longest match at each position (an entry beats a term on a
+/// tie, the earlier entry beats a later one), replaced text never rescanned;
+/// then phonetic and conservative snapping over what the pass left alone.
+pub(crate) fn apply_list(
+    entries: &[DictionaryEntry],
+    terms: &[CanonicalTerm],
+    text: &str,
+) -> String {
+    let compiled = compile_entries(entries);
+    if compiled.is_empty() && terms.is_empty() {
+        return text.to_string();
+    }
+
+    let spans = tokenise(text);
+    let word_idx = word_indices(&spans);
+    let mut starts = Vec::with_capacity(spans.len());
+    let mut at = 0usize;
+    for s in &spans {
+        starts.push(at);
+        at += match s {
+            Span::Word(w) | Span::Gap(w) => w.len(),
+        };
+    }
+    let word_at: HashMap<usize, usize> = word_idx
+        .iter()
+        .enumerate()
+        .map(|(wi, &si)| (starts[si], wi))
+        .collect();
+    let global_max_window = terms
+        .iter()
+        .map(|t| t.max_words as usize)
+        .max()
+        .unwrap_or(1);
+
+    // Segments: (text, replaced). Replaced text is never scanned again.
+    let mut segments: Vec<(String, bool)> = Vec::new();
+    let mut raw = String::new();
+    let mut i = 0usize;
+    while i < text.len() {
+        let c = text[i..].chars().next().expect("char at boundary");
+        let prev_alnum = text[..i]
+            .chars()
+            .next_back()
+            .is_some_and(|p| p.is_alphanumeric());
+
+        let mut best: Option<(usize, String)> = None;
+        for ce in &compiled {
+            let same_first = if ce.entry.case_sensitive {
+                c == ce.first
+            } else {
+                c.to_lowercase().eq(ce.first.to_lowercase())
+            };
+            if !same_first || (ce.bound_before && prev_alnum) {
+                continue;
+            }
+            let Some(m) = ce.anchored.find(&text[i..]) else {
+                continue;
+            };
+            let end = i + m.end();
+            if ce.bound_after
+                && text[end..]
+                    .chars()
+                    .next()
+                    .is_some_and(|n| n.is_alphanumeric())
+            {
+                continue;
+            }
+            if best.as_ref().is_none_or(|(b, _)| end > *b) {
+                let out = if ce.entry.case_sensitive {
+                    ce.entry.to.clone()
+                } else {
+                    follow_case(&text[i..end], &ce.entry.to)
+                };
+                best = Some((end, out));
+            }
+        }
+        let term_hit = word_at.get(&i).and_then(|&wi| {
+            exact_term_at(
+                terms,
+                text,
+                &spans,
+                &word_idx,
+                &starts,
+                wi,
+                global_max_window,
+            )
+        });
+        if let Some((end, out)) =
+            term_hit.filter(|(end, _)| best.as_ref().is_none_or(|(b, _)| end > b))
+        {
+            best = Some((end, out));
+        }
+
+        match best {
+            Some((end, out)) if end > i => {
+                if !raw.is_empty() {
+                    segments.push((std::mem::take(&mut raw), false));
+                }
+                segments.push((out, true));
+                i = end;
+            }
+            _ => {
+                raw.push(c);
+                i += c.len_utf8();
+            }
+        }
+    }
+    if !raw.is_empty() {
+        segments.push((raw, false));
+    }
+
+    segments
+        .into_iter()
+        .map(|(s, replaced)| {
+            if replaced {
+                s
+            } else {
+                snap_with_terms(terms, &s)
+            }
+        })
+        .collect()
+}
+
+/// Apply the installed list (dictionary entries, then canonical terms as one
+/// pass) to `text`.
+pub fn apply_installed_list(text: &str) -> String {
+    let entries = crate::dictionary::get_dictionary_entries().unwrap_or_default();
+    let registry = get_registry();
+    let guard = registry.read();
+    apply_list(&entries, &guard.terms, text)
 }
 
 // ---------------------------------------------------------------------------

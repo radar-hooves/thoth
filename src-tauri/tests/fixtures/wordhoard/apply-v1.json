@@ -1,0 +1,2484 @@
+{
+ "version": "1",
+ "spec": "docs/product/applying-the-list.md",
+ "note": "A case marked snapping:true needs Thoth's phonetic or conservative snapping; every other door skips it. Every other case passes on every door, whatever a term's policy says.",
+ "cases": [
+  {
+   "id": "entry-substring-webhook",
+   "list": {
+    "entries": [
+     {
+      "from": "hook",
+      "to": "look",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "the webhook fired",
+   "expected": "the webhook fired",
+   "source": "thoth whole_word_does_not_match_substring"
+  },
+  {
+   "id": "entry-substring-classification",
+   "list": {
+    "entries": [
+     {
+      "from": "class",
+      "to": "klass",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "classification",
+   "expected": "classification",
+   "source": "thoth"
+  },
+  {
+   "id": "entry-standalone",
+   "list": {
+    "entries": [
+     {
+      "from": "hook",
+      "to": "look",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "grab the hook",
+   "expected": "grab the look",
+   "source": "thoth"
+  },
+  {
+   "id": "entry-punctuation-boundary",
+   "list": {
+    "entries": [
+     {
+      "from": "hook",
+      "to": "look",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "the hook, please",
+   "expected": "the look, please",
+   "source": "thoth"
+  },
+  {
+   "id": "entry-case-insensitive-follows-case",
+   "list": {
+    "entries": [
+     {
+      "from": "hello",
+      "to": "hi",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "Hello HELLO hello",
+   "expected": "Hi HI hi",
+   "note": "spec: a lower-case target follows the heard case, entries included; Thoth today gives 'hi hi hi'",
+   "source": "thoth case_insensitive"
+  },
+  {
+   "id": "entry-case-sensitive-verbatim",
+   "list": {
+    "entries": [
+     {
+      "from": "hello",
+      "to": "hi",
+      "caseSensitive": true
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "Hello hello HELLO",
+   "expected": "Hello hi HELLO",
+   "source": "thoth"
+  },
+  {
+   "id": "entry-multi-word",
+   "list": {
+    "entries": [
+     {
+      "from": "machine learning",
+      "to": "ML",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "I love machine learning a lot",
+   "expected": "I love ML a lot",
+   "source": "thoth"
+  },
+  {
+   "id": "entry-metachar-literal",
+   "list": {
+    "entries": [
+     {
+      "from": "node.js",
+      "to": "Node",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "use node.js here",
+   "expected": "use Node here",
+   "source": "thoth"
+  },
+  {
+   "id": "entry-metachar-not-regex",
+   "list": {
+    "entries": [
+     {
+      "from": "node.js",
+      "to": "Node",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "nodexjs",
+   "expected": "nodexjs",
+   "source": "thoth"
+  },
+  {
+   "id": "entry-punctuation-edge-unanchored",
+   "list": {
+    "entries": [
+     {
+      "from": "c++",
+      "to": "cpp",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "the c++ code",
+   "expected": "the cpp code",
+   "note": "spec: a key edge that is not a letter or digit takes no boundary; Thoth today leaves this unchanged",
+   "source": "thoth"
+  },
+  {
+   "id": "entry-target-is-literal",
+   "list": {
+    "entries": [
+     {
+      "from": "foo",
+      "to": "$1 bar",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "see foo here",
+   "expected": "see $1 bar here",
+   "source": "thoth"
+  },
+  {
+   "id": "entry-empty-from",
+   "list": {
+    "entries": [
+     {
+      "from": "",
+      "to": "replacement",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "Empty from",
+   "expected": "Empty from",
+   "source": "thoth"
+  },
+  {
+   "id": "entry-no-match",
+   "list": {
+    "entries": [
+     {
+      "from": "cat",
+      "to": "dog",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "The quick brown fox",
+   "expected": "The quick brown fox",
+   "source": "thoth"
+  },
+  {
+   "id": "entry-unicode",
+   "list": {
+    "entries": [
+     {
+      "from": "café",
+      "to": "coffee",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "a café here",
+   "expected": "a coffee here",
+   "source": "thoth"
+  },
+  {
+   "id": "entry-sp-bare",
+   "list": {
+    "entries": [
+     {
+      "from": "S P",
+      "to": "S&P",
+      "caseSensitive": true
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "S P 500.",
+   "expected": "S&P 500.",
+   "source": "thoth every_heard_form_of_s_and_p"
+  },
+  {
+   "id": "entry-sp-futures",
+   "list": {
+    "entries": [
+     {
+      "from": "S P",
+      "to": "S&P",
+      "caseSensitive": true
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "S P Futures.",
+   "expected": "S&P Futures.",
+   "source": "thoth"
+  },
+  {
+   "id": "entry-sp-case-sensitive-skips-lower",
+   "list": {
+    "entries": [
+     {
+      "from": "S P",
+      "to": "S&P",
+      "caseSensitive": true
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "s p 500",
+   "expected": "s p 500"
+  },
+  {
+   "id": "entry-upper-heard-upper-target",
+   "list": {
+    "entries": [
+     {
+      "from": "ok",
+      "to": "okay",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "OK",
+   "expected": "OKAY",
+   "note": "all-upper heard upper-cases a lower-case target"
+  },
+  {
+   "id": "entry-capitalised-heard",
+   "list": {
+    "entries": [
+     {
+      "from": "teh",
+      "to": "the",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "Teh cat",
+   "expected": "The cat"
+  },
+  {
+   "id": "entry-cased-target-verbatim",
+   "list": {
+    "entries": [
+     {
+      "from": "supercrawl",
+      "to": "supacrawl",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "Supercrawl is",
+   "expected": "Supacrawl is",
+   "note": "the 26/11 word test: the capital is kept"
+  },
+  {
+   "id": "entry-cased-target-ignores-heard",
+   "list": {
+    "entries": [
+     {
+      "from": "light llm",
+      "to": "LiteLLM",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "use LIGHT LLM",
+   "expected": "use LiteLLM"
+  },
+  {
+   "id": "entry-longest-first",
+   "list": {
+    "entries": [
+     {
+      "from": "red",
+      "to": "r",
+      "caseSensitive": false
+     },
+     {
+      "from": "red bar",
+      "to": "green",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "a red bar here",
+   "expected": "a green here"
+  },
+  {
+   "id": "entry-first-row-wins-equal-length",
+   "list": {
+    "entries": [
+     {
+      "from": "aa",
+      "to": "one",
+      "caseSensitive": false
+     },
+     {
+      "from": "AA",
+      "to": "two",
+      "caseSensitive": true
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "aa",
+   "expected": "one",
+   "note": "equal length: the earlier row in document order"
+  },
+  {
+   "id": "cascade-entries-one-pass",
+   "list": {
+    "entries": [
+     {
+      "from": "red bar",
+      "to": "green",
+      "caseSensitive": false
+     },
+     {
+      "from": "foo",
+      "to": "bar",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "red foo",
+   "expected": "red bar",
+   "note": "the replaced text is never re-scanned; the first pass's output stays"
+  },
+  {
+   "id": "cascade-entry-then-alias",
+   "list": {
+    "entries": [
+     {
+      "from": "foo",
+      "to": "port cullis",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "foo",
+   "expected": "port cullis"
+  },
+  {
+   "id": "entry-before-term-on-tie",
+   "list": {
+    "entries": [
+     {
+      "from": "lite llm",
+      "to": "lite-llm",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": [
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "lite llm"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "lite llm",
+   "expected": "lite-llm"
+  },
+  {
+   "id": "term-longer-beats-entry",
+   "list": {
+    "entries": [
+     {
+      "from": "light",
+      "to": "dark",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": [
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "light llm"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "light LLM",
+   "expected": "LiteLLM"
+  },
+  {
+   "id": "alias-two-words",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "lower the port cullis",
+   "expected": "lower the portcullis",
+   "source": "thoth test_phonetic_portcullis_alias"
+  },
+  {
+   "id": "alias-one-word",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "lower the portculis",
+   "expected": "lower the portcullis",
+   "source": "thoth"
+  },
+  {
+   "id": "alias-phonetic-policy-listed-alias",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "portcolours is strong",
+   "expected": "portcullis is strong",
+   "source": "thoth (alias form)"
+  },
+  {
+   "id": "alias-phonetic-unlisted-variant",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "lower the port colours",
+   "expected": "lower the portcullis",
+   "snapping": true,
+   "source": "thoth test_phonetic_portcullis_phonetic_policy"
+  },
+  {
+   "id": "alias-phonetic-unlisted-variant2",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "lower the port collars",
+   "expected": "lower the portcullis",
+   "snapping": true,
+   "source": "thoth"
+  },
+  {
+   "id": "alias-phonetic-single-word",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "portcolours is strong",
+   "expected": "portcullis is strong",
+   "source": "thoth"
+  },
+  {
+   "id": "term-verbatim-case-alias",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "lite llm"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 2,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "use lite llm for this",
+   "expected": "use LiteLLM for this",
+   "source": "thoth test_litellm_verbatim_casing"
+  },
+  {
+   "id": "term-verbatim-case-self",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "lite llm"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 2,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "use litellm for this",
+   "expected": "use LiteLLM for this",
+   "source": "thoth"
+  },
+  {
+   "id": "term-verbatim-case-upper-heard",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "lite llm"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 2,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "LITE LLM works",
+   "expected": "LiteLLM works",
+   "source": "thoth test_verbatim_casing_for_cased_terms"
+  },
+  {
+   "id": "term-verbatim-case-mixed-heard",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "lite llm"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 2,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "Lite Llm works",
+   "expected": "LiteLLM works",
+   "source": "thoth"
+  },
+  {
+   "id": "term-phonetic-light-llm",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "lite llm"
+      ],
+      "policy": "phonetic",
+      "maxWords": 2,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "run light LLM locally",
+   "expected": "run LiteLLM locally",
+   "snapping": true,
+   "source": "thoth test_litellm_phonetic_policy; 26/11 word test"
+  },
+  {
+   "id": "term-lowercase-follows-upper",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "PORTCULIS in the gate",
+   "expected": "PORTCULLIS in the gate",
+   "source": "thoth test_restore_case_for_lowercase_terms"
+  },
+  {
+   "id": "term-lowercase-follows-capital",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "Port cullis stands",
+   "expected": "Portcullis stands",
+   "source": "thoth"
+  },
+  {
+   "id": "term-lowercase-follows-lower",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "port cullis stands",
+   "expected": "portcullis stands"
+  },
+  {
+   "id": "term-longest-window",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "port",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port colours"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 2,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "lower the port colours",
+   "expected": "lower the portcullis",
+   "source": "thoth test_ngram_two_token_beats_one_token"
+  },
+  {
+   "id": "term-conservative-leaves-image",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "immich",
+      "aliases": [],
+      "policy": "conservative",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "attach the image",
+   "expected": "attach the image",
+   "source": "thoth test_conservative_immich_leaves_image_alone"
+  },
+  {
+   "id": "term-conservative-leaves-image-alone",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "immich",
+      "aliases": [],
+      "policy": "conservative",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "image",
+   "expected": "image",
+   "source": "thoth"
+  },
+  {
+   "id": "term-aliasonly-leaves-image",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "immich",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "view the image gallery",
+   "expected": "view the image gallery",
+   "source": "thoth"
+  },
+  {
+   "id": "term-phonetic-does-not-snap-colours",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "the colours are bright",
+   "expected": "the colours are bright",
+   "source": "thoth test_phonetic_portcullis_does_not_snap_standalone_colours"
+  },
+  {
+   "id": "term-phonetic-folder-not-vaultwarden",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "Vaultwarden",
+      "aliases": [
+       "vault warden"
+      ],
+      "policy": "phonetic",
+      "maxWords": 2,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "open the folder",
+   "expected": "open the folder",
+   "source": "thoth test_phonetic_folder_does_not_snap_to_vaultwarden"
+  },
+  {
+   "id": "term-phonetic-filter-not-vaultwarden",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "Vaultwarden",
+      "aliases": [
+       "vault warden"
+      ],
+      "policy": "phonetic",
+      "maxWords": 2,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "apply the filter",
+   "expected": "apply the filter",
+   "source": "thoth"
+  },
+  {
+   "id": "term-alias-vaultwarden",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "Vaultwarden",
+      "aliases": [
+       "vault warden"
+      ],
+      "policy": "phonetic",
+      "maxWords": 2,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "open vault warden now",
+   "expected": "open Vaultwarden now"
+  },
+  {
+   "id": "term-punctuation-preserved",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "lower the port cullis!",
+   "expected": "lower the portcullis!",
+   "source": "thoth test_punctuation_preserved_around_snap"
+  },
+  {
+   "id": "term-punctuation-parens",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "(port cullis)",
+   "expected": "(portcullis)",
+   "source": "thoth"
+  },
+  {
+   "id": "term-no-match-identical",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "the quick brown fox jumps, over the lazy dog.",
+   "expected": "the quick brown fox jumps, over the lazy dog.",
+   "source": "thoth test_no_match_returns_identical"
+  },
+  {
+   "id": "term-length-guard",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "tic",
+      "aliases": [],
+      "policy": "phonetic",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "a tic here",
+   "expected": "a tic here",
+   "source": "thoth test_length_guard_skips_short_candidates"
+  },
+  {
+   "id": "term-non-ascii-text",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "Привет, port cullis. Émile",
+   "expected": "Привет, portcullis. Émile",
+   "source": "thoth non-ascii regression"
+  },
+  {
+   "id": "term-non-ascii-only",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "Привет мир",
+   "expected": "Привет мир",
+   "source": "thoth"
+  },
+  {
+   "id": "term-exact-keeps-following-word-1",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "removed from port cullis. You'll need to run that",
+   "expected": "removed from portcullis. You'll need to run that",
+   "source": "thoth test_a_fuzzy_window_does_not_swallow_the_following_word"
+  },
+  {
+   "id": "term-exact-keeps-following-word-2",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "removed from Portcullis. You'll need to run that",
+   "expected": "removed from Portcullis. You'll need to run that",
+   "source": "thoth test_a_fuzzy_window_does_not_swallow_the_following_word"
+  },
+  {
+   "id": "term-exact-keeps-following-word-3",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "the container for Portcullis. It's not going to have it",
+   "expected": "the container for Portcullis. It's not going to have it",
+   "source": "thoth test_a_fuzzy_window_does_not_swallow_the_following_word"
+  },
+  {
+   "id": "term-exact-keeps-following-word-4",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "if you look in Portcullis, you'll see it",
+   "expected": "if you look in Portcullis, you'll see it",
+   "source": "thoth test_a_fuzzy_window_does_not_swallow_the_following_word"
+  },
+  {
+   "id": "term-exact-keeps-following-word-5",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "I still need to unlock Portcullis. I'm the only one",
+   "expected": "I still need to unlock Portcullis. I'm the only one",
+   "source": "thoth test_a_fuzzy_window_does_not_swallow_the_following_word"
+  },
+  {
+   "id": "term-clause-break-1",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "unlock portcullus. You'll see",
+   "expected": "unlock portcullis. You'll see",
+   "snapping": true,
+   "source": "thoth test_a_fuzzy_window_does_not_reach_across_a_clause_boundary"
+  },
+  {
+   "id": "term-clause-break-2",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "unlock portcullus, you'll see",
+   "expected": "unlock portcullis, you'll see",
+   "snapping": true,
+   "source": "thoth"
+  },
+  {
+   "id": "term-clause-break-3",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "unlock portcullus. It's fine",
+   "expected": "unlock portcullis. It's fine",
+   "snapping": true,
+   "source": "thoth"
+  },
+  {
+   "id": "term-hyphenated-variant",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "lower the port-colours now",
+   "expected": "lower the portcullis now",
+   "snapping": true,
+   "source": "thoth test_a_hyphenated_fuzzy_variant_still_snaps"
+  },
+  {
+   "id": "term-alias-across-punctuation",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "stdio",
+      "aliases": [
+       "standard I O"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "over standard I. O transport",
+   "expected": "over stdio transport",
+   "source": "thoth test_an_exact_alias_still_matches_across_punctuation"
+  },
+  {
+   "id": "term-multi-word-fuzzy",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis",
+       "portculis",
+       "portcolours"
+      ],
+      "policy": "phonetic",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "lower the port colours now",
+   "expected": "lower the portcullis now",
+   "snapping": true,
+   "source": "thoth test_a_multi_word_fuzzy_variant_still_snaps"
+  },
+  {
+   "id": "term-window-limit",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "alpha",
+      "aliases": [
+       "one two three four"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "one two three four",
+   "expected": "one two three four",
+   "note": "no window is longer than the list's largest maxWords"
+  },
+  {
+   "id": "term-window-is-the-lists-largest-max-words",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis"
+      ],
+      "policy": "conservative",
+      "maxWords": 1,
+      "threshold": 0.9
+     }
+    ]
+   },
+   "text": "port cullis",
+   "expected": "port cullis",
+   "note": "maxWords 1 on the only term: the window is one word, a two-word alias cannot match"
+  },
+  {
+   "id": "term-window-global",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "portcullis",
+      "aliases": [
+       "port cullis"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": 1,
+      "threshold": null
+     },
+     {
+      "term": "immich",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": 3,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "port cullis",
+   "expected": "portcullis",
+   "note": "the window is the largest maxWords on the whole list"
+  },
+  {
+   "id": "word-test-2611-1",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "Klangfarben",
+      "aliases": [
+       "clangfarben"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "claude code",
+      "aliases": [
+       "clawed code"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "wordhoard",
+      "aliases": [
+       "word horde"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "Light LLM"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Huginn",
+      "aliases": [
+       "Hoogan"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Chichi",
+      "aliases": [
+       "Chi-Chi"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Yggdrasil",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Redactyl",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Portcullis",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Authentik",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "I said clangfarben again.",
+   "expected": "I said Klangfarben again.",
+   "source": "26/11/2026 word test"
+  },
+  {
+   "id": "word-test-2611-2",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "Klangfarben",
+      "aliases": [
+       "clangfarben"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "claude code",
+      "aliases": [
+       "clawed code"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "wordhoard",
+      "aliases": [
+       "word horde"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "Light LLM"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Huginn",
+      "aliases": [
+       "Hoogan"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Chichi",
+      "aliases": [
+       "Chi-Chi"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Yggdrasil",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Redactyl",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Portcullis",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Authentik",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "I said clawed code again.",
+   "expected": "I said claude code again.",
+   "source": "26/11/2026 word test"
+  },
+  {
+   "id": "word-test-2611-3",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "Klangfarben",
+      "aliases": [
+       "clangfarben"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "claude code",
+      "aliases": [
+       "clawed code"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "wordhoard",
+      "aliases": [
+       "word horde"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "Light LLM"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Huginn",
+      "aliases": [
+       "Hoogan"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Chichi",
+      "aliases": [
+       "Chi-Chi"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Yggdrasil",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Redactyl",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Portcullis",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Authentik",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "I said word horde again.",
+   "expected": "I said wordhoard again.",
+   "source": "26/11/2026 word test"
+  },
+  {
+   "id": "word-test-2611-4",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "Klangfarben",
+      "aliases": [
+       "clangfarben"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "claude code",
+      "aliases": [
+       "clawed code"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "wordhoard",
+      "aliases": [
+       "word horde"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "Light LLM"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Huginn",
+      "aliases": [
+       "Hoogan"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Chichi",
+      "aliases": [
+       "Chi-Chi"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Yggdrasil",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Redactyl",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Portcullis",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Authentik",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "I said Light LLM again.",
+   "expected": "I said LiteLLM again.",
+   "source": "26/11/2026 word test"
+  },
+  {
+   "id": "word-test-2611-5",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "Klangfarben",
+      "aliases": [
+       "clangfarben"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "claude code",
+      "aliases": [
+       "clawed code"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "wordhoard",
+      "aliases": [
+       "word horde"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "Light LLM"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Huginn",
+      "aliases": [
+       "Hoogan"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Chichi",
+      "aliases": [
+       "Chi-Chi"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Yggdrasil",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Redactyl",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Portcullis",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Authentik",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "I said Hoogan again.",
+   "expected": "I said Huginn again.",
+   "source": "26/11/2026 word test"
+  },
+  {
+   "id": "word-test-2611-6",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "Klangfarben",
+      "aliases": [
+       "clangfarben"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "claude code",
+      "aliases": [
+       "clawed code"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "wordhoard",
+      "aliases": [
+       "word horde"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "Light LLM"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Huginn",
+      "aliases": [
+       "Hoogan"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Chichi",
+      "aliases": [
+       "Chi-Chi"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Yggdrasil",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Redactyl",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Portcullis",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Authentik",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "I said Chi-Chi again.",
+   "expected": "I said Chichi again.",
+   "source": "26/11/2026 word test"
+  },
+  {
+   "id": "word-test-2611-7",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "Klangfarben",
+      "aliases": [
+       "clangfarben"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "claude code",
+      "aliases": [
+       "clawed code"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "wordhoard",
+      "aliases": [
+       "word horde"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "Light LLM"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Huginn",
+      "aliases": [
+       "Hoogan"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Chichi",
+      "aliases": [
+       "Chi-Chi"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Yggdrasil",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Redactyl",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Portcullis",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Authentik",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "I said Yggdrasil again.",
+   "expected": "I said Yggdrasil again.",
+   "source": "26/11/2026 word test"
+  },
+  {
+   "id": "word-test-2611-8",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "Klangfarben",
+      "aliases": [
+       "clangfarben"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "claude code",
+      "aliases": [
+       "clawed code"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "wordhoard",
+      "aliases": [
+       "word horde"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "Light LLM"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Huginn",
+      "aliases": [
+       "Hoogan"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Chichi",
+      "aliases": [
+       "Chi-Chi"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Yggdrasil",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Redactyl",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Portcullis",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Authentik",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "I said Redactyl again.",
+   "expected": "I said Redactyl again.",
+   "source": "26/11/2026 word test"
+  },
+  {
+   "id": "word-test-2611-9",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "Klangfarben",
+      "aliases": [
+       "clangfarben"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "claude code",
+      "aliases": [
+       "clawed code"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "wordhoard",
+      "aliases": [
+       "word horde"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "Light LLM"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Huginn",
+      "aliases": [
+       "Hoogan"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Chichi",
+      "aliases": [
+       "Chi-Chi"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Yggdrasil",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Redactyl",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Portcullis",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Authentik",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "I said Portcullis again.",
+   "expected": "I said Portcullis again.",
+   "source": "26/11/2026 word test"
+  },
+  {
+   "id": "word-test-2611-10",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "Klangfarben",
+      "aliases": [
+       "clangfarben"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "claude code",
+      "aliases": [
+       "clawed code"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "wordhoard",
+      "aliases": [
+       "word horde"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "Light LLM"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Huginn",
+      "aliases": [
+       "Hoogan"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Chichi",
+      "aliases": [
+       "Chi-Chi"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Yggdrasil",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Redactyl",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Portcullis",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Authentik",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "I said Klangfarben again.",
+   "expected": "I said Klangfarben again.",
+   "source": "26/11/2026 word test"
+  },
+  {
+   "id": "word-test-2611-supercrawl-case",
+   "list": {
+    "entries": [
+     {
+      "from": "supercrawl",
+      "to": "supacrawl",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "Supercrawl",
+   "expected": "Supacrawl",
+   "note": "entry case-following: the capital is no longer lost"
+  },
+  {
+   "id": "collision-class-ordinary-word-stays",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "Klangfarben",
+      "aliases": [
+       "clangfarben"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "claude code",
+      "aliases": [
+       "clawed code"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "wordhoard",
+      "aliases": [
+       "word horde"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "Light LLM"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Huginn",
+      "aliases": [
+       "Hoogan"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Chichi",
+      "aliases": [
+       "Chi-Chi"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Yggdrasil",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Redactyl",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Portcullis",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     },
+     {
+      "term": "Authentik",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "an authentic signature",
+   "expected": "an authentic signature",
+   "note": "a collision-class term carries no dictionary-word alias and no snapping; priming alone fixes it"
+  },
+  {
+   "id": "collision-class-conservative-would-corrupt",
+   "list": {
+    "entries": [],
+    "canonicalTerms": [
+     {
+      "term": "Authentik",
+      "aliases": [],
+      "policy": "aliasOnly",
+      "maxWords": 1,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "Authentic is spelt like that",
+   "expected": "Authentic is spelt like that"
+  },
+  {
+   "id": "cascade-two-rows",
+   "list": {
+    "entries": [
+     {
+      "from": "red bar",
+      "to": "green",
+      "caseSensitive": false
+     },
+     {
+      "from": "foo",
+      "to": "bar",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": []
+   },
+   "text": "red foo and red bar",
+   "expected": "red bar and green",
+   "note": "the negative case the write door cannot see: both rows are legal alone, the second application would change the text"
+  },
+  {
+   "id": "cascade-term-after-entry",
+   "list": {
+    "entries": [
+     {
+      "from": "lite",
+      "to": "light",
+      "caseSensitive": false
+     }
+    ],
+    "canonicalTerms": [
+     {
+      "term": "LiteLLM",
+      "aliases": [
+       "light llm"
+      ],
+      "policy": "aliasOnly",
+      "maxWords": null,
+      "threshold": null
+     }
+    ]
+   },
+   "text": "lite llm",
+   "expected": "light llm",
+   "note": "entry wins as the longer-or-equal match at the same start; the text is not rescanned"
+  }
+ ]
+}

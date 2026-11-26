@@ -360,11 +360,11 @@ pub(crate) fn restore_case(original: &str, converted: &str) -> String {
         return converted.to_uppercase();
     }
     if original.chars().next().is_some_and(|c| c.is_uppercase()) {
-        let mut out = converted.to_string();
-        if let Some(first) = out.get_mut(0..1) {
-            first.make_ascii_uppercase();
-        }
-        return out;
+        let mut chars = converted.chars();
+        return match chars.next() {
+            Some(first) => first.to_uppercase().chain(chars).collect(),
+            None => String::new(),
+        };
     }
     converted.to_string()
 }
